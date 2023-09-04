@@ -82,9 +82,12 @@ class HeteroCompleteGraphFromMolWrapper:
 
         if ret_feat_names:
             feat_names = {}
-            feat_names["atom"] = feat_atom
-            feat_names["bond"] = feat_bond
-            feat_names["global"] = globe_feat
+            if self.atom_featurizer is not None:
+                feat_names["atom"] = feat_atom
+            if self.bond_featurizer is not None:
+                feat_names["bond"] = feat_bond
+            if self.global_featurizer is not None:
+                feat_names["global"] = globe_feat
             return g, feat_names
 
         return g

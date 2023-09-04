@@ -3,6 +3,16 @@ import networkx as nx
 import numpy as np
 
 
+def get_global_features(row, global_keys):
+    """
+    Get global features from a row of a dataframe.
+    """
+    global_feats = {}
+    for key in global_keys:
+        global_feats[key] = row[key]
+    return global_feats
+
+
 def get_atom_feats(row, atom_keys):
     """
     Get atom features from a row of a dataframe.
@@ -36,9 +46,11 @@ def get_bond_features(row, map_key, keys=None):
     bond_features = {}
 
     for key in keys:
-        if type(row[key]) == int:
-            if row[key] == -1:
-                return -1
+        if key != "bond_length":
+            if type(row[key]) == int:
+                if row[key] == -1:
+                    return -1
+
     for bond in row.bonds:
         # print(bond)
         if (bond[0], bond[1]) not in bond_features.keys():
@@ -47,8 +59,8 @@ def get_bond_features(row, map_key, keys=None):
         bond_index_map = row[map_key][0].index(tuple(bond))
 
         for key in keys:
-            # print(row[key])
-            bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
+            if key != "bond_length":
+                bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
 
     return bond_features
 
@@ -289,6 +301,8 @@ def ring_features_from_bond(bond, cycles, allowed_ring_size):
     for cycle in cycles:
         if tuple(bond) in cycle or (bond[-1], bond[0]) in cycle:
             ring_inclusion = 1
+            # print("allowed ring size: " + str(allowed_ring_size))
+            # print(allowed_ring_size.index(len(cycle)))
             ring_size_ret_list[allowed_ring_size.index(len(cycle))] = 1
 
     return ring_inclusion, ring_size_ret_list
@@ -321,3 +335,15 @@ def ring_features_for_bonds_full(bonds, no_metal_binary, cycles, allowed_ring_si
         else:  # we're never including metal bonds in ring formations
             ret_dict[tuple(bond)] = (1, 0, [0 for i in range(len(allowed_ring_size))])
     return ret_dict
+
+
+def clean(input):
+    return "".join([i for i in input if not i.isdigit()])
+
+
+def elements_from_pmg(pmg_mol):
+    """
+    Convert a pymatgen molecule to a list of elements
+    """
+    formula = pmg_mol.composition.formula.split()
+    return [clean(x) for x in formula]
