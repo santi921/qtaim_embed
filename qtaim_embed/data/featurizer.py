@@ -125,7 +125,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                 ft = []
                 if self.allowed_ring_size != []:
                     if tuple(bond) in ring_dict_keys:
-                        ft.append(ring_dict[tuple(bond)][0])
+                        ft.append(ring_dict[tuple(bond)][0])  # metal
                         ft.append(ring_dict[tuple(bond)][1])
                         ft += ring_dict[tuple(bond)][2]  # one hot ring
                     else:
@@ -154,10 +154,9 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                 feats.append(ft)
 
         feats = torch.tensor(feats, dtype=getattr(torch, self.dtype))
-        self._feature_size = feats.shape[1]
-        self._feature_name = ["metal bond"]
 
         if self.allowed_ring_size != []:
+            self._feature_name = ["metal bond"]
             self._feature_name += ["ring inclusion"] + [
                 "ring size_{}".format(i) for i in self.allowed_ring_size
             ]
