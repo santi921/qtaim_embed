@@ -1,26 +1,78 @@
 import torch
 from tqdm import tqdm
+import pandas as pd
+from qtaim_embed.utils.grapher import get_grapher
+from qtaim_embed.data.molwrapper import mol_wrappers_from_df
 
 
 class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        molecule_wrappers,
-        graphs,
-        feature_names,
-        target_dict,
+        file,
+        allowed_ring_size=[3, 4, 5, 6, 7],
+        allowed_charges=None,
+        self_loop=True,
+        extra_keys={
+            "atom": [
+                "extra_feat_atom_esp_total",
+            ],
+            "bond": [
+                "extra_feat_bond_esp_total",
+                "bond_length",
+            ],
+            "global": [],
+        },
+        target_dict={
+            "atom": ["extra_feat_atom_esp_total"],
+            "bond": ["extra_feat_bond_esp_total"],
+        },
         extra_dataset_info={},
     ):
         """
+        Baseline dataset for hetero graph node label prediction. Includes global feautures.
+        TODO: add support for no global features
         Args:
-            molecule_wrappers (list): list of MoleculeWrapper objects
-            feature_names (list): list of feature names
-            graphs (list): list of dgl graphs
-            target_dict (dict): dict with node type as keys and target names as value
+            file (string): path to data file
+            allowed_ring_size (list): list of allowed ring sizes
+            allowed_charges (list): list of allowed charges
+            self_loop (bool): whether to add self loops to the graph
+            extra_keys (dict): dictionary of keys to grab from the data file
+            target_dict (dict): dictionary of keys to use as labels
+            extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
         """
-        self.data = molecule_wrappers
-        self.feature_names = feature_names
-        self.graphs = graphs
+        # check if file ends in pkl
+        if file[-3:] == "pkl":
+            df = pd.read_pickle(file)
+        elif file[-3:] == "json":
+            df = pd.read_json(file)
+        else:
+            df = pd.read_csv(file)
+
+        mol_wrappers, element_set = mol_wrappers_from_df(
+            df, extra_keys["atom"], extra_keys["bond"], extra_keys["global"]
+        )
+
+        grapher = get_grapher(
+            element_set,
+            atom_keys=extra_keys["atom"],
+            bond_keys=extra_keys["bond"],
+            global_keys=extra_keys["global"],
+            allowed_ring_size=allowed_ring_size,
+            allowed_charges=allowed_charges,
+            self_loop=self_loop,
+        )
+
+        graph_list = []
+        print("... > Building graphs and featurizing")
+        for mol in tqdm(mol_wrappers):
+            graph = grapher.build_graph(mol)
+            graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
+            graph_list.append(graph)
+
+        self.data = mol_wrappers
+        self.element_set = element_set
+        self.feature_names = names
+        self.graphs = graph_list
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
 
@@ -112,3 +164,28 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             # label_list.append(labels)
 
         self.labels = label_list
+
+
+class Subset(torch.utils.data.Dataset):
+    def __init__(self, dataset, indices):
+        self.dataset = dataset
+        self.indices = indices
+
+    def __getitem__(self, idx):
+        return self.dataset[self.indices[idx]]
+
+    def __len__(self):
+        return len(self.indices)
+
+    def feature_names(self):
+        return self.dataset.exclude_names
+
+    def label_names(self):
+        return self.dataset.include_names
+
+    def featuze_size(self):
+        len_ret = 0
+        for _, value in self.dataset.include_locs.items():
+            len_ret += len(value)
+
+        return len_ret

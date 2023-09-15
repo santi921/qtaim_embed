@@ -80,6 +80,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             print(
                 "NOTE: No ring size if no ring features are enabled, metal/nonmetal bonds are also off"
             )
+        print("selected bond keys", selected_keys)
 
     def __call__(self, mol, **kwargs):
         """
@@ -194,7 +195,7 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
                 "`dtype` should be `float32` or `float64`, but got `{}`.".format(dtype)
             )
         print("element set", element_set)
-        print("selected keys", selected_keys)
+        print("selected atomic keys", selected_keys)
 
         self.dtype = dtype
         self._feature_size = None
@@ -293,6 +294,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
         self.dtype = dtype
         self.allowed_charges = allowed_charges
         self.selected_keys = selected_keys
+        print("selected global keys", selected_keys)
 
     def __call__(self, mol, **kwargs):
         """
