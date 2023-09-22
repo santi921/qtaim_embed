@@ -18,6 +18,7 @@ class HeteroCompleteGraphFromMolWrapper:
 
     def build_graph(self, mol):
         bonds = list(mol.bonds.keys())
+        # print("bonds", bonds)
         num_bonds = len(bonds)
         num_atoms = len(mol.coords)
         a2b = []

@@ -51,11 +51,14 @@ def get_bond_features(row, map_key, keys=None):
                 if row[key] == -1:
                     return -1
 
-    for bond in row.bonds:
-        # print(bond)
+    if len(row.bonds) == 1:
+        bonds = row.bonds[0]
+    else:
+        bonds = row.bonds
+
+    for bond in bonds:
         if (bond[0], bond[1]) not in bond_features.keys():
             bond_features[(bond[0], bond[1])] = {}
-
         bond_index_map = row[map_key][0].index(tuple(bond))
 
         for key in keys:

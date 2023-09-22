@@ -3,15 +3,23 @@ from tqdm import tqdm
 import pandas as pd
 from qtaim_embed.utils.grapher import get_grapher
 from qtaim_embed.data.molwrapper import mol_wrappers_from_df
+from qtaim_embed.data.processing import (
+    HeteroGraphStandardScaler,
+    HeteroGraphLogMagnitudeScaler,
+)
 
 
 class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         file,
+        scale_features=True,
+        log_scale_targets=False,
+        standard_scale_targets=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
         self_loop=True,
+        debug=False,
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -33,9 +41,11 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         TODO: add support for no global features
         Args:
             file (string): path to data file
+            scale_features (bool): whether to scale features
             allowed_ring_size (list): list of allowed ring sizes
             allowed_charges (list): list of allowed charges
             self_loop (bool): whether to add self loops to the graph
+            debug (bool): whether to run in debug mode
             extra_keys (dict): dictionary of keys to grab from the data file
             target_dict (dict): dictionary of keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
@@ -48,8 +58,16 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         else:
             df = pd.read_csv(file)
 
+        if debug:
+            print("... > running in debug mode")
+            df = df.head(100)
+
         mol_wrappers, element_set = mol_wrappers_from_df(
-            df, extra_keys["atom"], extra_keys["bond"], extra_keys["global"]
+            df=df,
+            bond_key="bonds",
+            atom_keys=extra_keys["atom"],
+            bond_keys=extra_keys["bond"],
+            global_keys=extra_keys["global"],
         )
 
         grapher = get_grapher(
@@ -69,6 +87,9 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
             graph_list.append(graph)
 
+        self.scale_features = scale_features
+        self.log_scale_targets = log_scale_targets
+        self.standard_scale_targets = standard_scale_targets
         self.data = mol_wrappers
         self.element_set = element_set
         self.feature_names = names
@@ -137,7 +158,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
     def load(self):
         self.get_include_exclude_indices()
 
-        label_list = []
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
@@ -161,9 +181,48 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                         ]
                 graph.ndata["feat"] = features_new
                 graph.ndata["labels"] = labels
+
             # label_list.append(labels)
 
-        self.labels = label_list
+        if self.scale_features:
+            print("... > Scaling features")
+            scaler = HeteroGraphStandardScaler()
+            self.graphs = scaler(self.graphs)
+            self.scaler_feat_mean = scaler.mean
+            self.scaler_feat_std = scaler.std
+            print("... > Scaling features complete")
+            print("... > mean: \n", self.scaler_feat_mean)
+            print("... > std:  \n", self.scaler_feat_std)
+
+        if self.log_scale_targets:
+            print("... > Log scaling targets")
+            scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
+            self.graphs = scaler(self.graphs)
+            print("... > Log scaling targets complete")
+
+        if self.standard_scale_targets:
+            print("... > Scaling targets")
+            scaler = HeteroGraphStandardScaler(features_tf=False)
+            self.graphs = scaler(self.graphs)
+            self.scaler_label_mean = scaler.mean
+            self.scaler_label_std = scaler.std
+            print("... > Scaling targets complete")
+            print("... > mean: \n", self.scaler_label_mean)
+            print("... > std:  \n", self.scaler_label_std)
+
+        # self.labels = label_list
+
+    def feature_names(self):
+        return self.exclude_names
+
+    def label_names(self):
+        return self.include_names
+
+    def featuze_size(self):
+        len_dict = {}
+        for key, value in self.exclude_names.items():
+            len_dict[key] = len(value)
+        return len_dict
 
 
 class Subset(torch.utils.data.Dataset):
@@ -184,8 +243,7 @@ class Subset(torch.utils.data.Dataset):
         return self.dataset.include_names
 
     def featuze_size(self):
-        len_ret = 0
-        for _, value in self.dataset.include_locs.items():
-            len_ret += len(value)
-
-        return len_ret
+        len_dict = {}
+        for key, value in self.dataset.exclude_names.items():
+            len_dict[key] = len(value)
+        return len_dict

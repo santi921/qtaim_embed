@@ -15,7 +15,11 @@ class TestGrapher:
             "extra_feat_bond_esp_total",
         ]
         mol_wrappers, element_set = mol_wrappers_from_df(
-            self.df_test, atom_keys, bond_keys
+            df=self.df_test,
+            bond_key="bonds",
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
         )
 
         grapher = get_grapher(
@@ -53,7 +57,13 @@ class TestGrapher:
 
         test_vals = [col_test.iloc[ind][0][0] for ind in range(len(col_test))]
         # print(test_vals)
-        mol_wrappers, element_set = mol_wrappers_from_df(self.df_test, atom_keys, [])
+        mol_wrappers, element_set = mol_wrappers_from_df(
+            self.df_test,
+            bond_key="bonds",
+            atom_keys=atom_keys,
+            bond_keys=[],
+            global_keys=[],
+        )
 
         grapher = get_grapher(
             element_set,
@@ -105,7 +115,9 @@ class TestGrapher:
             "bond_length",
         ]
 
-        mol_wrappers, element_set = mol_wrappers_from_df(self.df_test, [], bond_keys)
+        mol_wrappers, element_set = mol_wrappers_from_df(
+            df=self.df_test, bond_key="bonds", atom_keys=[], bond_keys=bond_keys
+        )
 
         list_test = []
         for wrapper in mol_wrappers:
@@ -160,7 +172,11 @@ class TestGrapher:
         global_keys = ["ids"]
 
         mol_wrappers, element_set = mol_wrappers_from_df(
-            self.df_test, [], [], global_keys
+            self.df_test,
+            bond_key="bonds",
+            atom_keys=[],
+            bond_keys=[],
+            global_keys=global_keys,
         )
         # for mol in mol_wrappers:
         #    print(mol.global_features)
@@ -208,3 +224,7 @@ class TestGrapher:
                 == graph_list_bare[ind].ndata["feat"]["global"].shape[1] + 1
             )
             assert int(graph_list[ind].ndata["feat"]["global"][0][-1]) == id_list[ind]
+
+
+# test = TestGrapher()
+# test.test_node_sizes()

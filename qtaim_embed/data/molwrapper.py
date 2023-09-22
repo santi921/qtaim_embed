@@ -8,7 +8,7 @@ from qtaim_embed.utils.descriptors import (
 )
 
 
-def mol_wrappers_from_df(df, atom_keys=[], bond_keys=[], global_keys=[]):
+def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_keys=[]):
     """
     Creates a list of MoleculeWrapper objects from a dataframe
     Takes:
@@ -18,6 +18,7 @@ def mol_wrappers_from_df(df, atom_keys=[], bond_keys=[], global_keys=[]):
             - ids: molecule id
             - names: molecule name
             - bonds: list of bonds
+        bond_key: bond key to be used as features
         atom_keys: list of atom keys to be used as features
         bond_keys: list of bond keys to be used as features
     Returns:
@@ -30,7 +31,8 @@ def mol_wrappers_from_df(df, atom_keys=[], bond_keys=[], global_keys=[]):
     for index, row in tqdm(df.iterrows(), total=len(df)):
         charge = 0
         free_energy = 0
-        bonds = row.bonds
+        bonds = row[bond_key]
+        # bonds = row.bonds
 
         id_combined = str(row.ids) + "_" + row.names
         bonds = {tuple(sorted(b)): None for b in bonds}
@@ -49,9 +51,15 @@ def mol_wrappers_from_df(df, atom_keys=[], bond_keys=[], global_keys=[]):
             )
 
         mol_graph = row.molecule_graph
+        # print(mol_graph)
         pmg_mol = row.molecule
         elements = elements_from_pmg(pmg_mol)
         element_set.update(elements)
+
+        if len(row.bonds) == 1:
+            bonds = row.bonds[0]
+        else:
+            bonds = row.bonds
 
         # filter for bond_feats = -1
         if bond_feats != -1 and atom_feats != 1:
@@ -60,7 +68,8 @@ def mol_wrappers_from_df(df, atom_keys=[], bond_keys=[], global_keys=[]):
                 functional_group=None,
                 free_energy=None,
                 id=id_combined,
-                non_metal_bonds=None,
+                bonds=bonds,
+                non_metal_bonds=bonds,  # TODO: fix this
                 atom_features=atom_feats,
                 bond_features=bond_feats,
                 global_features=global_features,

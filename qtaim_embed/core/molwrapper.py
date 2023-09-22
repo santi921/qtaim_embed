@@ -26,6 +26,7 @@ class MoleculeWrapper:
         functional_group=None,
         free_energy=None,
         id=None,
+        bonds=None,
         non_metal_bonds=None,
         atom_features={},
         bond_features={},
@@ -35,6 +36,7 @@ class MoleculeWrapper:
     ):
         self.mol_graph = mol_graph
         self.pymatgen_mol = mol_graph.molecule
+        self.manual_bonds = bonds
         self.nonmetal_bonds = non_metal_bonds
         self.free_energy = free_energy
         self.functional_group = functional_group
@@ -116,7 +118,14 @@ class MoleculeWrapper:
             dict: with bond index (a tuple of atom indices) as the key and and bond
                 attributes as the value.
         """
-        return {tuple(sorted([i, j])): attr for i, j, attr in self.graph.edges.data()}
+        if self.manual_bonds is not None:
+            #    print("getting manual bonds")
+            # return self.manual_bonds
+            return {tuple(sorted([i, j])): {} for i, j in self.manual_bonds}
+        else:
+            return {
+                tuple(sorted([i, j])): attr for i, j, attr in self.graph.edges.data()
+            }
 
     @property
     def graph(self):
