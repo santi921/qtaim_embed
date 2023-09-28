@@ -52,7 +52,13 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         """
         # check if file ends in pkl
         if file[-3:] == "pkl":
-            df = pd.read_pickle(file)
+            try:
+                df = pd.read_pickle(file)
+            except:
+                import pickle5 as pickle
+                with open(file, "rb") as fh:
+                    df = pickle.load(fh)
+
         elif file[-3:] == "json":
             df = pd.read_json(file)
         else:
