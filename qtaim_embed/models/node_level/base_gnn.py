@@ -1,17 +1,20 @@
 # baseline GNN model for node-level regression
 import torch
+from torch.optim import lr_scheduler
 import pytorch_lightning as pl
-import torchmetrics
 import dgl.nn.pytorch as dglnn
 from torchmetrics.wrappers import MultioutputWrapper
+import torchmetrics
+
+from qtaim_embed.models.utils import _split_batched_output
 from qtaim_embed.models.layers import GraphConvDropoutBatch
 
 class GCNNodePred(pl.LightningModule):
     def __init__(
         self, 
-        atom_input_size=64, 
-        bond_input_size=64, 
-        global_input_size=64,
+        atom_input_size=12, 
+        bond_input_size=8, 
+        global_input_size=3,
         n_conv_layers=3,
         target_dict= {
             "atom": "extra_feat_bond_esp_total"
@@ -23,6 +26,10 @@ class GCNNodePred(pl.LightningModule):
         bias=True,
         norm="both",
         aggregate="sum",
+        lr=1e-3,
+        weight_decay=0.0,
+        lr_plateau_patience=5,
+        lr_scale_factor=0.5,
         ):
         """
         Basic GNN model for node-level regression
@@ -46,7 +53,7 @@ class GCNNodePred(pl.LightningModule):
 
         super().__init__()
 
-        self.atom_input_size = atom_input_size
+        """self.atom_input_size = atom_input_size
         self.bond_input_size = bond_input_size
         self.global_input_size = global_input_size
         self.layer_conv = conv_fn
@@ -58,10 +65,11 @@ class GCNNodePred(pl.LightningModule):
         self.aggregate = aggregate
         self.n_conv_layers = n_conv_layers
         self.target_dict = target_dict
-        self.output_dims = 0 
+        self.output_dims = 0 """
 
+        output_dims = 0
         for k, v in target_dict.items():
-            self.output_dims += len(v)
+            output_dims += len(v)
 
         params = {
             "atom_input_size": atom_input_size,
@@ -69,7 +77,7 @@ class GCNNodePred(pl.LightningModule):
             "global_input_size": global_input_size,
             "conv_fn": conv_fn,
             "target_dict": target_dict,
-            "output_dims": self.output_dims,
+            "output_dims": output_dims,
             "dropout": dropout,
             "batch_norm": batch_norm,
             "activation": activation,
@@ -77,127 +85,131 @@ class GCNNodePred(pl.LightningModule):
             "norm": norm,
             "aggregate": "sum",
             "n_conv_layers": n_conv_layers,
+            "lr": lr,
+            "weight_decay": weight_decay,
+            "lr_plateau_patience": lr_plateau_patience,
+            "lr_scale_factor": lr_scale_factor,
         }
 
         self.hparams.update(params)
         self.save_hyperparameters()
 
         # convert string activation to function
-        if self.activation is not None:
-            self.activation = getattr(torch.nn, self.activation)()
+        if self.hparams.activation is not None:
+            self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
 
         self.conv_layers = []
-        for i in range(self.n_conv_layers):
+        for i in range(self.hparams.n_conv_layers):
             
-            atom_out = self.atom_input_size
-            bond_out = self.bond_input_size
-            global_out = self.global_input_size
+            atom_out = self.hparams.atom_input_size
+            bond_out = self.hparams.bond_input_size
+            global_out = self.hparams.global_input_size
 
             # check if it's the last layer
-            if i == self.n_conv_layers - 1:
-                if "atom" in self.target_dict.keys():
-                    atom_out = len(self.target_dict["atom"])
-                if "bond" in self.target_dict.keys():
-                    bond_out = len(self.target_dict["bond"])
-                if "global" in self.target_dict.keys():
-                    global_out = len(self.target_dict["global"])
-
+            if i == self.hparams.n_conv_layers - 1:
+                if "atom" in self.hparams.target_dict.keys():
+                    atom_out = len(self.hparams.target_dict["atom"])
+                if "bond" in self.hparams.target_dict.keys():
+                    bond_out = len(self.hparams.target_dict["bond"])
+                if "global" in self.hparams.target_dict.keys():
+                    global_out = len(self.hparams.target_dict["global"])
+            
+            """print("atom_in", self.atom_input_size)
+            print("bond_in", self.bond_input_size)
+            print("global_in", self.global_input_size)
+            print("atom_out", atom_out)
+            print("bond_out", bond_out)
+            print("global_out", global_out)"""
+            
             a2b_args = {
-                "in_feats": self.atom_input_size,
+                "in_feats": self.hparams.atom_input_size,
                 "out_feats": bond_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
             b2a_args = {
-                "in_feats": self.bond_input_size,
+                "in_feats": self.hparams.bond_input_size,
                 "out_feats": atom_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
-
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
             a2g_args = {
-                "in_feats": self.atom_input_size,
+                "in_feats": self.hparams.atom_input_size,
                 "out_feats": global_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
-
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
             g2a_args = {
-                "in_feats": self.global_input_size,
+                "in_feats": self.hparams.global_input_size,
                 "out_feats": atom_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
-
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
             b2g_args = {
-                "in_feats": self.bond_input_size,
+                "in_feats": self.hparams.bond_input_size,
                 "out_feats": global_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,   
-                "bias": self.bias,
-                "norm": self.norm,
-             
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
             g2b_args = {
-                "in_feats": self.global_input_size,
+                "in_feats": self.hparams.global_input_size,
                 "out_feats": bond_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
 
             }
 
             a2a_args = {
-                "in_feats": self.atom_input_size,
+                "in_feats": self.hparams.atom_input_size,
                 "out_feats": atom_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
-
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
             b2b_args = {
-                "in_feats": self.bond_input_size,
+                "in_feats": self.hparams.bond_input_size,
                 "out_feats": bond_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
-
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
             g2g_args = {
-                "in_feats": self.global_input_size,
+                "in_feats": self.hparams.global_input_size,
                 "out_feats": global_out,
-                "dropout": self.dropout,
-                "batch_norm_tf": self.batch_norm,
-                "activation": self.activation,
-                "bias": self.bias,
-                "norm": self.norm,
-
+                "dropout": self.hparams.dropout,
+                "batch_norm_tf": self.hparams.batch_norm,
+                "activation": self.hparams.activation,
+                "bias": self.hparams.bias,
+                "norm": self.hparams.norm,
             }
 
 
@@ -213,7 +225,7 @@ class GCNNodePred(pl.LightningModule):
                     "b2b": GraphConvDropoutBatch(**b2b_args),
                     "g2g": GraphConvDropoutBatch(**g2g_args),
                 },
-                aggregate=self.aggregate,
+                aggregate=self.hparams.aggregate,
             )   
             )
         
@@ -223,10 +235,16 @@ class GCNNodePred(pl.LightningModule):
         """
         Forward pass
         """
-        for conv in self.conv_layers:
-            inputs = conv(graph, inputs)
-        return inputs
+        for ind, conv in enumerate(self.conv_layers):
+            if ind == 0: 
+                feats = conv(graph, inputs)
+            else: 
+                feats = conv(graph, feats)
 
+        #for key in ["atom", "bond", "global"]:
+        #    feats[key] = _split_batched_output(graph, feats[key], key)
+        
+        return feats  
 
     def feature_at_each_layer():
         """
@@ -244,12 +262,10 @@ class GCNNodePred(pl.LightningModule):
         Initialize loss function
         """
         if self.hparams.loss_fn == "mse":
-            # loss_fn = WeightedMSELoss(reduction="mean")
             loss_fn = torchmetrics.MeanSquaredError()
         elif self.hparams.loss_fn == "smape":
             loss_fn = torchmetrics.SymmetricMeanAbsolutePercentageError()
         elif self.hparams.loss_fn == "mae":
-            # loss_fn = WeightedL1Loss(reduction="mean")
             loss_fn = torchmetrics.MeanAbsoluteError()
         else:
             loss_fn = torchmetrics.MeanSquaredError()
@@ -262,12 +278,6 @@ class GCNNodePred(pl.LightningModule):
         Compute loss
         """
         return self.loss(target, pred)
-
-
-    def configure_optimizers():        
-        pass
-    def _config_lr_schedule():
-        pass
 
     def training_step(self, batch, batch_idx):
         """
@@ -374,3 +384,33 @@ class GCNNodePred(pl.LightningModule):
 
         return r2, torch_l1, torch_mse
 
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, self.parameters()),
+            lr=self.hparams.lr,
+            weight_decay=self.hparams.weight_decay,
+        )
+
+        scheduler = self._config_lr_scheduler(optimizer)
+
+        lr_scheduler = {"scheduler": scheduler, "monitor": "val_loss"}
+
+        return [optimizer], [lr_scheduler]
+
+    def _config_lr_scheduler(self, optimizer):
+        scheduler_name = self.hparams["scheduler_name"].lower()
+
+        if scheduler_name == "reduce_on_plateau":
+            scheduler = lr_scheduler.ReduceLROnPlateau(
+                optimizer, mode="max", 
+                factor=self.hparams.lr_scale_factor, 
+                patience=self.hparams.lr_plateau_patience, 
+                verbose=True
+            )
+
+        elif scheduler_name == "none":
+            scheduler = None
+        else:
+            raise ValueError(f"Not supported lr scheduler: {self.hparams.lr_scheduler}")
+
+        return scheduler
