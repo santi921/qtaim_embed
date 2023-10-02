@@ -1,6 +1,9 @@
 # baseline GNN model for node-level regression
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import lr_scheduler
+
 import pytorch_lightning as pl
 import dgl.nn.pytorch as dglnn
 from torchmetrics.wrappers import MultioutputWrapper
@@ -10,6 +13,23 @@ from qtaim_embed.models.utils import _split_batched_output
 from qtaim_embed.models.layers import GraphConvDropoutBatch
 
 class GCNNodePred(pl.LightningModule):
+    """
+        Basic GNN model for node-level regression
+        Takes 
+            atom_input_size: int, dimension of atom features
+            bond_input_size: int, dimension of bond features
+            global_input_size: int, dimension of global features
+            target_dict: dict, dictionary of targets
+            n_conv_layers: int, number of convolution layers
+            conv_fn: str "GraphConvDropoutBatch"
+            dropout: float, dropout rate
+            batch_norm: bool, whether to use batch norm
+            activation: str, activation function
+            bias: bool, whether to use bias
+            norm: str, normalization type
+            aggregate: str, aggregation type
+    """
+    
     def __init__(
         self, 
         atom_input_size=12, 
@@ -27,45 +47,16 @@ class GCNNodePred(pl.LightningModule):
         norm="both",
         aggregate="sum",
         lr=1e-3,
+        scheduler_name="reduce_on_plateau",
         weight_decay=0.0,
         lr_plateau_patience=5,
         lr_scale_factor=0.5,
-        ):
-        """
-        Basic GNN model for node-level regression
-        Takes 
-            atom_input_size: int, dimension of atom features
-            bond_input_size: int, dimension of bond features
-            global_input_size: int, dimension of global features
-            target_dict: dict, dictionary of targets
-            n_conv_layers: int, number of convolution layers
-            conv_fn: str "GraphConvDropoutBatch"
-            dropout: float, dropout rate
-            batch_norm: bool, whether to use batch norm
-            activation: str, activation function
-            bias: bool, whether to use bias
-            norm: str, normalization type
-            aggregate: str, aggregation type
-
-
-        """
+    ):
 
 
         super().__init__()
+        self.learning_rate = lr
 
-        """self.atom_input_size = atom_input_size
-        self.bond_input_size = bond_input_size
-        self.global_input_size = global_input_size
-        self.layer_conv = conv_fn
-        self.dropout = dropout
-        self.batch_norm = batch_norm
-        self.activation = activation
-        self.bias = bias
-        self.norm = norm
-        self.aggregate = aggregate
-        self.n_conv_layers = n_conv_layers
-        self.target_dict = target_dict
-        self.output_dims = 0 """
 
         output_dims = 0
         for k, v in target_dict.items():
@@ -83,12 +74,13 @@ class GCNNodePred(pl.LightningModule):
             "activation": activation,
             "bias": bias,
             "norm": norm,
-            "aggregate": "sum",
+            "aggregate": aggregate,
             "n_conv_layers": n_conv_layers,
             "lr": lr,
             "weight_decay": weight_decay,
             "lr_plateau_patience": lr_plateau_patience,
             "lr_scale_factor": lr_scale_factor,
+            "scheduler_name": scheduler_name,
         }
 
         self.hparams.update(params)
@@ -98,9 +90,8 @@ class GCNNodePred(pl.LightningModule):
         if self.hparams.activation is not None:
             self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
 
-        self.conv_layers = []
+        self.conv_layers = nn.ModuleList()
         for i in range(self.hparams.n_conv_layers):
-            
             atom_out = self.hparams.atom_input_size
             bond_out = self.hparams.bond_input_size
             global_out = self.hparams.global_input_size
@@ -114,12 +105,6 @@ class GCNNodePred(pl.LightningModule):
                 if "global" in self.hparams.target_dict.keys():
                     global_out = len(self.hparams.target_dict["global"])
             
-            """print("atom_in", self.atom_input_size)
-            print("bond_in", self.bond_input_size)
-            print("global_in", self.global_input_size)
-            print("atom_out", atom_out)
-            print("bond_out", bond_out)
-            print("global_out", global_out)"""
             
             a2b_args = {
                 "in_feats": self.hparams.atom_input_size,
@@ -228,8 +213,18 @@ class GCNNodePred(pl.LightningModule):
                 aggregate=self.hparams.aggregate,
             )   
             )
-        
-  
+         
+
+        # create multioutput wrapper for metrics
+        self.train_r2 = MultioutputWrapper(torchmetrics.R2Score(), num_outputs=output_dims)
+        self.train_torch_l1 = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=output_dims)
+        self.train_torch_mse = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=output_dims)
+        self.val_r2 = MultioutputWrapper(torchmetrics.R2Score(), num_outputs=output_dims)
+        self.val_torch_l1 = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=output_dims)
+        self.val_torch_mse = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=output_dims)
+        self.test_r2 = MultioutputWrapper(torchmetrics.R2Score(), num_outputs=output_dims)
+        self.test_torch_l1 = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=output_dims)
+        self.test_torch_mse = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=output_dims)
 
     def forward(self, graph, inputs):
         """
@@ -241,35 +236,83 @@ class GCNNodePred(pl.LightningModule):
             else: 
                 feats = conv(graph, feats)
 
-        #for key in ["atom", "bond", "global"]:
-        #    feats[key] = _split_batched_output(graph, feats[key], key)
-        
+
         return feats  
 
-    def feature_at_each_layer():
+
+    def feature_at_each_layer(model, graph, feats):
         """
-        Get feature at each layer
+        Get the features at each layer before the final fully-connected layer.
+
+        This is used for feature visualization to see how the model learns.
+
+        Returns:
+            dict: (layer_idx, feats), each feats is a list of
         """
+
+        layer_idx = 0
+        atom_feats, bond_feats, global_feats = {}, {}, {}
+
+        feats = model.embedding(feats)
+        bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
+        atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
+        global_feats[layer_idx] = _split_batched_output(graph, feats["global"], "global")
+
+        layer_idx += 1
+
+        # gated layer
+        for layer in model.conv_layers[:-1]:
+            feats = layer(graph, feats)
+            # store bond feature of each molecule
+            bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
+
+            atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
+
+            global_feats[layer_idx] = _split_batched_output(
+                graph, feats["global"], "global"
+            )
+            layer_idx += 1
+
+        return bond_feats, atom_feats, global_feats
 
         
-    def shared_step():
-        # Todo
-        pass
-
+    def shared_step(self, batch, mode):
+        batch_graph, batch_label = batch
+        logits_list = []
+        labels_list = []
+        logits = self.forward(batch_graph, batch_graph.ndata[target_type])
+                
+        for target_type, target_list in self.hparams.target_dict.items():
+            if  target_list is not None and len(target_list) > 0:
+                labels = batch_label[target_type]
+                logits_temp = logits[target_type]
+                if max_nodes < logits_temp.shape[0]:
+                    max_nodes = logits_temp.shape[0]
+                logits_list.append(logits_temp)
+                labels_list.append(labels)
+        logits_list = [F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in logits_list]
+        labels_list = [F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in labels_list]
+        logits = torch.cat(logits_list, dim=1)
+        labels = torch.cat(labels_list, dim=1)
+        
+        all_loss = self.compute_loss(logits, labels)
+        self.update_metrics(logits, labels, mode)
 
     def loss_function(self):
         """
         Initialize loss function
         """
         if self.hparams.loss_fn == "mse":
-            loss_fn = torchmetrics.MeanSquaredError()
+            # make multioutput wrapper for mse
+            loss_multi = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims)
         elif self.hparams.loss_fn == "smape":
-            loss_fn = torchmetrics.SymmetricMeanAbsolutePercentageError()
+            loss_multi = MultioutputWrapper(torchmetrics.SMAPE(), num_outputs=self.hparams.output_dims)
         elif self.hparams.loss_fn == "mae":
-            loss_fn = torchmetrics.MeanAbsoluteError()
+            loss_multi = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=self.hparams.output_dims)
         else:
-            loss_fn = torchmetrics.MeanSquaredError()
-
+            loss_multi = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims)
+        
+        loss_fn = loss_multi
         return loss_fn
     
 
@@ -278,6 +321,7 @@ class GCNNodePred(pl.LightningModule):
         Compute loss
         """
         return self.loss(target, pred)
+
 
     def training_step(self, batch, batch_idx):
         """
@@ -411,6 +455,6 @@ class GCNNodePred(pl.LightningModule):
         elif scheduler_name == "none":
             scheduler = None
         else:
-            raise ValueError(f"Not supported lr scheduler: {self.hparams.lr_scheduler}")
+            raise ValueError(f"Not supported lr scheduler: {scheduler_name}")
 
         return scheduler
