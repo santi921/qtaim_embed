@@ -51,6 +51,7 @@ class GCNNodePred(pl.LightningModule):
         weight_decay=0.0,
         lr_plateau_patience=5,
         lr_scale_factor=0.5,
+        loss_fn="mse",  
     ):
 
 
@@ -81,6 +82,7 @@ class GCNNodePred(pl.LightningModule):
             "lr_plateau_patience": lr_plateau_patience,
             "lr_scale_factor": lr_scale_factor,
             "scheduler_name": scheduler_name,
+            "loss_fn": loss_fn,
         }
 
         self.hparams.update(params)
@@ -114,6 +116,7 @@ class GCNNodePred(pl.LightningModule):
                 "activation": self.hparams.activation,
                 "bias": self.hparams.bias,
                 "norm": self.hparams.norm,
+                "allow_zero_in_degree": True,
             }
 
             b2a_args = {
@@ -124,6 +127,8 @@ class GCNNodePred(pl.LightningModule):
                 "activation": self.hparams.activation,
                 "bias": self.hparams.bias,
                 "norm": self.hparams.norm,
+                "allow_zero_in_degree": True,
+
             }
 
             a2g_args = {
@@ -134,6 +139,8 @@ class GCNNodePred(pl.LightningModule):
                 "activation": self.hparams.activation,
                 "bias": self.hparams.bias,
                 "norm": self.hparams.norm,
+                "allow_zero_in_degree": True,
+
             }
 
             g2a_args = {
@@ -144,6 +151,8 @@ class GCNNodePred(pl.LightningModule):
                 "activation": self.hparams.activation,
                 "bias": self.hparams.bias,
                 "norm": self.hparams.norm,
+                "allow_zero_in_degree": True,
+
             }
 
             b2g_args = {
@@ -154,6 +163,8 @@ class GCNNodePred(pl.LightningModule):
                 "activation": self.hparams.activation,
                 "bias": self.hparams.bias,
                 "norm": self.hparams.norm,
+                "allow_zero_in_degree": True,
+
             }
 
             g2b_args = {
@@ -164,6 +175,7 @@ class GCNNodePred(pl.LightningModule):
                 "activation": self.hparams.activation,
                 "bias": self.hparams.bias,
                 "norm": self.hparams.norm,
+                "allow_zero_in_degree": True,
 
             }
 
@@ -214,16 +226,19 @@ class GCNNodePred(pl.LightningModule):
             )   
             )
          
+        self.loss = self.loss_function()
+
+        print("number of output dims", output_dims)
 
         # create multioutput wrapper for metrics
         self.train_r2 = MultioutputWrapper(torchmetrics.R2Score(), num_outputs=output_dims)
-        self.train_torch_l1 = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=output_dims)
+        self.train_torch_l1 = MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=output_dims)
         self.train_torch_mse = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=output_dims)
         self.val_r2 = MultioutputWrapper(torchmetrics.R2Score(), num_outputs=output_dims)
-        self.val_torch_l1 = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=output_dims)
+        self.val_torch_l1 = MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=output_dims)
         self.val_torch_mse = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=output_dims)
         self.test_r2 = MultioutputWrapper(torchmetrics.R2Score(), num_outputs=output_dims)
-        self.test_torch_l1 = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=output_dims)
+        self.test_torch_l1 = MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=output_dims)
         self.test_torch_mse = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=output_dims)
 
     def forward(self, graph, inputs):
@@ -280,8 +295,8 @@ class GCNNodePred(pl.LightningModule):
         batch_graph, batch_label = batch
         logits_list = []
         labels_list = []
-        logits = self.forward(batch_graph, batch_graph.ndata[target_type])
-                
+        logits = self.forward(batch_graph, batch_graph.ndata["feat"])
+        max_nodes = -1 
         for target_type, target_list in self.hparams.target_dict.items():
             if  target_list is not None and len(target_list) > 0:
                 labels = batch_label[target_type]
@@ -296,7 +311,20 @@ class GCNNodePred(pl.LightningModule):
         labels = torch.cat(labels_list, dim=1)
         
         all_loss = self.compute_loss(logits, labels)
+        
+        # log loss 
+        self.log(
+            f"{mode}_loss",
+            all_loss.sum(),
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            batch_size=len(labels),
+            sync_dist=True,
+        )
         self.update_metrics(logits, labels, mode)
+        
+        return all_loss.sum()
 
     def loss_function(self):
         """
@@ -306,15 +334,15 @@ class GCNNodePred(pl.LightningModule):
             # make multioutput wrapper for mse
             loss_multi = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims)
         elif self.hparams.loss_fn == "smape":
-            loss_multi = MultioutputWrapper(torchmetrics.SMAPE(), num_outputs=self.hparams.output_dims)
+            loss_multi = MultioutputWrapper(torchmetrics.SymmetricMeanAbsolutePercentageError(), num_outputs=self.hparams.output_dims)
         elif self.hparams.loss_fn == "mae":
-            loss_multi = MultioutputWrapper(torchmetrics.L1Loss(), num_outputs=self.hparams.output_dims)
+            loss_multi = MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims)
         else:
             loss_multi = MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims)
         
         loss_fn = loss_multi
         return loss_fn
-    
+
 
     def compute_loss(self, target, pred):
         """
@@ -328,43 +356,52 @@ class GCNNodePred(pl.LightningModule):
         Train step
         """
         return self.shared_step(batch, mode="train")
-    
+
+
     def validation_step(self, batch, batch_idx):
         """
         Val step
         """
         return self.shared_step(batch, mode="val")
 
+
     def test_step(self, batch, batch_idx):
         # Todo
-        pass
+        return self.shared_step(batch, mode="val")
 
-    def training_epoch_end(self, outputs):
+
+    def on_train_epoch_end(self):
         """
         Training epoch end
         """
-        r2, mae, mse = self.compute_metrics(outputs, mode="train")
-        self.log("train_r2", r2, prog_bar=True, sync_dist=True)
-        self.log("train_mae", mae, prog_bar=True, sync_dist=True)
-        self.log("train_mse", mse, prog_bar=True, sync_dist=True)
+        r2, mae, mse = self.compute_metrics(mode="train")
+        # get epoch number 
+        if self.trainer.current_epoch == 0:
+            self.log("val_mae", 10**10, prog_bar=False)
+        self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
+        self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
+        self.log("train_mse", mse.mean(), prog_bar=False, sync_dist=True)
 
-    def validation_epoch_end(self, outputs):
+
+    def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
-        r2, mae, mse = self.compute_metrics(outputs, mode="val")
-        self.log("val_r2", r2, prog_bar=True, sync_dist=True)
-        self.log("val_mae", mae, prog_bar=True, sync_dist=True)
-        self.log("val_mse", mse, prog_bar=True, sync_dist=True)
+        r2, mae, mse = self.compute_metrics(mode="val")
+        self.log("val_r2", r2.median(), prog_bar=True, sync_dist=True)
+        self.log("val_mae", mae.mean(), prog_bar=True, sync_dist=True)
+        self.log("val_mse", mse.mean(), prog_bar=False, sync_dist=True)
 
-    def test_epoch_end(self, outputs):
+
+    def on_test_epoch_end(self):
         """
         Test epoch end
         """
-        r2, mae, mse = self.compute_metrics(outputs, mode="test")
-        self.log("test_r2", r2, prog_bar=True, sync_dist=True)
-        self.log("test_mae", mae, prog_bar=True, sync_dist=True)
-        self.log("test_mse", mse, prog_bar=True, sync_dist=True)
+        r2, mae, mse = self.compute_metrics(mode="test")
+        self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
+        self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
+        self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
+
 
     def update_metrics(self, pred, target, mode):
         """
@@ -385,6 +422,7 @@ class GCNNodePred(pl.LightningModule):
             self.test_torch_l1.update(pred, target)
             self.test_torch_mse.update(pred, target)
 
+
     def compute_metrics(self, mode):
         """
             Compute metrics using torchmetrics interfaces
@@ -399,34 +437,31 @@ class GCNNodePred(pl.LightningModule):
             self.train_torch_mse.reset()
 
         elif mode == "val":
-            # l1 = self.val_l1.compute()
             r2 = self.val_r2.compute()
             torch_l1 = self.val_torch_l1.compute()
             torch_mse = self.val_torch_mse.compute()
             self.val_r2.reset()
-            # self.val_l1.reset()
             self.val_torch_l1.reset()
             self.val_torch_mse.reset()
 
         elif mode == "test":
-            # l1 = self.test_l1.compute()
             r2 = self.test_r2.compute()
             torch_l1 = self.test_torch_l1.compute()
             torch_mse = self.test_torch_mse.compute()
             self.test_r2.reset()
-            # self.test_l1.reset()
             self.test_torch_l1.reset()
             self.test_torch_mse.reset()
 
-        if self.stdev is not None:
-            # print("stdev", self.stdev)
-            torch_l1 = torch_l1 * self.stdev
-            torch_mse = torch_mse * self.stdev * self.stdev
-        else:
-            print("scaling is 1!" + "*" * 20)
+        #if self.stdev is not None:
+        #    # print("stdev", self.stdev)
+        #    torch_l1 = torch_l1 * self.stdev
+        #    torch_mse = torch_mse * self.stdev * self.stdev
+        #else:
+        #    print("scaling is 1!" + "*" * 20)
 
 
         return r2, torch_l1, torch_mse
+
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
@@ -437,9 +472,10 @@ class GCNNodePred(pl.LightningModule):
 
         scheduler = self._config_lr_scheduler(optimizer)
 
-        lr_scheduler = {"scheduler": scheduler, "monitor": "val_loss"}
+        lr_scheduler = {"scheduler": scheduler, "monitor": "val_mae"}
 
         return [optimizer], [lr_scheduler]
+
 
     def _config_lr_scheduler(self, optimizer):
         scheduler_name = self.hparams["scheduler_name"].lower()

@@ -34,4 +34,6 @@
 *PKG-INFO
 *pyc
 *csv
+*ckpt
+*yaml
 qtaim_embed.egg-info/not-zip-safe
