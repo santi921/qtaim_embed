@@ -228,7 +228,7 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
             ring_info = ring_features_from_atom_full(
                 num_atoms, cycles, self.allowed_ring_size
             )
-
+        # print("features", features)
         for atom_ind in range(num_atoms):
             ft = []
             atom_element = species_sites[atom_ind]

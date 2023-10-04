@@ -62,7 +62,7 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
             bonds = row.bonds
 
         # filter for bond_feats = -1
-        if bond_feats != -1 and atom_feats != 1:
+        if bond_feats != -1 and atom_feats != -1:
             mol_wrapper = MoleculeWrapper(
                 mol_graph,
                 functional_group=None,

@@ -91,8 +91,6 @@ class HeteroGraphStandardScaler:
                 node_feats[nt].append(data)
                 node_feats_size[nt].append(len(data))
 
-        dtype = node_feats[node_types[0]][0].dtype
-
         # standardize
         if self._mean is not None and self._std is not None:
             for nt in node_types:
@@ -102,11 +100,8 @@ class HeteroGraphStandardScaler:
         else:
             self._std = {}
             self._mean = {}
-
+            dtype = node_feats[node_types[0]][0].dtype
             for nt in node_types:
-                # if node_feats is empty, skip
-                # cat_feats = torch.cat(node_feats[nt])
-                # check that cat_feats isn't just (n, )
                 if torch.cat(node_feats[nt]).shape[1] > 0:
                     feats, mean, std = _transform(torch.cat(node_feats[nt]), self.copy)
                     node_feats[nt] = torch.tensor(feats, dtype=dtype)
@@ -118,6 +113,47 @@ class HeteroGraphStandardScaler:
                     node_feats[nt] = torch.cat(node_feats[nt])
 
         # assign data back
+        for nt in node_types:
+            feats = torch.split(node_feats[nt], node_feats_size[nt])
+            for g, ft in zip(graphs, feats):
+                g.nodes[nt].data[graph_key] = ft
+
+        return graphs
+
+    def inverse(self, graphs):
+        """
+        Perform inverse standardization on the given features.
+        Takes:
+            graphs: list of dgl graphs
+        Returns:
+            graphs: list of dgl graphs with inverse standardized features
+        """
+        # check that mean and std are not None
+        assert (
+            self._mean is not None and self._std is not None
+        ), "must set up scaler first before inverting data"
+
+        g = graphs[0]
+        node_types = g.ntypes
+        node_feats = defaultdict(list)
+        node_feats_size = defaultdict(list)
+        if self.features_tf:
+            graph_key = "feat"
+        else:
+            graph_key = "labels"
+
+        for g in graphs:
+            for nt in node_types:
+                data = g.nodes[nt].data[graph_key]
+                node_feats[nt].append(data)
+                node_feats_size[nt].append(len(data))
+
+        dtype = node_feats[node_types[0]][0].dtype
+
+        for nt in node_types:
+            feats = torch.cat(node_feats[nt] * self._std[nt]) + self._mean[nt]
+            node_feats[nt] = feats
+
         for nt in node_types:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
@@ -180,6 +216,58 @@ class HeteroGraphLogMagnitudeScaler:
                 feats = feats + self.shift
                 # log scale the magnitude
                 feats = torch.log(feats)
+                # put the sign back
+                feats = feats * sign
+                # assign
+                node_feats[nt] = feats
+
+        # assign data back
+        for nt in node_types:
+            feats = torch.split(node_feats[nt], node_feats_size[nt])
+            for g, ft in zip(graphs, feats):
+                g.nodes[nt].data[graph_key] = ft
+
+        return graphs
+
+    def inverse(self, graphs):
+        """
+        Perform inverse standardization on the given features.
+        Takes:
+            graphs: list of dgl graphs
+        Returns:
+            graphs: list of dgl graphs with inverse standardized features
+        """
+        g = graphs[0]
+        node_types = g.ntypes
+        node_feats = defaultdict(list)
+        node_feats_size = defaultdict(list)
+        if self.features_tf:
+            graph_key = "feat"
+        else:
+            graph_key = "labels"
+
+        # obtain feats from ALL graphs
+        for g in graphs:
+            for nt in node_types:
+                data = g.nodes[nt].data[graph_key]
+                node_feats[nt].append(data)
+                node_feats_size[nt].append(len(data))
+
+        # log scale
+        for nt in node_types:
+            if len(node_feats[nt]) != 0:
+                # log scale
+                feats = torch.cat(node_feats[nt])
+                # get the sign of the data
+                sign = torch.sign(feats)
+                # get the magnitude of the data
+                feats = torch.abs(feats)
+                # if shift is not None:
+                # feats = feats + self.shift
+                # exp scale the magnitude
+                feats = torch.exp(feats)
+                # undo the shift
+                feats = feats - self.shift
                 # put the sign back
                 feats = feats * sign
                 # assign
