@@ -13,7 +13,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         file,
-        scale_features=True,
+        standard_scale_features=True,
+        log_scale_features=True,
         log_scale_targets=False,
         standard_scale_targets=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
@@ -41,7 +42,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         TODO: add support for no global features
         Args:
             file (string): path to data file
-            scale_features (bool): whether to scale features
+            standard_scale_features (bool): whether to scale features
+            log_scale_features (bool): whether to log scale features
             allowed_ring_size (list): list of allowed ring sizes
             allowed_charges (list): list of allowed charges
             self_loop (bool): whether to add self loops to the graph
@@ -56,6 +58,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                 df = pd.read_pickle(file)
             except:
                 import pickle5 as pickle
+
                 with open(file, "rb") as fh:
                     df = pickle.load(fh)
 
@@ -67,6 +70,9 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         if debug:
             print("... > running in debug mode")
             df = df.head(100)
+        for key_check in ["atom", "bond", "global"]:
+            if key_check not in extra_keys.keys():
+                extra_keys[key_check] = []
 
         mol_wrappers, element_set = mol_wrappers_from_df(
             df=df,
@@ -93,9 +99,10 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
             graph_list.append(graph)
 
-        self.scale_features = scale_features
-        self.log_scale_targets = log_scale_targets
-        self.standard_scale_targets = standard_scale_targets
+        self.standard_scale_features = standard_scale_features
+        self.log_scale_features = log_scale_features
+        self.log_scale_labels = log_scale_targets
+        self.standard_scale_labels = standard_scale_targets
         self.data = mol_wrappers
         self.element_set = element_set
         self.feature_names = names
@@ -190,31 +197,40 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
             # label_list.append(labels)
 
-        if self.scale_features:
+        if self.log_scale_features:
+            print("... > Log scaling features")
+            log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=True, shift=1)
+            self.graphs = log_scaler(self.graphs)
+            self.log_feature_scaler = log_scaler
+            print("... > Log scaling features complete")
+
+        if self.standard_scale_features:
             print("... > Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
             self.scaler_feat_mean = scaler.mean
             self.scaler_feat_std = scaler.std
+            self.scaler = scaler
             print("... > Scaling features complete")
-            print("... > mean: \n", self.scaler_feat_mean)
-            print("... > std:  \n", self.scaler_feat_std)
+            print("... > feature mean(s): \n", self.scaler_feat_mean)
+            print("... > feature std(s):  \n", self.scaler_feat_std)
 
-        if self.log_scale_targets:
+        if self.log_scale_labels:
             print("... > Log scaling targets")
-            scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
-            self.graphs = scaler(self.graphs)
+            log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
+            self.graphs = log_scaler(self.graphs)
+            self.log_label_scaler = log_scaler
             print("... > Log scaling targets complete")
 
-        if self.standard_scale_targets:
+        if self.standard_scale_labels:
             print("... > Scaling targets")
             scaler = HeteroGraphStandardScaler(features_tf=False)
             self.graphs = scaler(self.graphs)
             self.scaler_label_mean = scaler.mean
             self.scaler_label_std = scaler.std
             print("... > Scaling targets complete")
-            print("... > mean: \n", self.scaler_label_mean)
-            print("... > std:  \n", self.scaler_label_std)
+            print("... > label mean(s): \n", self.scaler_label_mean)
+            print("... > label std(s):  \n", self.scaler_label_std)
 
         # self.labels = label_list
 
@@ -224,11 +240,50 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
     def label_names(self):
         return self.include_names
 
-    def featuze_size(self):
+    def feature_size(self):
         len_dict = {}
         for key, value in self.exclude_names.items():
             len_dict[key] = len(value)
         return len_dict
+
+    def unscale_features(self, graphs):
+        """
+        Perform inverse standardization on the given graphs.
+        Takes:
+            graphs: list of dgl graphs
+        Returns:
+            graphs: list of dgl graphs with inverse standardized features
+        """
+        # assert that one of standard_scale_targets or log_scale_targets is true
+        assert (
+            self.log_scale_features or self.standard_scale_features
+        ), "a scaler must be used to unscale features"
+
+        if self.scale_features:
+            graphs = self.scaler.inverse(graphs)
+        if self.log_scale_features:
+            graphs = self.log_scaler.inverse(graphs)
+        return graphs
+
+    def unscale_targets(self, graphs):
+        """
+        Perform inverse standardization of targets on the given graphs.
+        Takes:
+            graphs: list of dgl graphs
+        Returns:
+            graphs: list of dgl graphs with inverse standardized targets
+
+        """
+        # assert that one of standard_scale_targets or log_scale_targets is true
+        assert (
+            self.log_scale_targets or self.standard_scale_targets
+        ), "a scaler must be used to unscale targets"
+
+        if self.standard_scale_targets:
+            graphs = self.scaler.inverse(graphs)
+        if self.log_scale_targets:
+            graphs = self.log_scaler.inverse(graphs)
+        return graphs
 
 
 class Subset(torch.utils.data.Dataset):
@@ -248,7 +303,7 @@ class Subset(torch.utils.data.Dataset):
     def label_names(self):
         return self.dataset.include_names
 
-    def featuze_size(self):
+    def feature_size(self):
         len_dict = {}
         for key, value in self.dataset.exclude_names.items():
             len_dict[key] = len(value)

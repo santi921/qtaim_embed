@@ -28,6 +28,8 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
     element_set = set()
     mol_wrappers = []
     print("... > creating MoleculeWrapper objects")
+    bond_feats_error_count = 0
+    atom_feats_error_count = 0
     for index, row in tqdm(df.iterrows(), total=len(df)):
         charge = 0
         free_energy = 0
@@ -62,6 +64,7 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
             bonds = row.bonds
 
         # filter for bond_feats = -1
+
         if bond_feats != -1 and atom_feats != -1:
             mol_wrapper = MoleculeWrapper(
                 mol_graph,
@@ -77,5 +80,11 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
                 original_bond_mapping=None,
             )
             mol_wrappers.append(mol_wrapper)
-
+        else:
+            if bond_feats == -1:
+                bond_feats_error_count += 1
+            if atom_feats == -1:
+                atom_feats_error_count += 1
+    print("... > bond_feats_error_count: ", bond_feats_error_count)
+    print("... > atom_feats_error_count: ", atom_feats_error_count)
     return mol_wrappers, element_set
