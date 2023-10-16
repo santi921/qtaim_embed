@@ -103,6 +103,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.log_scale_features = log_scale_features
         self.log_scale_labels = log_scale_targets
         self.standard_scale_labels = standard_scale_targets
+        self.feature_scalers = []
+        self.label_scalers = []
         self.data = mol_wrappers
         self.element_set = element_set
         self.feature_names = names
@@ -139,21 +141,31 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         exclude_names = {}
 
         for node_type, value_list in self.feature_names.items():
-            if node_type not in include_locs:
-                include_locs[node_type] = []
-                exclude_locs[node_type] = []
-                include_names[node_type] = []
-                exclude_names[node_type] = []
+            # if node_type not in include_locs:
+            #    include_locs[node_type] = []
+            #    exclude_locs[node_type] = []
+            #    include_names[node_type] = []
+            #    exclude_names[node_type] = []
 
             for i, value in enumerate(value_list):
                 if node_type in target_locs.keys():
                     if i in target_locs[node_type]:
+                        if node_type not in include_names:
+                            include_names[node_type] = []
+                            include_locs[node_type] = []
+
                         include_locs[node_type].append(i)
                         include_names[node_type].append(value)
                     else:
+                        if node_type not in exclude_names:
+                            exclude_names[node_type] = []
+                            exclude_locs[node_type] = []
                         exclude_locs[node_type].append(i)
                         exclude_names[node_type].append(value)
                 else:
+                    if node_type not in exclude_names:
+                        exclude_names[node_type] = []
+                        exclude_locs[node_type] = []
                     exclude_locs[node_type].append(i)
                     exclude_names[node_type].append(value)
 
@@ -170,7 +182,9 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
     def load(self):
         self.get_include_exclude_indices()
-
+        print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
@@ -184,53 +198,56 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                     ]
 
                     features_new.update(graph_features)
-                    if key == "global":
-                        labels[key] = graph.ndata["feat"][key][
-                            :, self.include_locs[key]
-                        ]
-                    else:
-                        labels[key] = graph.ndata["feat"][key][
-                            :, self.include_locs[key]
-                        ]
+                    # if key == "global":
+                    labels[key] = graph.ndata["feat"][key][:, self.include_locs[key]]
+                    # else:
+                    #    labels[key] = graph.ndata["feat"][key][
+                    #        :, self.include_locs[key]
+                    #    ]
                 graph.ndata["feat"] = features_new
                 graph.ndata["labels"] = labels
 
             # label_list.append(labels)
+        print("original loader node types:", graph.ndata["feat"].keys())
+        print("original loader label types:", graph.ndata["labels"].keys())
 
         if self.log_scale_features:
             print("... > Log scaling features")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=True, shift=1)
             self.graphs = log_scaler(self.graphs)
-            self.log_feature_scaler = log_scaler
+            self.feature_scalers.append(log_scaler)
             print("... > Log scaling features complete")
 
         if self.standard_scale_features:
             print("... > Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
-            self.scaler_feat_mean = scaler.mean
-            self.scaler_feat_std = scaler.std
-            self.scaler = scaler
+            # self.scaler_feat_mean = scaler.mean
+            # self.scaler_feat_std = scaler.std
+            self.feature_scalers.append(scaler)
             print("... > Scaling features complete")
-            print("... > feature mean(s): \n", self.scaler_feat_mean)
-            print("... > feature std(s):  \n", self.scaler_feat_std)
+            print("... > feature mean(s): \n", scaler.mean)
+            print("... > feature std(s):  \n", scaler.std)
 
         if self.log_scale_labels:
             print("... > Log scaling targets")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
             self.graphs = log_scaler(self.graphs)
-            self.log_label_scaler = log_scaler
+            # self.log_label_scaler = log_scaler
+            self.label_scalers.append(log_scaler)
             print("... > Log scaling targets complete")
 
         if self.standard_scale_labels:
             print("... > Scaling targets")
             scaler = HeteroGraphStandardScaler(features_tf=False)
             self.graphs = scaler(self.graphs)
-            self.scaler_label_mean = scaler.mean
-            self.scaler_label_std = scaler.std
+            # self.scaler_label_mean = scaler.mean
+            # self.scaler_label_std = scaler.std
+            # self.standard_label_scaler = scaler
+            self.label_scalers.append(scaler)
             print("... > Scaling targets complete")
-            print("... > label mean(s): \n", self.scaler_label_mean)
-            print("... > label std(s):  \n", self.scaler_label_std)
+            print("... > feature mean(s): \n", scaler.mean)
+            print("... > feature std(s):  \n", scaler.std)
 
         # self.labels = label_list
 
@@ -259,10 +276,14 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             self.log_scale_features or self.standard_scale_features
         ), "a scaler must be used to unscale features"
 
-        if self.scale_features:
-            graphs = self.scaler.inverse(graphs)
-        if self.log_scale_features:
-            graphs = self.log_scaler.inverse(graphs)
+        if self.standard_scale_features and self.log_scale_features:
+            print("unscaling feats with log and standard scalers")
+            graphs = self.feature_scalers[1].inverse(graphs)
+            graphs = self.feature_scalers[0].inverse(graphs)
+
+        elif self.log_scale_features or self.standard_scale_features:
+            graphs = self.feature_scalers[0].inverse(graphs)
+
         return graphs
 
     def unscale_targets(self, graphs):
@@ -276,13 +297,15 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         """
         # assert that one of standard_scale_targets or log_scale_targets is true
         assert (
-            self.log_scale_targets or self.standard_scale_targets
+            self.log_scale_labels or self.standard_scale_labels
         ), "a scaler must be used to unscale targets"
 
-        if self.standard_scale_targets:
-            graphs = self.scaler.inverse(graphs)
-        if self.log_scale_targets:
-            graphs = self.log_scaler.inverse(graphs)
+        if self.standard_scale_labels and self.log_scale_labels:
+            print("unscaling feats with log and standard scalers")
+            graphs = self.label_scalers[1].inverse(graphs)
+            graphs = self.label_scalers[0].inverse(graphs)
+        elif self.log_scale_labels or self.standard_scale_labels:
+            graphs = self.label_scalers[0].inverse(graphs)
         return graphs
 
 

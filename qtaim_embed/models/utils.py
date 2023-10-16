@@ -353,5 +353,4 @@ def get_layer_args(hparams, layer_ind=None):
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
-        print(layer_args)
         return layer_args

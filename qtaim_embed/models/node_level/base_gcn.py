@@ -1,4 +1,5 @@
 # baseline GNN model for node-level regression
+from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -35,6 +36,8 @@ class GCNNodePred(pl.LightningModule):
         lr_plateau_patience: int, patience for lr scheduler
         lr_scale_factor: float, scale factor for lr scheduler
         loss_fn: str, loss function
+        resid_n_graph_convs: int, number of graph convolutions per residual block
+        scalers: list, list of scalers applied to each node type
 
     """
 
@@ -59,6 +62,7 @@ class GCNNodePred(pl.LightningModule):
         lr_plateau_patience=5,
         lr_scale_factor=0.5,
         loss_fn="mse",
+        scalers=None,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -98,6 +102,7 @@ class GCNNodePred(pl.LightningModule):
             "scheduler_name": scheduler_name,
             "loss_fn": loss_fn,
             "resid_n_graph_convs": resid_n_graph_convs,
+            "n_scalers": len(scalers),
         }
 
         self.hparams.update(params)
@@ -247,7 +252,9 @@ class GCNNodePred(pl.LightningModule):
         batch_graph, batch_label = batch
         logits_list = []
         labels_list = []
-        logits = self.forward(batch_graph, batch_graph.ndata["feat"])
+        logits = self.forward(
+            batch_graph, batch_graph.ndata["feat"]
+        )  # returns a dict of node types
         max_nodes = -1
         for target_type, target_list in self.hparams.target_dict.items():
             if target_list is not None and len(target_list) > 0:
@@ -344,9 +351,6 @@ class GCNNodePred(pl.LightningModule):
         """
         r2, mae, mse = self.compute_metrics(mode="val")
         r2_median = r2.median().type(torch.float32)
-        mae_mean = mae.mean().type(torch.float32)
-        mse_mean = mse.mean().type(torch.float32)
-
         self.log("val_r2", r2_median, prog_bar=True, sync_dist=True)
         self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=True)
@@ -408,13 +412,6 @@ class GCNNodePred(pl.LightningModule):
             self.test_torch_l1.reset()
             self.test_torch_mse.reset()
 
-        # if self.stdev is not None:
-        #    # print("stdev", self.stdev)
-        #    torch_l1 = torch_l1 * self.stdev
-        #    torch_mse = torch_mse * self.stdev * self.stdev
-        # else:
-        #    print("scaling is 1!" + "*" * 20)
-
         return r2, torch_l1, torch_mse
 
     def configure_optimizers(self):
@@ -448,3 +445,33 @@ class GCNNodePred(pl.LightningModule):
             raise ValueError(f"Not supported lr scheduler: {scheduler_name}")
 
         return scheduler
+
+    def evaluate_manually(self, batch_graph, batched_label, scaler_list):
+        """
+        Evaluate a set of data manually
+        Takes
+            feats: dict, dictionary of batched features
+            scaler_list: list, list of scalers
+        """
+        # batch_graph, batch_label = batch
+        preds = self.forward(batch_graph, batched_label)
+        preds_unscaled = deepcopy(preds)
+        labels_unscaled = deepcopy(batched_label)
+        for scaler in scaler_list:
+            labels_unscaled = scaler.inverse_feats(labels_unscaled)
+            preds_unscaled = scaler.inverse_feats(preds_unscaled)
+
+        # manually compute metrics
+        r2 = torchmetrics.R2Score()
+        mae = torchmetrics.MeanAbsoluteError()
+        mse = torchmetrics.MeanSquaredError()
+
+        r2.update(preds_unscaled, labels_unscaled)
+        mae.update(preds_unscaled, labels_unscaled)
+        mse.update(preds_unscaled, labels_unscaled)
+
+        r2 = r2.compute()
+        mae = mae.compute()
+        mse = mse.compute()
+
+        return r2, mae, mse
