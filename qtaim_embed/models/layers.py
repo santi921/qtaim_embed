@@ -1,9 +1,15 @@
 import torch
-import pytorch_lightning as pl
+from torch import nn
+
+from copy import deepcopy
+from typing import List, Tuple, Dict, Optional
+
+
+import dgl
+from dgl import function as fn
 import torchmetrics
 import dgl.nn.pytorch as dglnn
-from torch import nn
-from copy import deepcopy
+import pytorch_lightning as pl
 
 
 class GraphConvDropoutBatch(nn.Module):
@@ -32,7 +38,7 @@ class GraphConvDropoutBatch(nn.Module):
         )
         self.dropout = None
         self.batch_norm = None
-
+        self.out_feats = out_feats
         # create dropout layer
         if dropout > 0:
             self.dropout = nn.Dropout(p=dropout)
@@ -65,9 +71,12 @@ class ResidualBlock(nn.Module):
         super(ResidualBlock, self).__init__()
         # create graph convolutional layer
         self.layers = []
+        self.output_block = output_block
+
         for i in range(resid_n_graph_convs):
             if output_block == True:
                 if i == resid_n_graph_convs - 1:
+                    print("triggered separate outer layer")
                     self.layers.append(
                         dglnn.HeteroGraphConv(
                             {
@@ -85,6 +94,7 @@ class ResidualBlock(nn.Module):
                         )
                     )
                 else:
+                    print("triggered separate intermediate layer")
                     self.layers.append(
                         dglnn.HeteroGraphConv(
                             {
@@ -103,6 +113,7 @@ class ResidualBlock(nn.Module):
                     )
 
             else:
+                print("triggered normal outer layer")
                 self.layers.append(
                     dglnn.HeteroGraphConv(
                         {
@@ -121,10 +132,307 @@ class ResidualBlock(nn.Module):
                 )
 
         self.layers = nn.ModuleList(self.layers)
+        self.out_feats = {}
+        for k, v in self.layers[-1].mods.items():
+            self.out_feats[k] = v.out_feats
 
     def forward(self, graph, feat, weight=None, edge_weight=None):
         input_feats = feat
         for layer in self.layers:
             feat = layer(graph, feat, weight, edge_weight)
-        feat = {k: feat[k] + input_feats[k] for k in feat.keys()}
+        if self.output_block == True:
+            return feat
+        else:
+            feat = {k: feat[k] + input_feats[k] for k in feat.keys()}
         return feat
+
+
+class Set2Set(nn.Module):
+    r"""
+    Compared to the Official dgl implementation, we allowed node type.
+
+    For each individual graph in the batch, set2set computes
+
+    .. math::
+        q_t &= \mathrm{LSTM} (q^*_{t-1})
+
+        \alpha_{i,t} &= \mathrm{softmax}(x_i \cdot q_t)
+
+        r_t &= \sum_{i=1}^N \alpha_{i,t} x_i
+
+        q^*_t &= q_t \Vert r_t
+
+    for this graph.
+
+    Args:
+        input_dim: The size of each input sample.
+        n_iters: The number of iterations.
+        n_layers: The number of recurrent layers.
+        ntype: Type of the node to apply Set2Set.
+    """
+
+    def __init__(self, input_dim: int, n_iters: int, n_layers: int, ntype: str):
+        super(Set2Set, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = 2 * input_dim
+        self.n_iters = n_iters
+        self.n_layers = n_layers
+        self.ntype = ntype
+        self.lstm = torch.nn.LSTM(self.output_dim, self.input_dim, n_layers)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        """Reinitialize learnable parameters."""
+        self.lstm.reset_parameters()
+
+    def forward(self, graph: dgl.DGLGraph, feat: torch.Tensor) -> torch.Tensor:
+        """
+        Compute set2set pooling.
+
+        Args:
+            graph: the input graph
+            feat: The input feature with shape :math:`(N, D)` where  :math:`N` is the
+                number of nodes in the graph, and :math:`D` means the size of features.
+
+        Returns:
+            The output feature with shape :math:`(B, D)`, where :math:`B` refers to
+            the batch size, and :math:`D` means the size of features.
+        """
+        with graph.local_scope():
+            batch_size = graph.batch_size
+
+            h = (
+                feat.new_zeros((self.n_layers, batch_size, self.input_dim)),
+                feat.new_zeros((self.n_layers, batch_size, self.input_dim)),
+            )
+
+            q_star = feat.new_zeros(batch_size, self.output_dim)
+
+            for _ in range(self.n_iters):
+                q, h = self.lstm(q_star.unsqueeze(0), h)
+                q = q.view(batch_size, self.input_dim)
+                e = (feat * dgl.broadcast_nodes(graph, q, ntype=self.ntype)).sum(
+                    dim=-1, keepdim=True
+                )
+                graph.nodes[self.ntype].data["e"] = e
+                alpha = dgl.softmax_nodes(graph, "e", ntype=self.ntype)
+                graph.nodes[self.ntype].data["r"] = feat * alpha
+                readout = dgl.sum_nodes(graph, "r", ntype=self.ntype)
+                q_star = torch.cat([q, readout], dim=-1)
+
+            return q_star
+
+    def extra_repr(self):
+        """
+        Set the extra representation of the module.
+        which will come into effect when printing the model.
+        """
+        summary = "n_iters={n_iters}"
+        return summary.format(**self.__dict__)
+
+
+class Set2SetThenCat(nn.Module):
+    """
+    Set2Set for nodes (separate for different node type) and then concatenate the
+    features of different node types to create a representation of the graph.
+
+     Args:
+        n_iter: number of LSTM iteration
+        n_layers: number of LSTM layers
+        ntypes: node types to perform Set2Set, e.g. ['atom', 'bond']
+        in_feats: node feature sizes. The order should be the same as `ntypes`.
+        ntypes_direct_cat: node types to which not perform Set2Set, whose feature is
+            directly concatenated. e.g. ['global']
+    """
+
+    def __init__(
+        self,
+        n_iters: int,
+        n_layers: int,
+        ntypes: List[str],
+        in_feats: List[int],
+        ntypes_direct_cat: Optional[List[str]] = None,
+    ):
+        super(Set2SetThenCat, self).__init__()
+        self.ntypes = ntypes
+        self.ntypes_direct_cat = ntypes_direct_cat
+
+        self.layers = nn.ModuleDict()
+        for nt, sz in zip(ntypes, in_feats):
+            if nt not in ntypes_direct_cat:
+                self.layers[nt] = Set2Set(
+                    input_dim=sz, n_iters=n_iters, n_layers=n_layers, ntype=nt
+                )
+
+    def forward(
+        self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Args:
+            graph: the graph
+            feats: node features with node type as key and the corresponding
+                features as value. Each tensor is of shape (N, D) where N is the number
+                of nodes of the corresponding node type, and D is the feature size.
+        Returns:
+            update features. Each tensor is of shape (B, D), where B is the batch size
+                and D is the feature size. Note D could be different for different
+                node type.
+
+        """
+        rst = []
+        for nt in self.ntypes:
+            if nt not in self.ntypes_direct_cat:
+                ft = self.layers[nt](graph, feats[nt])
+                rst.append(ft)
+
+        if self.ntypes_direct_cat is not None:
+            for nt in self.ntypes_direct_cat:
+                rst.append(feats[nt])
+
+        res = torch.cat(rst, dim=-1)  # dim=-1 to deal with batched graph
+
+        return res
+
+
+class UnifySize(nn.Module):
+    """
+    A layer to unify the feature size of nodes of different types.
+    Each feature uses a linear fc layer to map the size.
+
+    NOTE, after this transformation, each data point is just a linear combination of its
+    feature in the original feature space (x_new_ij = x_ik w_kj), there is not mixing of
+    feature between data points.
+
+    Args:
+        input_dim (dict): feature sizes of nodes with node type as key and size as value
+        output_dim (int): output feature size, i.e. the size we will turn all the
+            features to
+    """
+
+    def __init__(self, input_dim, output_dim):
+        super(UnifySize, self).__init__()
+
+        self.linears = nn.ModuleDict(
+            {
+                k: nn.Linear(size, output_dim, bias=False)
+                for k, size in input_dim.items()
+            }
+        )
+
+    def forward(self, feats):
+        """
+        Args:
+            feats (dict): features dict with node type as key and feature as value
+
+        Returns:
+            dict: size adjusted features
+        """
+        return {k: self.linears[k](x) for k, x in feats.items()}
+
+
+class SumPoolingThenCat(nn.Module):
+    """
+    SumPooling for nodes (separate for different node type) and then concatenate the
+    features of different node types to create a representation of the graph.
+
+     Args:
+        ntypes: node types to perform SumPooling, e.g. ['atom', 'bond']
+        in_feats: node feature sizes. The order should be the same as `ntypes`.
+        ntypes_direct_cat: node types to which not perform SumPooling, whose feature is
+            directly concatenated. e.g. ['global']
+    """
+
+    def __init__(
+        self,
+        ntypes: list,
+        in_feats: list,
+        ntypes_direct_cat: list,
+    ):
+        super(SumPoolingThenCat, self).__init__()
+        self.ntypes = ntypes
+        self.ntypes_direct_cat = ntypes_direct_cat
+        self.in_feats = in_feats
+        self.layers = nn.ModuleDict()
+        # for nt, sz in zip(ntypes, in_feats):
+        #    if nt not in ntypes_direct_cat:
+        #        self.layers[nt] = dgl.SumPooling(ntype=nt)
+
+    def forward(
+        self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute the sumpooling of each node type and each graph in the batch.
+        """
+        rst = []
+        with graph.local_scope():
+            graph.ndata["h"] = feats
+
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    rst.append(dgl.readout_nodes(graph, "h", ntype=ntype, op="sum"))
+
+        if self.ntypes_direct_cat is not None:
+            for ntype in self.ntypes_direct_cat:
+                rst.append(feats[ntype])
+
+        return torch.cat(rst, dim=-1)
+
+
+class WeightAndSumThenCat(nn.Module):
+    """
+    WeightAndSum for nodes (separate for different node type) and then concatenate the
+    features of different node types to create a representation of the graph.
+
+     Args:
+        ntypes: node types to perform WeightAndSum, e.g. ['atom', 'bond']
+        in_feats: node feature sizes. The order should be the same as `ntypes`.
+        ntypes_direct_cat: node types to which not perform WeightAndSum, whose feature is
+            directly concatenated. e.g. ['global']
+    """
+
+    def __init__(
+        self,
+        ntypes: list,
+        in_feats: list,
+        ntypes_direct_cat: list,
+    ):
+        super(WeightAndSumThenCat, self).__init__()
+        self.ntypes = ntypes
+        self.ntypes_direct_cat = ntypes_direct_cat
+        self.in_feats = in_feats
+        self.layers = nn.ModuleDict()
+        self.atom_weighting = {}
+        for ntype, size in zip(ntypes, in_feats):
+            if ntype not in ntypes_direct_cat:
+                self.atom_weighting[ntype] = nn.Linear(size, 1)
+
+        # for ntype, size in zip(ntypes, in_feats):
+        #    self.layers[ntype] = WeightAndSum(in_feats=size)
+
+    def forward(
+        self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute the sumpooling of each node type and each graph in the batch.
+        """
+        rst = []
+        with graph.local_scope():
+            weight_dict = {}
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    weight_dict[ntype] = self.atom_weighting[ntype](feats[ntype])
+
+            graph.ndata["h"] = feats
+            graph.ndata["w"] = weight_dict
+
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    rst.append(
+                        dgl.readout_nodes(graph, "h", "w", ntype=ntype, op="sum")
+                    )
+
+        if self.ntypes_direct_cat is not None:
+            for ntype in self.ntypes_direct_cat:
+                rst.append(feats[ntype])
+
+        return torch.cat(rst, dim=-1)
