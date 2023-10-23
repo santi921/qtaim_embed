@@ -12,6 +12,8 @@ from qtaim_embed.data.featurizer import (
     AtomFeaturizerGraphGeneral,
     GlobalFeaturizerGraph,
 )
+from qtaim_embed.core.datamodule import QTAIMNodeTaskDataModule
+
 from qtaim_embed.core.dataset import HeteroGraphNodeLabelDataset
 
 
@@ -23,3 +25,14 @@ def test_molwrapper():
 def test_dataset():
     # TODO
     pass
+
+
+def test_datamodule():
+    dm = QTAIMNodeTaskDataModule()
+    print(dm.config)
+    dm.setup("fit")
+    train_dl = dm.train_dataloader()
+    val_dl = dm.val_dataloader()
+
+
+test_datamodule()

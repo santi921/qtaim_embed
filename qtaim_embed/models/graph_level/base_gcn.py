@@ -10,13 +10,26 @@ import dgl.nn.pytorch as dglnn
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
 
-from qtaim_embed.models.utils import _split_batched_output, get_layer_args
-from qtaim_embed.models.layers import GraphConvDropoutBatch, ResidualBlock
+from qtaim_embed.models.utils import (
+    _split_batched_output,
+    get_layer_args,
+    link_fmt_to_node_fmt,
+)
+
+from qtaim_embed.models.layers import (
+    GraphConvDropoutBatch,
+    ResidualBlock,
+    UnifySize,
+    Set2SetThenCat,
+    SumPoolingThenCat,
+    WeightAndSumThenCat,
+    GlobalAttentionPoolingThenCat,
+)
 
 
-class GCNNodePred(pl.LightningModule):
+class GCNGraphPred(pl.LightningModule):
     """
-    Basic GNN model for node-level regression
+    Basic GNN model for graph-level regression
     Takes
         atom_input_size: int, dimension of atom features
         bond_input_size: int, dimension of bond features
@@ -38,6 +51,8 @@ class GCNNodePred(pl.LightningModule):
         loss_fn: str, loss function
         resid_n_graph_convs: int, number of graph convolutions per residual block
         scalers: list, list of scalers applied to each node type
+        embedding_size: int, size of embedding layer
+        global_pooling: str, type of global pooling
 
     """
 
@@ -47,12 +62,13 @@ class GCNNodePred(pl.LightningModule):
         bond_input_size=8,
         global_input_size=3,
         n_conv_layers=3,
-        target_dict={"atom": "extra_feat_bond_esp_total"},
+        target_dict={"atom": "E"},
         conv_fn="GraphConvDropoutBatch",
+        global_pooling="WeightAndSumThenCat",
         resid_n_graph_convs=None,
         dropout=0.2,
         batch_norm=True,
-        activation=None,
+        activation="ReLU",
         bias=True,
         norm="both",
         aggregate="sum",
@@ -62,13 +78,23 @@ class GCNNodePred(pl.LightningModule):
         lr_plateau_patience=5,
         lr_scale_factor=0.5,
         loss_fn="mse",
+        embedding_size=128,
+        fc_layer_size=[128, 64],
+        fc_dropout=0.0,
+        fc_batch_norm=True,
+        lstm_iters=3,
+        lstm_layers=1,
+        output_dims=1,
+        pooling_ntypes=["atom", "bond"],
+        pooling_ntypes_direct=["global"],
     ):
         super().__init__()
         self.learning_rate = lr
 
-        output_dims = 0
-        for k, v in target_dict.items():
-            output_dims += len(v)
+        # output_dims = 0
+        # for k, v in target_dict.items():
+        #    output_dims += len(v)
+
         assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock", (
             "conv_fn must be either GraphConvDropoutBatch or ResidualBlock"
             + f"but got {conv_fn}"
@@ -79,6 +105,16 @@ class GCNNodePred(pl.LightningModule):
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
             )
+
+        assert global_pooling in [
+            "WeightAndSumThenCat",
+            "SumPoolingThenCat",
+            "GlobalAttentionPoolingThenCat",
+            "Set2SetThenCat",
+        ], (
+            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, or GlobalAttentionPoolingThenCat"
+            + f"but got {global_pooling}"
+        )
 
         params = {
             "atom_input_size": atom_input_size,
@@ -101,6 +137,17 @@ class GCNNodePred(pl.LightningModule):
             "scheduler_name": scheduler_name,
             "loss_fn": loss_fn,
             "resid_n_graph_convs": resid_n_graph_convs,
+            "embedding_size": embedding_size,
+            "fc_layer_size": fc_layer_size,
+            "fc_dropout": fc_dropout,
+            "fc_batch_norm": fc_batch_norm,
+            "n_fc_layers": len(fc_layer_size),
+            "global_pooling": global_pooling,
+            "ntypes_pool": pooling_ntypes,
+            "ntypes_pool_direct_cat": pooling_ntypes_direct,
+            "output_dims": output_dims,
+            "lstm_iters": lstm_iters,
+            "lstm_layers": lstm_layers,
         }
 
         self.hparams.update(params)
@@ -110,11 +157,27 @@ class GCNNodePred(pl.LightningModule):
         if self.hparams.activation is not None:
             self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
 
+        input_size = {
+            "atom": self.hparams.atom_input_size,
+            "bond": self.hparams.bond_input_size,
+            "global": self.hparams.global_input_size,
+        }
+        # print("input size", input_size)
+        self.embedding = UnifySize(
+            input_dim=input_size,
+            output_dim=self.hparams.embedding_size,
+        )
+        # self.embedding_output_size = self.hparams.embedding_size
+
         self.conv_layers = nn.ModuleList()
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             for i in range(self.hparams.n_conv_layers):
-                layer_args = get_layer_args(self.hparams, i)
+                embedding_in = False
+                if i == 0:
+                    embedding_in = True
+
+                layer_args = get_layer_args(self.hparams, i, embedding_in=embedding_in)
 
                 self.conv_layers.append(
                     dglnn.HeteroGraphConv(
@@ -135,18 +198,23 @@ class GCNNodePred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "ResidualBlock":
             layer_tracker = 0
+            embedding_in = False
+            if layer_tracker == 0:
+                embedding_in = True
 
             while layer_tracker < self.hparams.n_conv_layers:
                 if (
                     layer_tracker + self.hparams.resid_n_graph_convs
                     > self.hparams.n_conv_layers - 1
                 ):
-                    print("triggered output_layer args")
+                    # print("triggered output_layer args")
                     layer_ind = self.hparams.n_conv_layers - layer_tracker - 1
                 else:
                     layer_ind = -1
 
-                layer_args = get_layer_args(self.hparams, layer_ind)
+                layer_args = get_layer_args(
+                    self.hparams, layer_ind, embedding_in=embedding_in
+                )
 
                 output_block = False
                 if layer_ind != -1:
@@ -164,38 +232,122 @@ class GCNNodePred(pl.LightningModule):
                 layer_tracker += self.hparams.resid_n_graph_convs
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
+        # print("conv layer out modes", self.conv_layers[-1].mods)
 
+        # print("conv layer out feats", self.conv_layers[-1].out_feats)
+        # conv_out_size = self.conv_layers[-1].out_feats
+
+        if self.hparams.conv_fn == "GraphConvDropoutBatch":
+            conv_out_size = {}
+            for k, v in self.conv_layers[-1].mods.items():
+                conv_out_size[k] = v.out_feats
+        elif self.hparams.conv_fn == "ResidualBlock":
+            conv_out_size = self.conv_layers[-1].out_feats
+
+        # print("conv out raw", conv_out_size)
+        self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
+        # print("conv out size: ", self.conv_out_size)
+
+        if self.hparams.global_pooling == "WeightAndSumThenCat":
+            readout_fn = WeightAndSumThenCat
+        elif self.hparams.global_pooling == "SumPoolingThenCat":
+            readout_fn = SumPoolingThenCat
+        elif self.hparams.global_pooling == "GlobalAttentionPoolingThenCat":
+            readout_fn = GlobalAttentionPoolingThenCat
+        elif self.hparams.global_pooling == "Set2SetThenCat":
+            readout_fn = Set2SetThenCat
+
+        list_in_feats = []
+        for type_feat in self.hparams.pooling_ntypes:
+            list_in_feats.append(self.conv_out_size[type_feat])
+
+        self.readout_out_size = 0
+        # print("list in feats", list_in_feats)
+        # print("conv out size", self.conv_out_size)
+        # print("pooling ntypes", self.hparams.pooling_ntypes)
+        # print("pooling ntypes direct cat", self.hparams.ntypes_pool_direct_cat)
+        if self.hparams.global_pooling == "Set2SetThenCat":
+            # print("using set2setthencat")
+
+            self.readout = readout_fn(
+                n_iters=self.hparams.lstm_iters,
+                n_layers=self.hparams.lstm_layers,
+                in_feats=list_in_feats,
+                ntypes=self.hparams.pooling_ntypes,
+                ntypes_direct_cat=self.hparams.ntypes_pool_direct_cat,
+            )
+            for i in self.hparams.pooling_ntypes:
+                if i not in self.hparams.ntypes_pool_direct_cat:
+                    self.readout_out_size += self.conv_out_size[i] * 2
+                else:
+                    self.readout_out_size += self.conv_out_size[i]
+
+        else:
+            # print("other readout used")
+            self.readout = readout_fn(
+                ntypes=self.hparams.pooling_ntypes,
+                in_feats=list_in_feats,
+                ntypes_direct_cat=self.hparams.ntypes_pool_direct_cat,
+            )
+
+            for i in self.hparams.pooling_ntypes:
+                if i in self.hparams.ntypes_pool_direct_cat:
+                    self.readout_out_size += self.conv_out_size[i]
+                else:
+                    self.readout_out_size += self.conv_out_size[i]
+
+        # print("readout out size", self.readout_out_size)
+        # self.readout_out_size = readout_out_size
         self.loss = self.loss_function()
 
-        print("number of output dims", output_dims)
+        self.fc_layers = nn.ModuleList()
+
+        input_size = self.readout_out_size
+        for i in range(self.hparams.n_fc_layers):
+            out_size = self.hparams.fc_layer_size[i]
+            self.fc_layers.append(nn.Linear(input_size, out_size))
+            if self.hparams.fc_batch_norm:
+                self.fc_layers.append(nn.BatchNorm1d(out_size))
+            if self.hparams.activation is not None:
+                self.fc_layers.append(self.hparams.activation)
+            if self.hparams.fc_dropout > 0:
+                self.fc_layers.append(nn.Dropout(self.hparams.fc_dropout))
+            input_size = out_size
+
+        self.fc_layers.append(nn.Linear(input_size, self.hparams.output_dims))
+
+        # print("number of output dims", output_dims)
 
         # create multioutput wrapper for metrics
         self.train_r2 = MultioutputWrapper(
-            torchmetrics.R2Score(), num_outputs=output_dims
+            torchmetrics.R2Score(), num_outputs=self.hparams.output_dims
         )
         self.train_torch_l1 = MultioutputWrapper(
-            torchmetrics.MeanAbsoluteError(), num_outputs=output_dims
+            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
         )
         self.train_torch_mse = MultioutputWrapper(
-            torchmetrics.MeanSquaredError(squared=False), num_outputs=output_dims
+            torchmetrics.MeanSquaredError(squared=False),
+            num_outputs=self.hparams.output_dims,
         )
         self.val_r2 = MultioutputWrapper(
-            torchmetrics.R2Score(), num_outputs=output_dims
+            torchmetrics.R2Score(), num_outputs=self.hparams.output_dims
         )
         self.val_torch_l1 = MultioutputWrapper(
-            torchmetrics.MeanAbsoluteError(), num_outputs=output_dims
+            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
         )
         self.val_torch_mse = MultioutputWrapper(
-            torchmetrics.MeanSquaredError(squared=False), num_outputs=output_dims
+            torchmetrics.MeanSquaredError(squared=False),
+            num_outputs=self.hparams.output_dims,
         )
         self.test_r2 = MultioutputWrapper(
-            torchmetrics.R2Score(), num_outputs=output_dims
+            torchmetrics.R2Score(), num_outputs=self.hparams.output_dims
         )
         self.test_torch_l1 = MultioutputWrapper(
-            torchmetrics.MeanAbsoluteError(), num_outputs=output_dims
+            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
         )
         self.test_torch_mse = MultioutputWrapper(
-            torchmetrics.MeanSquaredError(squared=False), num_outputs=output_dims
+            torchmetrics.MeanSquaredError(squared=False),
+            num_outputs=self.hparams.output_dims,
         )
 
     def forward(self, graph, inputs):
@@ -203,13 +355,48 @@ class GCNNodePred(pl.LightningModule):
         Forward pass
         """
 
+        feats = self.embedding(inputs)
         for ind, conv in enumerate(self.conv_layers):
-            if ind == 0:
-                feats = conv(graph, inputs)
-            else:
-                feats = conv(graph, feats)
+            feats = conv(graph, feats)
 
-        return feats
+        readout_feats = self.readout(graph, feats)
+        for ind, layer in enumerate(self.fc_layers):
+            readout_feats = layer(readout_feats)
+
+        # print("preds shape:", readout_feats.shape)
+        return readout_feats
+
+    def loss_function(self):
+        """
+        Initialize loss function
+        """
+        if self.hparams.loss_fn == "mse":
+            # make multioutput wrapper for mse
+            loss_multi = MultioutputWrapper(
+                torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims
+            )
+        elif self.hparams.loss_fn == "smape":
+            loss_multi = MultioutputWrapper(
+                torchmetrics.SymmetricMeanAbsolutePercentageError(),
+                num_outputs=self.hparams.output_dims,
+            )
+        elif self.hparams.loss_fn == "mae":
+            loss_multi = MultioutputWrapper(
+                torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
+            )
+        else:
+            loss_multi = MultioutputWrapper(
+                torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims
+            )
+
+        loss_fn = loss_multi
+        return loss_fn
+
+    def compute_loss(self, target, pred):
+        """
+        Compute loss
+        """
+        return self.loss(target, pred)
 
     def feature_at_each_layer(model, graph, feats):
         """
@@ -246,35 +433,15 @@ class GCNNodePred(pl.LightningModule):
             )
             layer_idx += 1
 
-        return bond_feats, atom_feats, global_feats
-
     def shared_step(self, batch, mode):
         batch_graph, batch_label = batch
-        logits_list = []
-        labels_list = []
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
-        max_nodes = -1
-        for target_type, target_list in self.hparams.target_dict.items():
-            if target_list is not None and len(target_list) > 0:
-                labels = batch_label[target_type]
-                logits_temp = logits[target_type]
-                if max_nodes < logits_temp.shape[0]:
-                    max_nodes = logits_temp.shape[0]
-                logits_list.append(logits_temp)
-                labels_list.append(labels)
-        logits_list = [
-            F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in logits_list
-        ]  # this does the unify node size
-        labels_list = [
-            F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in labels_list
-        ]  # this does the unify node size
-        logits = torch.cat(logits_list, dim=1)
-        labels = torch.cat(labels_list, dim=1)
-
+        labels = batch_label["global"]
         all_loss = self.compute_loss(logits, labels)
-
+        logits = logits.view(-1, self.hparams.output_dims)
+        labels = labels.view(-1, self.hparams.output_dims)
         # log loss
         self.log(
             f"{mode}_loss",
@@ -286,40 +453,7 @@ class GCNNodePred(pl.LightningModule):
             sync_dist=True,
         )
         self.update_metrics(logits, labels, mode)
-
-        return all_loss.sum()
-
-    def loss_function(self):
-        """
-        Initialize loss function
-        """
-        if self.hparams.loss_fn == "mse":
-            # make multioutput wrapper for mse
-            loss_multi = MultioutputWrapper(
-                torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims
-            )
-        elif self.hparams.loss_fn == "smape":
-            loss_multi = MultioutputWrapper(
-                torchmetrics.SymmetricMeanAbsolutePercentageError(),
-                num_outputs=self.hparams.output_dims,
-            )
-        elif self.hparams.loss_fn == "mae":
-            loss_multi = MultioutputWrapper(
-                torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
-            )
-        else:
-            loss_multi = MultioutputWrapper(
-                torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims
-            )
-
-        loss_fn = loss_multi
-        return loss_fn
-
-    def compute_loss(self, target, pred):
-        """
-        Compute loss
-        """
-        return self.loss(target, pred)
+        return all_loss
 
     def training_step(self, batch, batch_idx):
         """

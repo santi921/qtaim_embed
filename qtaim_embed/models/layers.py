@@ -1,15 +1,53 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from copy import deepcopy
 from typing import List, Tuple, Dict, Optional
 
 
-import dgl
-from dgl import function as fn
 import torchmetrics
 import dgl.nn.pytorch as dglnn
 import pytorch_lightning as pl
+import dgl
+from dgl import function as fn
+from dgl.readout import sum_nodes, max_nodes, mean_nodes, softmax_nodes
+
+
+class UnifySize(nn.Module):
+    """
+    A layer to unify the feature size of nodes of different types.
+    Each feature uses a linear fc layer to map the size.
+
+    NOTE, after this transformation, each data point is just a linear combination of its
+    feature in the original feature space (x_new_ij = x_ik w_kj), there is not mixing of
+    feature between data points.
+
+    Args:
+        input_dim (dict): feature sizes of nodes with node type as key and size as value
+        output_dim (int): output feature size, i.e. the size we will turn all the
+            features to
+    """
+
+    def __init__(self, input_dim, output_dim):
+        super(UnifySize, self).__init__()
+
+        self.linears = nn.ModuleDict(
+            {
+                k: nn.Linear(size, output_dim, bias=False)
+                for k, size in input_dim.items()
+            }
+        )
+
+    def forward(self, feats):
+        """
+        Args:
+            feats (dict): features dict with node type as key and feature as value
+
+        Returns:
+            dict: size adjusted features
+        """
+        return {k: self.linears[k](x) for k, x in feats.items()}
 
 
 class GraphConvDropoutBatch(nn.Module):
@@ -76,7 +114,7 @@ class ResidualBlock(nn.Module):
         for i in range(resid_n_graph_convs):
             if output_block == True:
                 if i == resid_n_graph_convs - 1:
-                    print("triggered separate outer layer")
+                    # print("triggered separate outer layer")
                     self.layers.append(
                         dglnn.HeteroGraphConv(
                             {
@@ -94,7 +132,7 @@ class ResidualBlock(nn.Module):
                         )
                     )
                 else:
-                    print("triggered separate intermediate layer")
+                    # print("triggered separate intermediate layer")
                     self.layers.append(
                         dglnn.HeteroGraphConv(
                             {
@@ -113,7 +151,7 @@ class ResidualBlock(nn.Module):
                     )
 
             else:
-                print("triggered normal outer layer")
+                # print("triggered normal outer layer")
                 self.layers.append(
                     dglnn.HeteroGraphConv(
                         {
@@ -294,42 +332,6 @@ class Set2SetThenCat(nn.Module):
         return res
 
 
-class UnifySize(nn.Module):
-    """
-    A layer to unify the feature size of nodes of different types.
-    Each feature uses a linear fc layer to map the size.
-
-    NOTE, after this transformation, each data point is just a linear combination of its
-    feature in the original feature space (x_new_ij = x_ik w_kj), there is not mixing of
-    feature between data points.
-
-    Args:
-        input_dim (dict): feature sizes of nodes with node type as key and size as value
-        output_dim (int): output feature size, i.e. the size we will turn all the
-            features to
-    """
-
-    def __init__(self, input_dim, output_dim):
-        super(UnifySize, self).__init__()
-
-        self.linears = nn.ModuleDict(
-            {
-                k: nn.Linear(size, output_dim, bias=False)
-                for k, size in input_dim.items()
-            }
-        )
-
-    def forward(self, feats):
-        """
-        Args:
-            feats (dict): features dict with node type as key and feature as value
-
-        Returns:
-            dict: size adjusted features
-        """
-        return {k: self.linears[k](x) for k, x in feats.items()}
-
-
 class SumPoolingThenCat(nn.Module):
     """
     SumPooling for nodes (separate for different node type) and then concatenate the
@@ -352,7 +354,7 @@ class SumPoolingThenCat(nn.Module):
         self.ntypes = ntypes
         self.ntypes_direct_cat = ntypes_direct_cat
         self.in_feats = in_feats
-        self.layers = nn.ModuleDict()
+        # self.layers = nn.ModuleDict()
         # for nt, sz in zip(ntypes, in_feats):
         #    if nt not in ntypes_direct_cat:
         #        self.layers[nt] = dgl.SumPooling(ntype=nt)
@@ -400,8 +402,7 @@ class WeightAndSumThenCat(nn.Module):
         self.ntypes = ntypes
         self.ntypes_direct_cat = ntypes_direct_cat
         self.in_feats = in_feats
-        self.layers = nn.ModuleDict()
-        self.atom_weighting = {}
+        self.atom_weighting = nn.ModuleDict()
         for ntype, size in zip(ntypes, in_feats):
             if ntype not in ntypes_direct_cat:
                 self.atom_weighting[ntype] = nn.Linear(size, 1)
@@ -436,3 +437,73 @@ class WeightAndSumThenCat(nn.Module):
                 rst.append(feats[ntype])
 
         return torch.cat(rst, dim=-1)
+
+
+class GlobalAttentionPoolingThenCat(nn.Module):
+    """
+    GlobalAttentionPooling for nodes (separate for different node type) and then concatenate the
+    features of different node types to create a representation of the graph.
+
+     Args:
+        ntypes: node types to perform GlobalAttentionPooling, e.g. ['atom', 'bond']
+        in_feats: node feature sizes. The order should be the same as `ntypes`.
+        ntypes_direct_cat: node types to which not perform GlobalAttentionPooling, whose feature is
+            directly concatenated. e.g. ['global']
+    """
+
+    def __init__(
+        self,
+        ntypes: list,
+        in_feats: list,
+        ntypes_direct_cat: list,
+    ):
+        super(GlobalAttentionPoolingThenCat, self).__init__()
+        self.ntypes = ntypes
+        self.ntypes_direct_cat = ntypes_direct_cat
+        self.in_feats = in_feats
+        self.gate_nn = nn.ModuleDict()
+        for ntype, in_feat in zip(ntypes, in_feats):
+            self.gate_nn[ntype] = nn.Linear(in_feat, 1)
+
+    def forward(self, graph, feats, get_attention=False):
+        rst = []
+        readout_dict = {}
+        gate_dict = {}
+        gated_feats = {}
+        with graph.local_scope():
+            # gather, assign gate to graph
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    gate_dict[ntype] = F.leaky_relu(self.gate_nn[ntype](feats[ntype]))
+
+            graph.ndata["gate"] = gate_dict
+            graph.nodes["atom"].data["gate"]
+            graph.nodes["bond"].data["gate"]
+
+            # gather, assign gated features to graph
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    gate = softmax_nodes(
+                        graph=graph, feat="gate", ntype=ntype
+                    )  # error is here
+                    gated_feats[ntype] = feats[ntype] * gate
+            graph.ndata.pop("gate")
+
+            # gather, assign readout features to graph
+            graph.ndata["r"] = gated_feats
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    readout_dict[ntype] = sum_nodes(graph, "r", ntype=ntype)
+                    rst.append(readout_dict[ntype])
+            graph.ndata.pop("r")
+
+        if self.ntypes_direct_cat is not None:
+            for ntype in self.ntypes_direct_cat:
+                rst.append(feats[ntype])
+
+        rst = torch.cat(rst, dim=-1)
+
+        if get_attention:
+            return rst, gate
+        else:
+            return rst

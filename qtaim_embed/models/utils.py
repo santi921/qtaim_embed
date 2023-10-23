@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+import pytorch_lightning as pl
 
 
 def _split_batched_output(graph, value, key):
@@ -14,6 +16,23 @@ def _split_batched_output(graph, value, key):
     # convert to tuple
     n_nodes = tuple(n_nodes)
     return torch.split(value, n_nodes)
+
+
+def link_fmt_to_node_fmt(dict_feats):
+    """
+    Converts a dictionary of features from link format to node format.
+    """
+    ret_dict = {}
+    for k, v in dict_feats.items():
+        assert k[-1] in ["g", "b", "a"], "key must end with g, b, or a"
+        if k[-1] == "g":
+            ret_dict["global"] = v
+        elif k[-1] == "b":
+            ret_dict["bond"] = v
+        elif k[-1] == "a":
+            ret_dict["atom"] = v
+
+    return ret_dict
 
 
 def get_layer_args(hparams, layer_ind=None, embedding_in=False):
@@ -164,7 +183,7 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False):
         # resid_n_graph_convs = hparams.resid_n_graph_convs
 
         if layer_ind != -1:  # last residual layer has different args
-            print("triggered early stop condition!!!")
+            # print("triggered early stop condition!!!")
             layer_args["a2b_inner"] = {
                 "in_feats": atom_in,
                 "out_feats": bond_out,
@@ -270,7 +289,7 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False):
                 bond_out = len(hparams.target_dict["bond"])
             if "global" in hparams.target_dict.keys():
                 global_out = len(hparams.target_dict["global"])
-            print("target_dict", hparams.target_dict)
+            # print("target_dict", hparams.target_dict)
 
         layer_args["a2b"] = {
             "in_feats": atom_in,
@@ -372,3 +391,30 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False):
         }
 
         return layer_args
+
+
+class LogParameters(pl.Callback):
+    # weight and biases to tensorboard
+    def __init__(self):
+        super().__init__()
+
+    def on_fit_start(self, trainer, pl_module):
+        self.d_parameters = {}
+        for n, p in pl_module.named_parameters():
+            self.d_parameters[n] = []
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        if not trainer.sanity_checking:  # WARN: sanity_check is turned on by default
+            lp = []
+            tensorboard_logger_index = 0
+            for n, p in pl_module.named_parameters():
+                trainer.logger.experiment.add_histogram(
+                    n, p.data, trainer.current_epoch
+                )
+                self.d_parameters[n].append(p.ravel().cpu().numpy())
+                lp.append(p.ravel().cpu().numpy())
+
+            p = np.concatenate(lp)
+            trainer.logger.experiment.add_histogram(
+                "Parameters", p, trainer.current_epoch
+            )
