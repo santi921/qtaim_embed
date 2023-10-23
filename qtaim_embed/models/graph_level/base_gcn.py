@@ -10,10 +10,10 @@ import dgl.nn.pytorch as dglnn
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
 
-from qtaim_embed.models.utils import (
-    _split_batched_output,
+from qtaim_embed.utils.models import (
     get_layer_args,
     link_fmt_to_node_fmt,
+    _split_batched_output,
 )
 
 from qtaim_embed.models.layers import (

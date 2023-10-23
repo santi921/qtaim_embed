@@ -35,5 +35,8 @@
 *pyc
 *csv
 *ckpt
+*log
+*wandb
 *yaml
+*tfevents*
 qtaim_embed.egg-info/not-zip-safe

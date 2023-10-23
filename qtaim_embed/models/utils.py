@@ -1,396 +1,86 @@
 import torch
 import numpy as np
 import pytorch_lightning as pl
+from qtaim_embed.models.graph_level.base_gcn import GCNGraphPred
 
 
-def _split_batched_output(graph, value, key):
+def load_graph_level_model_from_config(config):
     """
-    Split a tensor into `num_graphs` chunks, the size of each chunk equals the
-    number of bonds in the graph.
+    returns model and optimizer from dict of parameters
 
+    Args:
+        dict_train(dict): dictionary
     Returns:
-        list of tensor.
-
+        model (pytorch model): model to train
+        optimizer (pytorch optimizer obj): optimizer
     """
-    n_nodes = graph.batch_num_nodes(key)
-    # convert to tuple
-    n_nodes = tuple(n_nodes)
-    return torch.split(value, n_nodes)
+    if config["restore"]:
+        print(":::RESTORING MODEL FROM EXISTING FILE:::")
 
+        if config["restore_path"] != None:
+            model = GCNGraphPred.load_from_checkpoint(
+                checkpoint_path=config["restore_path"]
+            )
+            # model.to(device)
+            print(":::MODEL LOADED:::")
+            return model
 
-def link_fmt_to_node_fmt(dict_feats):
-    """
-    Converts a dictionary of features from link format to node format.
-    """
-    ret_dict = {}
-    for k, v in dict_feats.items():
-        assert k[-1] in ["g", "b", "a"], "key must end with g, b, or a"
-        if k[-1] == "g":
-            ret_dict["global"] = v
-        elif k[-1] == "b":
-            ret_dict["bond"] = v
-        elif k[-1] == "a":
-            ret_dict["atom"] = v
+        if load_dir == None:
+            load_dir = "./"
 
-    return ret_dict
+        try:
+            model = GCNGraphPred.load_from_checkpoint(
+                checkpoint_path=load_dir + "/last.ckpt"
+            )
+            # model.to(device)
+            print(":::MODEL LOADED:::")
+            return model
 
+        except:
+            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
-def get_layer_args(hparams, layer_ind=None, embedding_in=False):
-    """
-    Converts hparam dictionary to a dictionary of arguments for a layer.
-    """
+    shape_fc = config["shape_fc"]
+    base_fc = config["fc_hidden_size_1"]
 
-    assert hparams.conv_fn in [
-        "GraphConvDropoutBatch",
-        "ResidualBlock",
-    ], "conv_fn must be either GraphConvDropoutBatch or ResidualBlock"
+    if shape_fc == "flat":
+        fc_layers = [base_fc for i in range(config["fc_num_layers"])]
+    else:
+        fc_layers = [int(base_fc / (2**i)) for i in range(config["fc_num_layers"])]
 
-    layer_args = {}
-    if hparams.conv_fn == "GraphConvDropoutBatch":
-        atom_out = hparams.atom_input_size
-        bond_out = hparams.bond_input_size
-        global_out = hparams.global_input_size
-        atom_in = hparams.atom_input_size
-        bond_in = hparams.bond_input_size
-        global_in = hparams.global_input_size
+    model = GCNGraphPred(
+        atom_input_size=config["atom_feature_size"],
+        bond_input_size=config["bond_feature_size"],
+        global_input_size=config["global_feature_size"],
+        n_conv_layers=config["n_conv_layers"],
+        resid_n_graph_convs=config["resid_n_graph_convs"],
+        target_dict=config["target_dict"],
+        conv_fn=config["conv_fn"],
+        global_pooling=config["global_pooling_fn"],
+        dropout=config["dropout"],
+        batch_norm=config["batch_norm"],
+        activation=config["activation"],
+        bias=config["bias"],
+        norm=config["norm"],
+        aggregate=config["aggregate"],
+        lr=config["lr"],
+        scheduler_name="reduce_on_plateau",
+        weight_decay=config["weight_decay"],
+        lr_plateau_patience=config["lr_plateau_patience"],
+        lr_scale_factor=config["lr_scale_factor"],
+        loss_fn=config["loss_fn"],
+        embedding_size=config["embedding_size"],
+        fc_layer_size=fc_layers,
+        fc_dropout=config["fc_dropout"],
+        fc_batch_norm=config["fc_batch_norm"],
+        lstm_iters=config["lstm_iters"],
+        lstm_layers=config["lstm_layers"],
+        output_dims=config["output_dims"],
+        pooling_ntypes=["atom", "bond", "global"],
+        pooling_ntypes_direct=["global"],
+    )
+    # model.to(device)
 
-        if layer_ind == hparams.n_conv_layers - 1:
-            if "atom" in hparams.target_dict.keys():
-                atom_out = len(hparams.target_dict["atom"])
-            if "bond" in hparams.target_dict.keys():
-                bond_out = len(hparams.target_dict["bond"])
-            if "global" in hparams.target_dict.keys():
-                global_out = len(hparams.target_dict["global"])
-
-        if embedding_in:
-            atom_in = hparams.embedding_size
-            bond_in = hparams.embedding_size
-            global_in = hparams.embedding_size
-
-        layer_args["a2b"] = {
-            "in_feats": atom_in,
-            "out_feats": bond_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["b2a"] = {
-            "in_feats": bond_in,
-            "out_feats": atom_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["a2g"] = {
-            "in_feats": atom_in,
-            "out_feats": global_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["b2g"] = {
-            "in_feats": bond_in,
-            "out_feats": global_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["g2a"] = {
-            "in_feats": global_in,
-            "out_feats": atom_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["g2b"] = {
-            "in_feats": global_in,
-            "out_feats": bond_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["a2a"] = {
-            "in_feats": atom_in,
-            "out_feats": atom_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["b2b"] = {
-            "in_feats": bond_in,
-            "out_feats": bond_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["g2g"] = {
-            "in_feats": global_in,
-            "out_feats": global_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        return layer_args
-
-    elif hparams.conv_fn == "ResidualBlock":
-        atom_out = hparams.atom_input_size
-        bond_out = hparams.bond_input_size
-        global_out = hparams.global_input_size
-        atom_in = hparams.atom_input_size
-        bond_in = hparams.bond_input_size
-        global_in = hparams.global_input_size
-
-        if embedding_in:
-            atom_in = hparams.embedding_size
-            bond_in = hparams.embedding_size
-            global_in = hparams.embedding_size
-        # resid_n_graph_convs = hparams.resid_n_graph_convs
-
-        if layer_ind != -1:  # last residual layer has different args
-            # print("triggered early stop condition!!!")
-            layer_args["a2b_inner"] = {
-                "in_feats": atom_in,
-                "out_feats": bond_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["b2a_inner"] = {
-                "in_feats": bond_in,
-                "out_feats": atom_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["a2g_inner"] = {
-                "in_feats": atom_in,
-                "out_feats": global_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["b2g_inner"] = {
-                "in_feats": bond_in,
-                "out_feats": global_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["g2a_inner"] = {
-                "in_feats": global_in,
-                "out_feats": atom_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["g2b_inner"] = {
-                "in_feats": global_in,
-                "out_feats": bond_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["a2a_inner"] = {
-                "in_feats": atom_in,
-                "out_feats": atom_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["b2b_inner"] = {
-                "in_feats": hparams.bond_input_size,
-                "out_feats": bond_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            layer_args["g2g_inner"] = {
-                "in_feats": global_in,
-                "out_feats": global_out,
-                "norm": hparams.norm,
-                "bias": hparams.bias,
-                "activation": hparams.activation,
-                "allow_zero_in_degree": True,
-                "dropout": hparams.dropout,
-                "batch_norm_tf": hparams.batch_norm_tf,
-            }
-
-            if "atom" in hparams.target_dict.keys():
-                atom_out = len(hparams.target_dict["atom"])
-            if "bond" in hparams.target_dict.keys():
-                bond_out = len(hparams.target_dict["bond"])
-            if "global" in hparams.target_dict.keys():
-                global_out = len(hparams.target_dict["global"])
-            # print("target_dict", hparams.target_dict)
-
-        layer_args["a2b"] = {
-            "in_feats": atom_in,
-            "out_feats": bond_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["b2a"] = {
-            "in_feats": bond_in,
-            "out_feats": atom_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["a2g"] = {
-            "in_feats": atom_in,
-            "out_feats": global_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["b2g"] = {
-            "in_feats": bond_in,
-            "out_feats": global_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["g2a"] = {
-            "in_feats": global_in,
-            "out_feats": atom_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["g2b"] = {
-            "in_feats": global_in,
-            "out_feats": bond_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["a2a"] = {
-            "in_feats": atom_in,
-            "out_feats": atom_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["b2b"] = {
-            "in_feats": bond_in,
-            "out_feats": bond_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        layer_args["g2g"] = {
-            "in_feats": global_in,
-            "out_feats": global_out,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": hparams.activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-        return layer_args
+    return model
 
 
 class LogParameters(pl.Callback):

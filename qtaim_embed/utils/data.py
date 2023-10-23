@@ -48,13 +48,13 @@ def get_default_node_level_config():
 
 def get_default_graph_level_config():
     root = Path(__file__).parent.parent.parent
-
     # to string
     root = str(root)
+
     return {
         "dataset": {
             "allowed_ring_size": [3, 4, 5, 6, 7],
-            "allowed_charges": None,
+            "allowed_charges": [0],
             "self_loop": True,
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
@@ -85,7 +85,7 @@ def get_default_graph_level_config():
             "resid_n_graph_convs": 2,
             "target_dict": {"global": "extra_feat_global_E1_CAM"},
             "conv_fn": "GraphConvDropoutBatch",
-            "global_pooling": "GlobalAttentionPoolingThenCat",
+            "global_pooling_fn": "GlobalAttentionPoolingThenCat",
             "dropout": 0.2,
             "batch_norm": False,
             "activation": "ReLU",
@@ -99,7 +99,10 @@ def get_default_graph_level_config():
             "lr_scale_factor": 0.6,
             "loss_fn": "mse",
             "embedding_size": 50,
-            "fc_layer_size": [256, 128],
+            # "fc_layer_size": [256, 128],
+            "shape_fc": "cone",
+            "fc_hidden_size_1": 256,
+            "fc_num_layers": 3,
             "fc_dropout": 0.2,
             "fc_batch_norm": True,
             "lstm_iters": 3,
@@ -107,6 +110,17 @@ def get_default_graph_level_config():
             "output_dims": 1,
             "pooling_ntypes": ["atom", "bond", "global"],
             "pooling_ntypes_direct": ["global"],
+            "restore": False,
+            "max_epochs": 1000,
+            "num_workers": 1,
+        },
+        "optim": {
+            "num_devices": 1,
+            "num_nodes": 1,
+            "gradient_clip_val": 5.0,
+            "strategy": "auto",
+            "precision": "bf16",
+            "accumulate_grad_batches": 3,
         },
     }
 

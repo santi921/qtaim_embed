@@ -282,7 +282,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
 
     def __init__(
         self,
-        allowed_charges=None,
+        allowed_charges=[],
         selected_keys=[],
         dtype="float32",
     ):
@@ -314,7 +314,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
             mw,
         ]
 
-        if self.allowed_charges is not None:
+        if self.allowed_charges is not None and self.allowed_charges != []:
             try:
                 feats_info = kwargs["extra_feats_info"]
             except KeyError as e:
@@ -324,7 +324,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
                     )
                 )
 
-            if self.allowed_charges is not None:
+            if self.allowed_charges is not None and self.allowed_charges != []:
                 g += one_hot_encoding(feats_info["charge"], self.allowed_charges)
 
         self._feature_name = ["num atoms", "num bonds", "molecule weight"]
