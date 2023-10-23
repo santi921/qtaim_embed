@@ -33,22 +33,26 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
             if stage == "fit" or stage is None:
                 # Assign train/val datasets for use in dataloaders
                 self.full_dataset = HeteroGraphNodeLabelDataset(
-                    file=self.config["train_dataset_loc"],
-                    allowed_ring_size=self.config["allowed_ring_size"],
-                    allowed_charges=self.config["allowed_charges"],
-                    self_loop=self.config["self_loop"],
-                    extra_keys=self.config["extra_keys"],
-                    target_dict=self.config["target_dict"],
-                    extra_dataset_info=self.config["extra_dataset_info"],
-                    debug=self.config["debug"],
-                    log_scale_features=self.config["log_scale_features"],
-                    log_scale_targets=self.config["log_scale_targets"],
-                    standard_scale_features=self.config["standard_scale_features"],
-                    standard_scale_targets=self.config["standard_scale_targets"],
+                    file=self.config["dataset"]["train_dataset_loc"],
+                    allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
+                    allowed_charges=self.config["dataset"]["allowed_charges"],
+                    self_loop=self.config["dataset"]["self_loop"],
+                    extra_keys=self.config["dataset"]["extra_keys"],
+                    target_dict=self.config["dataset"]["target_dict"],
+                    extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
+                    debug=self.config["dataset"]["debug"],
+                    log_scale_features=self.config["dataset"]["log_scale_features"],
+                    log_scale_targets=self.config["dataset"]["log_scale_targets"],
+                    standard_scale_features=self.config["dataset"][
+                        "standard_scale_features"
+                    ],
+                    standard_scale_targets=self.config["dataset"][
+                        "standard_scale_targets"
+                    ],
                 )
 
-                validation = self.config["val_prop"]
-                test_size = self.config["test_prop"]
+                validation = self.config["dataset"]["val_prop"]
+                test_size = self.config["dataset"]["test_prop"]
 
                 (
                     self.train_dataset,
@@ -58,28 +62,32 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     self.full_dataset,
                     test=test_size,
                     validation=validation,
-                    random_seed=self.config["seed"],
+                    random_seed=self.config["dataset"]["seed"],
                 )
                 self.setup_tf = True
                 return self.train_dataset.feature_size()
 
             if stage == "test" or stage == "predict":
                 assert (
-                    self.config["test_dataset_loc"] is not None
+                    self.config["dataset"]["test_dataset_loc"] is not None
                 ), "test_dataset_loc is None"
                 self.test_dataset = HeteroGraphNodeLabelDataset(
                     file=self.test_dataset_loc,
-                    allowed_ring_size=self.config["allowed_ring_size"],
-                    allowed_charges=self.config["allowed_charges"],
-                    self_loop=self.config["self_loop"],
-                    extra_keys=self.config["extra_keys"],
-                    target_dict=self.config["target_dict"],
-                    extra_dataset_info=self.config["extra_dataset_info"],
-                    debug=self.config["debug"],
-                    log_scale_features=self.config["log_scale_features"],
-                    log_scale_targets=self.config["log_scale_targets"],
-                    standard_scale_features=self.config["standard_scale_features"],
-                    standard_scale_targets=self.config["standard_scale_targets"],
+                    allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
+                    allowed_charges=self.config["dataset"]["allowed_charges"],
+                    self_loop=self.config["dataset"]["self_loop"],
+                    extra_keys=self.config["dataset"]["extra_keys"],
+                    target_dict=self.config["dataset"]["target_dict"],
+                    extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
+                    debug=self.config["dataset"]["debug"],
+                    log_scale_features=self.config["dataset"]["log_scale_features"],
+                    log_scale_targets=self.config["dataset"]["log_scale_targets"],
+                    standard_scale_features=self.config["dataset"][
+                        "standard_scale_features"
+                    ],
+                    standard_scale_targets=self.config["dataset"][
+                        "standard_scale_targets"
+                    ],
                 )
                 self.setup_tf = True
                 return self.test_dataset.feature_size()
@@ -160,21 +168,25 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
 
             if stage == "test" or stage == "predict":
                 assert (
-                    self.config["test_dataset_loc"] is not None
+                    self.config["dataset"]["test_dataset_loc"] is not None
                 ), "test_dataset_loc is None"
                 self.test_dataset = HeteroGraphGraphLabelDataset(
                     file=self.test_dataset_loc,
-                    allowed_ring_size=self.config["allowed_ring_size"],
-                    allowed_charges=self.config["allowed_charges"],
-                    self_loop=self.config["self_loop"],
-                    extra_keys=self.config["extra_keys"],
-                    target_list=self.config["target_list"],
-                    extra_dataset_info=self.config["extra_dataset_info"],
-                    debug=self.config["debug"],
-                    log_scale_features=self.config["log_scale_features"],
-                    log_scale_targets=self.config["log_scale_targets"],
-                    standard_scale_features=self.config["standard_scale_features"],
-                    standard_scale_targets=self.config["standard_scale_targets"],
+                    allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
+                    allowed_charges=self.config["dataset"]["allowed_charges"],
+                    self_loop=self.config["dataset"]["self_loop"],
+                    extra_keys=self.config["dataset"]["extra_keys"],
+                    target_list=self.config["dataset"]["target_list"],
+                    extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
+                    debug=self.config["dataset"]["debug"],
+                    log_scale_features=self.config["dataset"]["log_scale_features"],
+                    log_scale_targets=self.config["dataset"]["log_scale_targets"],
+                    standard_scale_features=self.config["dataset"][
+                        "standard_scale_features"
+                    ],
+                    standard_scale_targets=self.config["dataset"][
+                        "standard_scale_targets"
+                    ],
                 )
                 self.setup_tf = True
                 return self.test_dataset.feature_size()
@@ -187,7 +199,9 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoaderMoleculeGraphTask(
-            self.train_dataset, batch_size=self.config["train_batch_size"], shuffle=True
+            self.train_dataset,
+            batch_size=self.config["dataset"]["train_batch_size"],
+            shuffle=True,
         )
 
     def val_dataloader(self):
