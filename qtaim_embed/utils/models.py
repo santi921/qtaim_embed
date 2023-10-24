@@ -32,6 +32,9 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False):
             atom_in = hparams.embedding_size
             bond_in = hparams.embedding_size
             global_in = hparams.embedding_size
+            atom_out = hparams.embedding_size
+            bond_out = hparams.embedding_size
+            global_out = hparams.embedding_size
 
         layer_args["a2b"] = {
             "in_feats": atom_in,
@@ -146,6 +149,10 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False):
             atom_in = hparams.embedding_size
             bond_in = hparams.embedding_size
             global_in = hparams.embedding_size
+            atom_out = hparams.embedding_size
+            bond_out = hparams.embedding_size
+            global_out = hparams.embedding_size
+
         # resid_n_graph_convs = hparams.resid_n_graph_convs
 
         if layer_ind != -1:  # last residual layer has different args
@@ -228,7 +235,7 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False):
             }
 
             layer_args["b2b_inner"] = {
-                "in_feats": hparams.bond_input_size,
+                "in_feats": bond_in,
                 "out_feats": bond_out,
                 "norm": hparams.norm,
                 "bias": hparams.bias,

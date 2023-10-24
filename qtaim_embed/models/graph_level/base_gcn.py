@@ -173,11 +173,12 @@ class GCNGraphPred(pl.LightningModule):
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             for i in range(self.hparams.n_conv_layers):
-                embedding_in = False
-                if i == 0:
-                    embedding_in = True
+                # embedding_in = False
+                # if i == 0:
+                embedding_in = True
 
                 layer_args = get_layer_args(self.hparams, i, embedding_in=embedding_in)
+                # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
                     dglnn.HeteroGraphConv(
@@ -198,9 +199,7 @@ class GCNGraphPred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "ResidualBlock":
             layer_tracker = 0
-            embedding_in = False
-            if layer_tracker == 0:
-                embedding_in = True
+            embedding_in = True
 
             while layer_tracker < self.hparams.n_conv_layers:
                 if (
@@ -215,7 +214,11 @@ class GCNGraphPred(pl.LightningModule):
                 layer_args = get_layer_args(
                     self.hparams, layer_ind, embedding_in=embedding_in
                 )
+                # print("resid layer args", layer_args)
+                # for k, v in layer_args.items():
+                #    print(k, v["in_feats"], v["out_feats"])
 
+                # embedding_in = False
                 output_block = False
                 if layer_ind != -1:
                     output_block = True
@@ -262,10 +265,6 @@ class GCNGraphPred(pl.LightningModule):
             list_in_feats.append(self.conv_out_size[type_feat])
 
         self.readout_out_size = 0
-        # print("list in feats", list_in_feats)
-        # print("conv out size", self.conv_out_size)
-        # print("pooling ntypes", self.hparams.pooling_ntypes)
-        # print("pooling ntypes direct cat", self.hparams.ntypes_pool_direct_cat)
         if self.hparams.global_pooling == "Set2SetThenCat":
             # print("using set2setthencat")
 
@@ -357,6 +356,7 @@ class GCNGraphPred(pl.LightningModule):
 
         feats = self.embedding(inputs)
         for ind, conv in enumerate(self.conv_layers):
+            # print("conv layer", ind)
             feats = conv(graph, feats)
 
         readout_feats = self.readout(graph, feats)

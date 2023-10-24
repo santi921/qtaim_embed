@@ -151,7 +151,6 @@ class GCNNodePred(pl.LightningModule):
                 output_block = False
                 if layer_ind != -1:
                     output_block = True
-
                 self.conv_layers.append(
                     ResidualBlock(
                         layer_args,
