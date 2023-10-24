@@ -483,9 +483,7 @@ class GlobalAttentionPoolingThenCat(nn.Module):
             # gather, assign gated features to graph
             for ntype in self.ntypes:
                 if ntype not in self.ntypes_direct_cat:
-                    gate = softmax_nodes(
-                        graph=graph, feat="gate", ntype=ntype
-                    )  # error is here
+                    gate = softmax_nodes(graph=graph, feat="gate", ntype=ntype)
                     gated_feats[ntype] = feats[ntype] * gate
             graph.ndata.pop("gate")
 

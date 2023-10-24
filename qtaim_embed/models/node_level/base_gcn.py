@@ -10,7 +10,7 @@ import dgl.nn.pytorch as dglnn
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
 
-from qtaim_embed.models.utils import _split_batched_output, get_layer_args
+from qtaim_embed.utils.models import _split_batched_output, get_layer_args
 from qtaim_embed.models.layers import GraphConvDropoutBatch, ResidualBlock
 
 

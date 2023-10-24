@@ -27,12 +27,19 @@ def test_dataset():
     pass
 
 
-def test_datamodule():
+def test_node_datamodule():
     dm = QTAIMNodeTaskDataModule()
     print(dm.config)
+    feature_size, feat_name = dm.prepare_data("fit")
     dm.setup("fit")
     train_dl = dm.train_dataloader()
     val_dl = dm.val_dataloader()
 
 
-test_datamodule()
+def test_graph_datamodule():
+    dm = QTAIMNodeTaskDataModule()
+    print(dm.config)
+    feature_size, feat_name = dm.prepare_data("fit")
+    dm.setup("fit")
+    train_dl = dm.train_dataloader()
+    val_dl = dm.val_dataloader()
