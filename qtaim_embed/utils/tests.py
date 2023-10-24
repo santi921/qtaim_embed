@@ -8,7 +8,10 @@ from qtaim_embed.utils.models import (
     get_layer_args,
 )
 
-from qtaim_embed.core.dataset import HeteroGraphNodeLabelDataset
+from qtaim_embed.core.dataset import (
+    HeteroGraphNodeLabelDataset,
+    HeteroGraphGraphLabelDataset,
+)
 
 
 class hyperparams:
@@ -46,6 +49,40 @@ def get_dataset(
             "global": ["extra_feat_global_E1_CAM"],
         },
         target_dict={"global": ["extra_feat_global_E1_CAM"]},
+        extra_dataset_info={},
+        debug=True,
+        log_scale_features=log_scale_features,
+        log_scale_targets=log_scale_targets,
+        standard_scale_features=standard_scale_features,
+        standard_scale_targets=standard_scale_targets,
+    )
+
+    return dataset
+
+
+def get_dataset_graph_level(
+    log_scale_features,
+    log_scale_targets,
+    standard_scale_features,
+    standard_scale_targets,
+):
+    # get the root directory for this package
+    # (i.e. the directory where setup.py is located)
+    root_dir = Path(__file__).parent.parent
+    dataset = HeteroGraphGraphLabelDataset(
+        file="./data/labelled_data.pkl",
+        allowed_ring_size=[3, 4, 5, 6, 7],
+        allowed_charges=None,
+        self_loop=True,
+        extra_keys={
+            "atom": ["extra_feat_atom_esp_total"],
+            "bond": [
+                "bond_length",
+                "extra_feat_bond_esp_total",
+            ],
+            "global": ["extra_feat_global_E1_CAM"],
+        },
+        target_list=["extra_feat_global_E1_CAM"],
         extra_dataset_info={},
         debug=True,
         log_scale_features=log_scale_features,

@@ -584,7 +584,7 @@ class GCNGraphPred(pl.LightningModule):
 
         return scheduler
 
-    def evaluate_manually(self, batch_graph, batched_label, scaler_list):
+    def evaluate_manually(self, batch_graph, batch_label, scaler_list):
         """
         Evaluate a set of data manually
         Takes
@@ -592,24 +592,31 @@ class GCNGraphPred(pl.LightningModule):
             scaler_list: list, list of scalers
         """
         # batch_graph, batch_label = batch
-        preds = self.forward(batch_graph, batched_label)
-        preds_unscaled = deepcopy(preds)
-        labels_unscaled = deepcopy(batched_label)
+
+        # batch_label = batch_label["global"]
+        preds = self.forward(batch_graph, batch_graph.ndata["feat"])
+
+        preds_unscaled = deepcopy(preds.detach())
+        labels_unscaled = deepcopy(batch_label)
+        # print("preds unscaled", preds_unscaled)  # * this looks good
+        # print("labels unscaled", labels_unscaled)  # * this looks good
         for scaler in scaler_list:
             labels_unscaled = scaler.inverse_feats(labels_unscaled)
-            preds_unscaled = scaler.inverse_feats(preds_unscaled)
+            preds_unscaled = scaler.inverse_feats({"global": preds_unscaled})
 
+        preds_unscaled = preds_unscaled["global"].view(-1, self.hparams.output_dims)
+        labels_unscaled = labels_unscaled["global"].view(-1, self.hparams.output_dims)
         # manually compute metrics
-        r2 = torchmetrics.R2Score()
-        mae = torchmetrics.MeanAbsoluteError()
-        mse = torchmetrics.MeanSquaredError()
+        r2_eval = torchmetrics.R2Score()
+        mae_eval = torchmetrics.MeanAbsoluteError()
+        mse_eval = torchmetrics.MeanSquaredError(squared=False)
 
-        r2.update(preds_unscaled, labels_unscaled)
-        mae.update(preds_unscaled, labels_unscaled)
-        mse.update(preds_unscaled, labels_unscaled)
+        r2_eval.update(preds_unscaled, labels_unscaled)
+        mae_eval.update(preds_unscaled, labels_unscaled)
+        mse_eval.update(preds_unscaled, labels_unscaled)
 
-        r2 = r2.compute()
-        mae = mae.compute()
-        mse = mse.compute()
+        r2_val = r2_eval.compute()
+        mae_val = mae_eval.compute()
+        mse_val = mse_eval.compute()
 
-        return r2, mae, mse
+        return r2_val, mae_val, mse_val

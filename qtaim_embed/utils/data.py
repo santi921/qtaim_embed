@@ -54,14 +54,12 @@ def get_default_graph_level_config():
     return {
         "dataset": {
             "allowed_ring_size": [3, 4, 5, 6, 7],
-            "allowed_charges": [0],
+            "allowed_charges": None,
             "self_loop": True,
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [
                     "extra_feat_bond_esp_total",
-                    "extra_feat_bond_ellip_e_dens",
-                    "extra_feat_bond_eta",
                     "bond_length",
                 ],
                 "global": ["extra_feat_global_E1_CAM"],
@@ -85,7 +83,7 @@ def get_default_graph_level_config():
             "resid_n_graph_convs": 2,
             "target_dict": {"global": "extra_feat_global_E1_CAM"},
             "conv_fn": "GraphConvDropoutBatch",
-            "global_pooling_fn": "GlobalAttentionPoolingThenCat",
+            "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,
             "batch_norm": False,
             "activation": "ReLU",

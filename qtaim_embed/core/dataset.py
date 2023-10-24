@@ -1,6 +1,7 @@
 import torch
 from tqdm import tqdm
 import pandas as pd
+from copy import deepcopy
 from qtaim_embed.utils.grapher import get_grapher
 from qtaim_embed.data.molwrapper import mol_wrappers_from_df
 from qtaim_embed.data.processing import (
@@ -277,16 +278,16 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         assert (
             self.log_scale_features or self.standard_scale_features
         ), "a scaler must be used to unscale features"
-
+        graphs_ret = deepcopy(graphs)
         if self.standard_scale_features and self.log_scale_features:
             print("unscaling feats with log and standard scalers")
-            graphs = self.feature_scalers[1].inverse(graphs)
-            graphs = self.feature_scalers[0].inverse(graphs)
+            graphs_ret = self.feature_scalers[1].inverse(graphs_ret)
+            graphs_ret = self.feature_scalers[0].inverse(graphs_ret)
 
         elif self.log_scale_features or self.standard_scale_features:
-            graphs = self.feature_scalers[0].inverse(graphs)
+            graphs_ret = self.feature_scalers[0].inverse(graphs_ret)
 
-        return graphs
+        return graphs_ret
 
     def unscale_targets(self, graphs):
         """
@@ -302,13 +303,19 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             self.log_scale_labels or self.standard_scale_labels
         ), "a scaler must be used to unscale targets"
 
+        graphs_ret = deepcopy(graphs)
+
         if self.standard_scale_labels and self.log_scale_labels:
             print("unscaling feats with log and standard scalers")
-            graphs = self.label_scalers[1].inverse(graphs)
-            graphs = self.label_scalers[0].inverse(graphs)
+            graphs_ret = self.label_scalers[1].inverse(graphs_ret)
+            graphs_ret = self.label_scalers[0].inverse(graphs_ret)
         elif self.log_scale_labels or self.standard_scale_labels:
-            graphs = self.label_scalers[0].inverse(graphs)
-        return graphs
+            if self.log_scale_labels:
+                print("unscaling feats with log scaler")
+            if self.standard_scale_labels:
+                print("unscaling feats with standard scaler")
+            graphs_ret = self.label_scalers[0].inverse(graphs_ret)
+        return graphs_ret
 
 
 class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
@@ -575,16 +582,16 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         assert (
             self.log_scale_features or self.standard_scale_features
         ), "a scaler must be used to unscale features"
-
+        graph_ret = deepcopy(graphs)
         if self.standard_scale_features and self.log_scale_features:
             print("unscaling feats with log and standard scalers")
-            graphs = self.feature_scalers[1].inverse(graphs)
-            graphs = self.feature_scalers[0].inverse(graphs)
+            graph_ret = self.feature_scalers[1].inverse(graph_ret)
+            graph_ret = self.feature_scalers[0].inverse(graph_ret)
 
         elif self.log_scale_features or self.standard_scale_features:
-            graphs = self.feature_scalers[0].inverse(graphs)
+            graph_ret = self.feature_scalers[0].inverse(graph_ret)
 
-        return graphs
+        return graph_ret
 
     def unscale_targets(self, graphs):
         """
@@ -599,14 +606,14 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         assert (
             self.log_scale_labels or self.standard_scale_labels
         ), "a scaler must be used to unscale targets"
-
+        graphs_ret = deepcopy(graphs)
         if self.standard_scale_labels and self.log_scale_labels:
             print("unscaling feats with log and standard scalers")
-            graphs = self.label_scalers[1].inverse(graphs)
-            graphs = self.label_scalers[0].inverse(graphs)
+            graphs_ret = self.label_scalers[1].inverse(graphs_ret)
+            graphs_ret = self.label_scalers[0].inverse(graphs_ret)
         elif self.log_scale_labels or self.standard_scale_labels:
-            graphs = self.label_scalers[0].inverse(graphs)
-        return graphs
+            graphs_ret = self.label_scalers[0].inverse(graphs_ret)
+        return graphs_ret
 
 
 class Subset(torch.utils.data.Dataset):
