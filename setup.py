@@ -9,4 +9,8 @@ setup(
     author="Santiago Vargas",
     author_email="santiagovargas921@gmail.com",
     zip_safe=False,
+    scripts=[
+        "./qtaim_embed/scripts/train/bayes_opt_graph.py",
+        "./qtaim_embed/scripts/train/train_qtaim_graph.py",
+    ],
 )
