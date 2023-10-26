@@ -25,10 +25,12 @@ class TrainingObject:
         log_save_dir,
         project_name,
         dataset_loc,
+        wandb_entity="santi",
     ):
         self.sweep_config = sweep_config
         self.log_save_dir = log_save_dir
         self.wandb_name = project_name
+        self.wandb_entity = "santi"
         self.dataset_loc = dataset_loc
         self.extra_keys = self.sweep_config["parameters"]["extra_keys"]["values"][0]
 
@@ -101,7 +103,7 @@ class TrainingObject:
         return model
 
     def train(self):
-        with wandb.init(project=self.wandb_name) as run:
+        with wandb.init(project=self.wandb_name, entity=self.wandb_entity) as run:
             init_config = wandb.config
             # init_config["target_dict"]["global"] = init_config["target_list"]
             target_dict = {"global": init_config["target_list"]}
