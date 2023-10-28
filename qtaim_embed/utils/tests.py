@@ -11,6 +11,7 @@ from qtaim_embed.utils.models import (
 from qtaim_embed.core.dataset import (
     HeteroGraphNodeLabelDataset,
     HeteroGraphGraphLabelDataset,
+    HeteroGraphGraphLabelClassifierDataset,
 )
 
 
@@ -92,6 +93,51 @@ def get_dataset_graph_level(
     )
 
     return dataset
+
+
+def get_datasets_graph_level_classifier(log_scale_features, standard_scale_features):
+    root_dir = Path(__file__).parent.parent
+    dataset_single = HeteroGraphGraphLabelClassifierDataset(
+        file="./data/test_classifier_labelled.pkl",
+        allowed_ring_size=[3, 4, 5, 6, 7],
+        allowed_charges=None,
+        self_loop=True,
+        extra_keys={
+            "atom": ["extra_feat_atom_esp_total"],
+            "bond": [
+                "bond_length",
+                "extra_feat_bond_esp_total",
+            ],
+            "global": ["NR-AR"],
+        },
+        target_list=["NR-AR"],
+        extra_dataset_info={},
+        debug=True,
+        log_scale_features=log_scale_features,
+        standard_scale_features=standard_scale_features,
+    )
+    dataset_multi = HeteroGraphGraphLabelClassifierDataset(
+        file="./data/test_classifier_labelled.pkl",
+        standard_scale_features=True,
+        log_scale_features=True,
+        allowed_ring_size=[3, 4, 5, 6, 7],
+        allowed_charges=None,
+        self_loop=True,
+        debug=True,
+        extra_keys={
+            "atom": [
+                "extra_feat_atom_esp_total",
+            ],
+            "bond": [
+                "extra_feat_bond_esp_total",
+                "bond_length",
+            ],
+            "global": ["NR-AR", "SR-p53"],
+        },
+        target_list=["NR-AR", "SR-p53"],
+        extra_dataset_info={},
+    )
+    return dataset_single, dataset_multi
 
 
 def get_invalid_data():
