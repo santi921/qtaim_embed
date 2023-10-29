@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import pytorch_lightning as pl
 from qtaim_embed.models.graph_level.base_gcn import GCNGraphPred
+from qtaim_embed.models.graph_level.base_gcn_classifier import GCNGraphPredClassifier
 
 
 def load_graph_level_model_from_config(config):
@@ -46,38 +47,70 @@ def load_graph_level_model_from_config(config):
         fc_layers = [base_fc for i in range(config["fc_num_layers"])]
     else:
         fc_layers = [int(base_fc / (2**i)) for i in range(config["fc_num_layers"])]
-
-    model = GCNGraphPred(
-        atom_input_size=config["atom_feature_size"],
-        bond_input_size=config["bond_feature_size"],
-        global_input_size=config["global_feature_size"],
-        n_conv_layers=config["n_conv_layers"],
-        resid_n_graph_convs=config["resid_n_graph_convs"],
-        target_dict=config["target_dict"],
-        conv_fn=config["conv_fn"],
-        global_pooling=config["global_pooling_fn"],
-        dropout=config["dropout"],
-        batch_norm=config["batch_norm"],
-        activation=config["activation"],
-        bias=config["bias"],
-        norm=config["norm"],
-        aggregate=config["aggregate"],
-        lr=config["lr"],
-        scheduler_name="reduce_on_plateau",
-        weight_decay=config["weight_decay"],
-        lr_plateau_patience=config["lr_plateau_patience"],
-        lr_scale_factor=config["lr_scale_factor"],
-        loss_fn=config["loss_fn"],
-        embedding_size=config["embedding_size"],
-        fc_layer_size=fc_layers,
-        fc_dropout=config["fc_dropout"],
-        fc_batch_norm=config["fc_batch_norm"],
-        lstm_iters=config["lstm_iters"],
-        lstm_layers=config["lstm_layers"],
-        output_dims=config["output_dims"],
-        pooling_ntypes=["atom", "bond", "global"],
-        pooling_ntypes_direct=["global"],
-    )
+    if config["classifier"]:
+        model = GCNGraphPredClassifier(
+            atom_input_size=config["atom_feature_size"],
+            bond_input_size=config["bond_feature_size"],
+            global_input_size=config["global_feature_size"],
+            n_conv_layers=config["n_conv_layers"],
+            resid_n_graph_convs=config["resid_n_graph_convs"],
+            target_dict=config["target_dict"],
+            conv_fn=config["conv_fn"],
+            global_pooling=config["global_pooling_fn"],
+            dropout=config["dropout"],
+            batch_norm=config["batch_norm"],
+            activation=config["activation"],
+            bias=config["bias"],
+            norm=config["norm"],
+            aggregate=config["aggregate"],
+            lr=config["lr"],
+            scheduler_name="reduce_on_plateau",
+            weight_decay=config["weight_decay"],
+            lr_plateau_patience=config["lr_plateau_patience"],
+            lr_scale_factor=config["lr_scale_factor"],
+            loss_fn="cross_entropy",
+            embedding_size=config["embedding_size"],
+            fc_layer_size=fc_layers,
+            fc_dropout=config["fc_dropout"],
+            fc_batch_norm=config["fc_batch_norm"],
+            lstm_iters=config["lstm_iters"],
+            lstm_layers=config["lstm_layers"],
+            output_dims=2,
+            pooling_ntypes=["atom", "bond", "global"],
+            pooling_ntypes_direct=["global"],
+        )
+    else:
+        model = GCNGraphPred(
+            atom_input_size=config["atom_feature_size"],
+            bond_input_size=config["bond_feature_size"],
+            global_input_size=config["global_feature_size"],
+            n_conv_layers=config["n_conv_layers"],
+            resid_n_graph_convs=config["resid_n_graph_convs"],
+            target_dict=config["target_dict"],
+            conv_fn=config["conv_fn"],
+            global_pooling=config["global_pooling_fn"],
+            dropout=config["dropout"],
+            batch_norm=config["batch_norm"],
+            activation=config["activation"],
+            bias=config["bias"],
+            norm=config["norm"],
+            aggregate=config["aggregate"],
+            lr=config["lr"],
+            scheduler_name="reduce_on_plateau",
+            weight_decay=config["weight_decay"],
+            lr_plateau_patience=config["lr_plateau_patience"],
+            lr_scale_factor=config["lr_scale_factor"],
+            loss_fn=config["loss_fn"],
+            embedding_size=config["embedding_size"],
+            fc_layer_size=fc_layers,
+            fc_dropout=config["fc_dropout"],
+            fc_batch_norm=config["fc_batch_norm"],
+            lstm_iters=config["lstm_iters"],
+            lstm_layers=config["lstm_layers"],
+            output_dims=config["output_dims"],
+            pooling_ntypes=["atom", "bond", "global"],
+            pooling_ntypes_direct=["global"],
+        )
     # model.to(device)
 
     return model

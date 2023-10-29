@@ -858,7 +858,6 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                     else:
                         labels[j, ind_hot] = 1
 
-                print(labels_raw, labels.flatten())
                 labels = torch.tensor([labels])
                 # labels = torch.tensor(labels.flatten())
                 # print(labels)

@@ -25,7 +25,6 @@ class TrainingObject:
         log_save_dir,
         project_name,
         dataset_loc,
-        wandb_entity="santi",
     ):
         self.sweep_config = sweep_config
         self.log_save_dir = log_save_dir

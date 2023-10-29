@@ -11,6 +11,11 @@ from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 # def construct_default_model():
 
 
+def test_save_load():
+    # TODO
+    pass
+
+
 def test_manual_eval_graph_level():
     dataset_graph_level = get_dataset_graph_level(
         log_scale_features=True,

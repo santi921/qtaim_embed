@@ -1,20 +1,9 @@
 import pandas as pd
-import dgl
-import networkx as nx
 import numpy as np
 import torch
 
-from qtaim_embed.core.molwrapper import MoleculeWrapper
-from qtaim_embed.utils.descriptors import get_atom_feats, get_bond_features
-from qtaim_embed.data.grapher import HeteroCompleteGraphFromMolWrapper
-from qtaim_embed.data.featurizer import (
-    BondAsNodeGraphFeaturizerGeneral,
-    AtomFeaturizerGraphGeneral,
-    GlobalFeaturizerGraph,
-)
 from qtaim_embed.core.datamodule import QTAIMNodeTaskDataModule
 from qtaim_embed.utils.tests import get_datasets_graph_level_classifier
-from qtaim_embed.core.dataset import HeteroGraphNodeLabelDataset
 
 
 def test_molwrapper():
@@ -83,10 +72,8 @@ def test_classifier_dataset():
         if not np.isnan(np.array(check_vals)).any():
             check_vals = [int(i) for i in check_vals_raw]
 
-            # print(label_multi[0].T)
             un_one_hot = torch.argmax(label_multi[0].T, dim=1).tolist()
             un_one_hot = [int(i) for i in un_one_hot]
-            # print(un_one_hot)
             assert un_one_hot == check_vals, "One hot encoding mismatch"
             graph_ind += 1
 
@@ -112,6 +99,3 @@ def test_graph_datamodule():
     dm.setup("fit")
     train_dl = dm.train_dataloader()
     val_dl = dm.val_dataloader()
-
-
-test_classifier_dataset()

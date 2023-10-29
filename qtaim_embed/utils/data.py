@@ -80,6 +80,7 @@ def get_default_graph_level_config():
             "num_workers": 1,
         },
         "model": {
+            "classifier": False,
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
             "target_dict": {"global": "extra_feat_global_E1_CAM"},
