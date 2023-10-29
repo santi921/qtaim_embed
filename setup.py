@@ -12,5 +12,7 @@ setup(
     scripts=[
         "./qtaim_embed/scripts/train/bayes_opt_graph.py",
         "./qtaim_embed/scripts/train/train_qtaim_graph.py",
+        "./qtaim_embed/scripts/train/bayes_opt_graph_classifier.py",
+        "./qtaim_embed/scripts/train/train_qtaim_graph_classifier.py",
     ],
 )
