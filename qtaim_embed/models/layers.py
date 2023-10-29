@@ -507,7 +507,7 @@ class GlobalAttentionPoolingThenCat(nn.Module):
             return rst
 
 
-class MultitaskSoftmax(nn.Module):
+class MultitaskLinearSoftmax(nn.Module):
     """
     Multihead attention with softmax.
 
@@ -515,16 +515,21 @@ class MultitaskSoftmax(nn.Module):
         n_tasks: number of tasks
     """
 
-    def __init__(self, n_tasks):
-        super(MultitaskSoftmax, self).__init__()
+    def __init__(self, n_tasks, in_feats, out_feats):
+        super(MultitaskLinearSoftmax, self).__init__()
         self.n_tasks = n_tasks
         self.layers_dict = nn.ModuleDict()
         for i in range(n_tasks):
-            self.layers_dict[str(i)] = nn.Softmax(dim=1)
+            self.layers_dict[str(i)] = nn.ModuleList()
+            self.layers_dict[str(i)].append(nn.Linear(in_feats, out_feats))
+            self.layers_dict[str(i)].append(nn.Softmax(dim=1))
 
     def forward(self, x):
         ret_dict = {}
         for i in range(self.n_tasks):
-            ret_dict[str(i)] = self.layers_dict[str(i)](x)
+            x_temp = x
+            for layer in self.layers_dict[str(i)]:
+                x_temp = layer(x_temp)
+            ret_dict[str(i)] = x_temp
         out_dict_as_tensor = torch.stack([ret_dict[k] for k in ret_dict.keys()], dim=1)
         return out_dict_as_tensor

@@ -48,6 +48,7 @@ def load_graph_level_model_from_config(config):
     else:
         fc_layers = [int(base_fc / (2**i)) for i in range(config["fc_num_layers"])]
     if config["classifier"]:
+        print(":::CLASSIFIER MODEL:::")
         model = GCNGraphPredClassifier(
             atom_input_size=config["atom_feature_size"],
             bond_input_size=config["bond_feature_size"],
@@ -80,6 +81,7 @@ def load_graph_level_model_from_config(config):
             pooling_ntypes_direct=["global"],
         )
     else:
+        print(":::REGRESSION MODEL:::")
         model = GCNGraphPred(
             atom_input_size=config["atom_feature_size"],
             bond_input_size=config["bond_feature_size"],

@@ -639,6 +639,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         },
         target_list=["NR-AR"],
         extra_dataset_info={},
+        impute=False,
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -712,6 +713,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         target_dict = {"global": target_list}
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
+        self.impute = impute
 
         self.load()
         print("... > loaded dataset")
@@ -742,12 +744,6 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         exclude_names = {}
 
         for node_type, value_list in self.feature_names.items():
-            # if node_type not in include_locs:
-            #    include_locs[node_type] = []
-            #    exclude_locs[node_type] = []
-            #    include_names[node_type] = []
-            #    exclude_names[node_type] = []
-
             for i, value in enumerate(value_list):
                 if node_type in target_locs.keys():
                     if i in target_locs[node_type]:
@@ -790,6 +786,8 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         filtered_graph_count = 0
         filter_ind = []
         categories_set_list = [set([]) for i in range(len(self.include_locs["global"]))]
+        if self.impute:
+            self.mode_dict = {}
 
         # print("categories set list: ", categories_set_list)
         for ind, graph in tqdm(enumerate(self.graphs)):
@@ -807,9 +805,20 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                     labels_temp = graph.ndata["feat"][key][:, self.include_locs[key]]
                     # print("labels temp: ", labels_temp)
                     # check if any of the labels are nan
+                    if self.impute:
+                        for ind_task, val in enumerate(labels_temp[0]):
+                            if not torch.isnan(val):
+                                if ind_task not in self.mode_dict:
+                                    self.mode_dict[ind_task] = [0, 0]
+                                self.mode_dict[ind_task][int(val.item())] += 1
+
                     if torch.isnan(labels_temp).any():
                         filtered_graph_count += 1
                         filter_ind.append(ind)
+                        list_labels = labels_temp.tolist()[0]
+                        for i, label in enumerate(list_labels):
+                            if not np.isnan(label):
+                                categories_set_list[i].add(int(label))
 
                     else:
                         list_labels = labels_temp.tolist()[0]
@@ -820,23 +829,59 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                         ]  # update number of categories
                     # print("labels temp: ", labels_temp[0])
                     labels[key] = labels_temp
+
             graph.ndata["feat"] = features_new
             # print(labels)
             graph.ndata["labels"] = labels
+        if self.impute:
+            # print("mode dict: ", self.mode_dict)
+            # convert mode dict to mode
+            for key, value in self.mode_dict.items():
+                self.mode_dict[key] = value.index(max(value))
 
         self.categories_set_list = categories_set_list
         # print("categories set list: ", categories_set_list)
-
+        dict_distro = {}
         graphs_filtered = []
         mol_wrappers_filtered = []
         for ind, graph in enumerate(self.graphs):
-            if ind not in filter_ind:
+            if self.impute == False:
+                if ind not in filter_ind:
+                    graphs_filtered.append(graph)
+                    mol_wrappers_filtered.append(self.data[ind])
+                    # convert labels to one hot
+                    labels = []
+                    labels_raw = graph.ndata["labels"]["global"]
+
+                    if len(categories_set_list) == 1:
+                        labels = np.zeros((1, len(categories_set_list[0])))
+                    else:
+                        labels = np.zeros(
+                            (len(categories_set_list), len(categories_set_list[0]))
+                        )
+                        labels_raw = labels_raw[0]
+
+                    # print("labels raw: ", labels_raw)
+                    # for i, label in enumerate(labels_raw):
+                    for j, category_set in enumerate(categories_set_list):
+                        ind_hot = list(category_set).index(int(labels_raw[j]))
+                        if j not in dict_distro:
+                            dict_distro[j] = [0 for i in range(len(category_set))]
+                        dict_distro[j][ind_hot] += 1
+                        if len(categories_set_list) == 1:
+                            labels[0, ind_hot] = 1
+                        else:
+                            labels[j, ind_hot] = 1
+
+                    labels = torch.tensor(np.array([labels]), dtype=torch.int64)
+                    # labels = torch.tensor(labels.flatten())
+                    # print(labels)
+                    graph.ndata["labels"] = {"global": labels}
+            else:
                 graphs_filtered.append(graph)
                 mol_wrappers_filtered.append(self.data[ind])
-                # convert labels to one hot
                 labels = []
                 labels_raw = graph.ndata["labels"]["global"]
-
                 if len(categories_set_list) == 1:
                     labels = np.zeros((1, len(categories_set_list[0])))
                 else:
@@ -844,32 +889,45 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                         (len(categories_set_list), len(categories_set_list[0]))
                     )
                     labels_raw = labels_raw[0]
-
-                # print("labels raw: ", labels_raw)
-                # for i, label in enumerate(labels_raw):
                 for j, category_set in enumerate(categories_set_list):
-                    ind_hot = list(category_set).index(int(labels_raw[j]))
+                    # print(category_set)
+                    # print("labels raw: ", labels_raw[j])
+                    if labels_raw[j] == np.NaN or torch.isnan(labels_raw[j]):
+                        ind_hot = self.mode_dict[j]
+                    else:
+                        ind_hot = list(category_set).index(int(labels_raw[j]))
 
-                    # print("ind_hot: ", ind_hot)
-                    # print("labels", labels)
+                    if j not in dict_distro:
+                        dict_distro[j] = [0 for i in range(len(category_set))]
+                    dict_distro[j][ind_hot] += 1
                     if len(categories_set_list) == 1:
-                        # print("here")
                         labels[0, ind_hot] = 1
                     else:
                         labels[j, ind_hot] = 1
-
-                labels = torch.tensor([labels])
-                # labels = torch.tensor(labels.flatten())
-                # print(labels)
+                labels = torch.tensor(np.array([labels]), dtype=torch.int64)
                 graph.ndata["labels"] = {"global": labels}
 
         self.graphs = graphs_filtered
         self.data = mol_wrappers_filtered
-
+        self.dict_distro = dict_distro
         # label_list.append(labels)
+        print("... > number of categories for each label: ")
+        for i, category_set in enumerate(categories_set_list):
+            print(
+                "...... > label ",
+                self.include_names["global"][i],
+                ": ",
+                len(category_set),
+                "with distribution: ",
+                dict_distro[i],
+            )
         print("original loader node types:", graph.ndata["feat"].keys())
         print("original loader label types:", graph.ndata["labels"].keys())
-        print("number of graphs filtered: ", filtered_graph_count)
+
+        if self.impute:
+            print("number of graphs imputed: ", filtered_graph_count)
+        else:
+            print("number of graphs filtered: ", filtered_graph_count)
 
         if self.log_scale_features:
             print("... > Log scaling features")

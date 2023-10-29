@@ -25,7 +25,7 @@ from qtaim_embed.models.layers import (
     SumPoolingThenCat,
     WeightAndSumThenCat,
     GlobalAttentionPoolingThenCat,
-    MultitaskSoftmax,
+    MultitaskLinearSoftmax,
 )
 
 
@@ -314,48 +314,67 @@ class GCNGraphPredClassifier(pl.LightningModule):
             if self.hparams.fc_dropout > 0:
                 self.fc_layers.append(nn.Dropout(self.hparams.fc_dropout))
             input_size = out_size
-
-        self.fc_layers.append(nn.Linear(input_size, self.hparams.output_dims))
+        print("... > number of tasks:", self.hparams.ntasks)
         # add softmax layer
         if self.hparams.ntasks > 1:
             # create a dict of softmax layers
-            self.fc_layers.append(MultitaskSoftmax(n_tasks=self.hparams.ntasks))
+            self.fc_layers.append(
+                MultitaskLinearSoftmax(
+                    in_feats=input_size,
+                    out_feats=self.hparams.output_dims,
+                    n_tasks=self.hparams.ntasks,
+                )
+            )
+
+            self.train_auroc = torchmetrics.classification.MultilabelAUROC(
+                num_labels=self.hparams.ntasks
+            )
+            self.train_acc = torchmetrics.classification.MultilabelAccuracy(
+                num_labels=self.hparams.ntasks
+            )
+            self.train_f1 = torchmetrics.classification.MultilabelF1Score(
+                num_labels=self.hparams.ntasks
+            )
+            self.val_auroc = torchmetrics.classification.MultilabelAUROC(
+                num_labels=self.hparams.ntasks
+            )
+            self.val_acc = torchmetrics.classification.MultilabelAccuracy(
+                num_labels=self.hparams.ntasks
+            )
+            self.val_f1 = torchmetrics.classification.MultilabelF1Score(
+                num_labels=self.hparams.ntasks
+            )
+            self.test_auroc = torchmetrics.classification.MultilabelAUROC(
+                num_labels=self.hparams.ntasks
+            )
+            self.test_acc = torchmetrics.classification.MultilabelAccuracy(
+                num_labels=self.hparams.ntasks
+            )
+            self.test_f1 = torchmetrics.classification.MultilabelF1Score(
+                num_labels=self.hparams.ntasks
+            )
 
         else:
+            self.fc_layers.append(nn.Linear(input_size, self.hparams.output_dims))
             self.fc_layers.append(nn.Softmax(dim=1))
+            self.train_auroc = torchmetrics.classification.AUROC(
+                num_labels=1, task="binary"
+            )
+            self.train_f1 = torchmetrics.F1Score(num_classes=2, task="binary")
+            self.train_acc = torchmetrics.Accuracy(num_classes=2, task="binary")
+
+            self.val_auroc = torchmetrics.classification.AUROC(
+                num_labels=1, task="binary"
+            )
+            self.val_f1 = torchmetrics.F1Score(num_classes=2, task="binary")
+            self.val_acc = torchmetrics.Accuracy(num_classes=2, task="binary")
+            self.test_auroc = torchmetrics.classification.AUROC(
+                num_labels=1, task="binary"
+            )
+            self.test_f1 = torchmetrics.F1Score(num_classes=2, task="binary")
+            self.test_acc = torchmetrics.Accuracy(num_classes=2, task="binary")
 
         self.loss = self.loss_function()
-        # print("number of output dims", output_dims)
-        self.train_f1 = MultioutputWrapper(
-            torchmetrics.F1Score(
-                num_classes=self.hparams.output_dims, task="multiclass"
-            ),
-            num_outputs=self.hparams.ntasks,
-        )
-        self.val_f1 = MultioutputWrapper(
-            torchmetrics.F1Score(
-                num_classes=self.hparams.output_dims, task="multiclass"
-            ),
-            num_outputs=self.hparams.ntasks,
-        )
-        self.test_f1 = MultioutputWrapper(
-            torchmetrics.F1Score(
-                num_classes=self.hparams.output_dims, task="multiclass"
-            ),
-            num_outputs=self.hparams.ntasks,
-        )
-        self.train_auroc = MultioutputWrapper(
-            torchmetrics.AUROC(num_classes=self.hparams.output_dims, task="multiclass"),
-            num_outputs=self.hparams.ntasks,
-        )
-        self.val_auroc = MultioutputWrapper(
-            torchmetrics.AUROC(num_classes=self.hparams.output_dims, task="multiclass"),
-            num_outputs=self.hparams.ntasks,
-        )
-        self.test_auroc = MultioutputWrapper(
-            torchmetrics.AUROC(num_classes=self.hparams.output_dims, task="multiclass"),
-            num_outputs=self.hparams.ntasks,
-        )
 
     def forward(self, graph, inputs):
         """
@@ -380,9 +399,13 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         if self.hparams.loss_fn == "cross_entropy":
             if self.hparams.ntasks > 1:
-                loss_fn = MultioutputWrapper(
-                    nn.CrossEntropyLoss(), num_outputs=self.hparams.ntasks
-                )
+                # loss_fn = MultioutputWrapper(
+                #    nn.CrossEntropyLoss(), num_outputs=self.hparams.ntasks
+                # )
+                # create module list
+                loss_fn = nn.ModuleList()
+                for i in range(self.hparams.ntasks):
+                    loss_fn.append(nn.CrossEntropyLoss())
             else:
                 loss_fn = nn.CrossEntropyLoss()
         return loss_fn
@@ -392,7 +415,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
         Compute loss
         """
         if self.hparams.ntasks > 1:
-            return self.loss(target, pred).sum()
+            loss = 0
+            for i in range(self.hparams.ntasks):
+                loss += self.loss[i](target[:, i], pred[:, i])
+            return loss
         return self.loss(target, pred)
 
     def feature_at_each_layer(model, graph, feats):
@@ -433,16 +459,16 @@ class GCNGraphPredClassifier(pl.LightningModule):
     def shared_step(self, batch, mode):
         batch_graph, batch_label = batch
         labels = batch_label["global"]
+        labels_one_hot = torch.argmax(labels, axis=2)
         logits = self.forward(batch_graph, batch_graph.ndata["feat"])
-        # get argmax
-        labels = torch.argmax(labels, axis=2)
-        if self.hparams.ntasks == 1:
-            labels = labels.reshape(-1)
+        logits_one_hot = torch.argmax(logits, axis=-1)
 
-        all_loss = self.compute_loss(logits, labels)
-
-        # logits = logits.view(-1, self.hparams.output_dims)
-        # labels = labels.view(-1, self.hparams.output_dims)
+        if self.hparams.ntasks < 2:
+            labels_one_hot = labels_one_hot.reshape(-1)
+            self.update_metrics(pred=logits_one_hot, target=labels_one_hot, mode=mode)
+        else:
+            self.update_metrics(pred=logits, target=labels, mode=mode)
+        all_loss = self.compute_loss(logits, labels_one_hot)
 
         # log loss
         self.log(
@@ -454,7 +480,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             batch_size=len(labels),
             sync_dist=True,
         )
-        self.update_metrics(logits, labels, mode)
+
         return all_loss
 
     def training_step(self, batch, batch_idx):
