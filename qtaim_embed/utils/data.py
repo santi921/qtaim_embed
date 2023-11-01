@@ -266,6 +266,18 @@ def train_validation_test_split(dataset, validation=0.1, test=0.1, random_seed=N
     assert validation + test < 1.0, "validation + test >= 1"
     size = len(dataset)
     num_val = int(size * validation)
+
+    if test == 0.0:
+        num_val = int(size * validation)
+        num_train = size - num_val
+        if random_seed is not None:
+            np.random.seed(random_seed)
+
+        idx = np.random.permutation(size)
+        train_idx = idx[:num_train]
+        val_idx = idx[num_train:]
+        return [Subset(dataset, train_idx), Subset(dataset, val_idx)]
+
     num_test = int(size * test)
     num_train = size - num_val - num_test
 

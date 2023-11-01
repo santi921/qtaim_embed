@@ -64,20 +64,32 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                 validation = self.config["dataset"]["val_prop"]
                 test_size = self.config["dataset"]["test_prop"]
 
-                (
-                    self.train_dataset,
-                    self.val_dataset,
-                    self.test_dataset,
-                ) = train_validation_test_split(
-                    self.full_dataset,
-                    test=test_size,
-                    validation=validation,
-                    random_seed=self.config["dataset"]["seed"],
-                )
+                if test_size > 0.0:
+                    (
+                        self.train_dataset,
+                        self.val_dataset,
+                        self.test_dataset,
+                    ) = train_validation_test_split(
+                        self.full_dataset,
+                        test=test_size,
+                        validation=validation,
+                        random_seed=self.config["dataset"]["seed"],
+                    )
+                else:
+                    print("... > no test set in datamodule")
+                    (
+                        self.train_dataset,
+                        self.val_dataset,
+                    ) = train_validation_test_split(
+                        self.full_dataset,
+                        test=0.0,
+                        validation=validation,
+                        random_seed=self.config["dataset"]["seed"],
+                    )
 
                 self.prepare_tf = True
                 return (
-                    self.test_dataset.feature_names(),
+                    self.train_dataset.feature_names(),
                     self.train_dataset.feature_size(),
                 )
 
@@ -186,19 +198,32 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                 validation = self.config["dataset"]["val_prop"]
                 test_size = self.config["dataset"]["test_prop"]
 
-                (
-                    self.train_dataset,
-                    self.val_dataset,
-                    self.test_dataset,
-                ) = train_validation_test_split(
-                    self.full_dataset,
-                    test=test_size,
-                    validation=validation,
-                    random_seed=self.config["dataset"]["seed"],
-                )
+                if test_size > 0.0:
+                    (
+                        self.train_dataset,
+                        self.val_dataset,
+                        self.test_dataset,
+                    ) = train_validation_test_split(
+                        self.full_dataset,
+                        test=test_size,
+                        validation=validation,
+                        random_seed=self.config["dataset"]["seed"],
+                    )
+                else:
+                    print("... > no test set in datamodule")
+                    (
+                        self.train_dataset,
+                        self.val_dataset,
+                    ) = train_validation_test_split(
+                        self.full_dataset,
+                        test=0.0,
+                        validation=validation,
+                        random_seed=self.config["dataset"]["seed"],
+                    )
+
                 self.prepare_tf = True
                 return (
-                    self.test_dataset.feature_names(),
+                    self.train_dataset.feature_names(),
                     self.train_dataset.feature_size(),
                 )
 
@@ -229,7 +254,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                 self.prepare_tf = True
                 return (
                     self.test_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.test_dataset.feature_size(),
                 )
 
         else:
@@ -311,20 +336,31 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
 
                 validation = self.config["dataset"]["val_prop"]
                 test_size = self.config["dataset"]["test_prop"]
-
-                (
-                    self.train_dataset,
-                    self.val_dataset,
-                    self.test_dataset,
-                ) = train_validation_test_split(
-                    self.full_dataset,
-                    test=test_size,
-                    validation=validation,
-                    random_seed=self.config["dataset"]["seed"],
-                )
+                if test_size > 0.0:
+                    (
+                        self.train_dataset,
+                        self.val_dataset,
+                        self.test_dataset,
+                    ) = train_validation_test_split(
+                        self.full_dataset,
+                        test=test_size,
+                        validation=validation,
+                        random_seed=self.config["dataset"]["seed"],
+                    )
+                else:
+                    print("... > no test set in datamodule")
+                    (
+                        self.train_dataset,
+                        self.val_dataset,
+                    ) = train_validation_test_split(
+                        self.full_dataset,
+                        test=0.0,
+                        validation=validation,
+                        random_seed=self.config["dataset"]["seed"],
+                    )
                 self.prepare_tf = True
                 return (
-                    self.test_dataset.feature_names(),
+                    self.train_dataset.feature_names(),
                     self.train_dataset.feature_size(),
                 )
 
@@ -350,7 +386,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                 self.prepare_tf = True
                 return (
                     self.test_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.test_dataset.feature_size(),
                 )
 
         else:

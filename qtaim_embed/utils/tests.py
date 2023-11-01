@@ -27,6 +27,10 @@ def get_data():
     return pd.read_pickle("./data/qm8_test.pkl")
 
 
+def get_data_spin_charge():
+    return pd.read_pickle("./data/labelled_spin_charge.pkl")
+
+
 def get_dataset(
     log_scale_features,
     log_scale_targets,

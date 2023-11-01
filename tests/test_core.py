@@ -8,6 +8,10 @@ from qtaim_embed.core.datamodule import (
     QTAIMGraphTaskClassifyDataModule,
 )
 from qtaim_embed.utils.tests import get_datasets_graph_level_classifier
+from qtaim_embed.utils.data import (
+    get_default_node_level_config,
+    get_default_graph_level_config,
+)
 
 
 def test_molwrapper():
@@ -94,6 +98,7 @@ def test_node_datamodule():
     dm.setup("fit")
     train_dl = dm.train_dataloader()
     val_dl = dm.val_dataloader()
+    # TODO: test size of features, dimensions
 
 
 def test_graph_classifier_datamodule():
@@ -103,12 +108,31 @@ def test_graph_classifier_datamodule():
     dm.setup("fit")
     train_dl = dm.train_dataloader()
     val_dl = dm.val_dataloader()
+    # TODO: test size of features, dimensions
 
 
 def test_graph_datamodule():
+    config_w_test = get_default_graph_level_config()
+    config_w_test["dataset"]["val_prop"] = 0.15
+    config_w_test["dataset"]["test_prop"] = 0.1
     dm = QTAIMGraphTaskClassifyDataModule()
-    print(dm.config)
+
     feature_size, feat_name = dm.prepare_data("fit")
     dm.setup("fit")
-    train_dl = dm.train_dataloader()
-    val_dl = dm.val_dataloader()
+    train_dl_size = len(dm.train_dataset)
+    val_dl_size = len(dm.val_dataset)
+    test_dl_size = len(dm.test_dataset)
+
+    config_w_test = get_default_graph_level_config()
+    config_w_test["dataset"]["val_prop"] = 0.25
+    config_w_test["dataset"]["test_prop"] = 0.0
+    dm = QTAIMGraphTaskClassifyDataModule(config=config_w_test)
+    feature_size, feat_name = dm.prepare_data("fit")
+    dm.setup("fit")
+    train_dl_size_no_test = len(dm.train_dataset)
+    val_dl_size_no_test = len(dm.val_dataset)
+    assert train_dl_size == train_dl_size_no_test, "Train size mismatch"
+    assert val_dl_size == val_dl_size_no_test - 10, "Val size mismatch"
+
+
+test_graph_datamodule()
