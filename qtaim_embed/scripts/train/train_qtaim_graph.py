@@ -81,7 +81,7 @@ if __name__ == "__main__":
         logger_tb = TensorBoardLogger(
             config["dataset"]["log_save_dir"], name="test_logs"
         )
-        logger_wb = WandbLogger(project=project_name, name="test_logs")
+        logger_wb = WandbLogger(project=project_name, name="test_logs", entity="santi")
         lr_monitor = LearningRateMonitor(logging_interval="step")
 
         checkpoint_callback = ModelCheckpoint(

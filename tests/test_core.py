@@ -2,7 +2,11 @@ import pandas as pd
 import numpy as np
 import torch
 
-from qtaim_embed.core.datamodule import QTAIMNodeTaskDataModule
+from qtaim_embed.core.datamodule import (
+    QTAIMNodeTaskDataModule,
+    QTAIMGraphTaskDataModule,
+    QTAIMGraphTaskClassifyDataModule,
+)
 from qtaim_embed.utils.tests import get_datasets_graph_level_classifier
 
 
@@ -92,8 +96,17 @@ def test_node_datamodule():
     val_dl = dm.val_dataloader()
 
 
+def test_graph_classifier_datamodule():
+    dm = QTAIMGraphTaskDataModule()
+    print(dm.config)
+    feature_size, feat_name = dm.prepare_data("fit")
+    dm.setup("fit")
+    train_dl = dm.train_dataloader()
+    val_dl = dm.val_dataloader()
+
+
 def test_graph_datamodule():
-    dm = QTAIMNodeTaskDataModule()
+    dm = QTAIMGraphTaskClassifyDataModule()
     print(dm.config)
     feature_size, feat_name = dm.prepare_data("fit")
     dm.setup("fit")

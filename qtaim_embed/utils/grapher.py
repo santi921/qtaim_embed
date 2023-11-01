@@ -13,6 +13,7 @@ def get_grapher(
     global_keys=[],
     allowed_ring_size=[],
     allowed_charges=None,
+    allowed_spins=None,
     self_loop=True,
     atom_featurizer_tf=True,
     bond_featurizer_tf=True,
@@ -41,6 +42,7 @@ def get_grapher(
         global_featurizer = GlobalFeaturizerGraph(
             selected_keys=global_keys,
             allowed_charges=allowed_charges,
+            allowed_spins=allowed_spins,
         )
 
     grapher = HeteroCompleteGraphFromMolWrapper(

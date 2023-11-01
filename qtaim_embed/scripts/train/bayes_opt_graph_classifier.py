@@ -262,4 +262,4 @@ if __name__ == "__main__":
     print("log_save_dir: {}".format(log_save_dir))
     print("wandb_project_name: {}".format(wandb_project_name))
     print("sweep_config_loc: {}".format(sweep_config_loc))
-    wandb.agent(sweep_id, function=training_obj.train, count=3000)
+    wandb.agent(sweep_id, function=training_obj.train, count=3000, entity="santi")

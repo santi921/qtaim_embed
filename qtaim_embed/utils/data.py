@@ -11,6 +11,7 @@ def get_default_node_level_config():
         "dataset": {
             "allowed_ring_size": [3, 4, 5, 6, 7],
             "allowed_charges": None,
+            "allowed_spins": None,
             "self_loop": True,
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
@@ -55,6 +56,7 @@ def get_default_graph_level_config():
         "dataset": {
             "allowed_ring_size": [3, 4, 5, 6, 7],
             "allowed_charges": None,
+            "allowed_spins": None,
             "self_loop": True,
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
@@ -133,6 +135,7 @@ def get_default_graph_level_config_classif():
         "dataset": {
             "allowed_ring_size": [3, 4, 5, 6, 7],
             "allowed_charges": None,
+            "allowed_spins": None,
             "self_loop": True,
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],

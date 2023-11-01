@@ -40,6 +40,7 @@ def get_dataset(
         file="./data/labelled_data.pkl",
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
+        allowed_spins=None,
         self_loop=True,
         extra_keys={
             "atom": ["extra_feat_atom_esp_total"],
@@ -74,6 +75,7 @@ def get_dataset_graph_level(
         file="./data/labelled_data.pkl",
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
+        allowed_spins=None,
         self_loop=True,
         extra_keys={
             "atom": ["extra_feat_atom_esp_total"],
@@ -101,6 +103,7 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
         file="./data/test_classifier_labelled.pkl",
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
+        allowed_spins=None,
         self_loop=True,
         extra_keys={
             "atom": ["extra_feat_atom_esp_total"],
@@ -122,6 +125,7 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
         log_scale_features=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
+        allowed_spins=None,
         self_loop=True,
         debug=True,
         extra_keys={

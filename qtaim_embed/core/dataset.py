@@ -23,6 +23,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         standard_scale_targets=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
+        allowed_spins=None,
         self_loop=True,
         debug=False,
         extra_keys={
@@ -93,6 +94,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             allowed_ring_size=allowed_ring_size,
             allowed_charges=allowed_charges,
+            allowed_spins=allowed_spins,
             self_loop=self_loop,
         )
 
@@ -113,6 +115,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.element_set = element_set
         self.feature_names = names
         self.graphs = graph_list
+        self.allowed_spins = allowed_spins
+        self.allowed_charges = allowed_charges
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
 
@@ -329,6 +333,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         standard_scale_targets=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
+        allowed_spins=None,
         self_loop=True,
         debug=False,
         extra_keys={
@@ -396,6 +401,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             allowed_ring_size=allowed_ring_size,
             allowed_charges=allowed_charges,
+            allowed_spins=allowed_spins,
             self_loop=self_loop,
         )
 
@@ -415,6 +421,8 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self.data = mol_wrappers
         self.element_set = element_set
         self.feature_names = names
+        self.allowed_spins = allowed_spins
+        self.allowed_spins = allowed_charges
         self.graphs = graph_list
         target_dict = {"global": target_list}
         self.target_dict = target_dict
@@ -625,6 +633,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         log_scale_features=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
+        allowed_spins=None,
         self_loop=True,
         debug=False,
         extra_keys={
@@ -693,6 +702,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             allowed_ring_size=allowed_ring_size,
             allowed_charges=allowed_charges,
+            allowed_spins=allowed_spins,
             self_loop=self_loop,
         )
 
@@ -711,6 +721,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.feature_names = names
         self.graphs = graph_list  # to be filtered
         target_dict = {"global": target_list}
+        self.allowed_spins = allowed_spins
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
         self.impute = impute

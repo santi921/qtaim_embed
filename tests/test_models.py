@@ -16,6 +16,11 @@ def test_save_load():
     pass
 
 
+def test_manual_eval_graph_level_classifier():
+    # TODO
+    pass
+
+
 def test_manual_eval_graph_level():
     dataset_graph_level = get_dataset_graph_level(
         log_scale_features=True,
@@ -91,6 +96,3 @@ def test_manual_eval_graph_level():
     )
 
     assert r2_post > r2_pre, "R2 score did not improve after training"
-
-
-test_manual_eval_graph_level()

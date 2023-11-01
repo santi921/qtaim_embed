@@ -283,6 +283,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
     def __init__(
         self,
         allowed_charges=[],
+        allowed_spins=[],
         selected_keys=[],
         dtype="float32",
     ):
@@ -294,6 +295,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
         self.dtype = dtype
         self.allowed_charges = allowed_charges
         self.selected_keys = selected_keys
+        self.allowed_spins = allowed_spins
         print("selected global keys", selected_keys)
 
     def __call__(self, mol, **kwargs):
@@ -315,27 +317,27 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
         ]
 
         if self.allowed_charges is not None and self.allowed_charges != []:
-            try:
-                feats_info = kwargs["extra_feats_info"]
-            except KeyError as e:
-                raise KeyError(
-                    "{} `extra_feats_info` needed for {}.".format(
-                        e, self.__class__.__name__
-                    )
+            if self.allowed_charges is not None and self.allowed_charges != []:
+                g += one_hot_encoding(
+                    mol.global_features["charge"], self.allowed_charges
                 )
 
-            if self.allowed_charges is not None and self.allowed_charges != []:
-                g += one_hot_encoding(feats_info["charge"], self.allowed_charges)
+        if self.allowed_spins is not None and self.allowed_spins != []:
+            if self.allowed_spins is not None and self.allowed_spins != []:
+                g += one_hot_encoding(mol.global_features["spin"], self.allowed_spins)
 
         self._feature_name = ["num atoms", "num bonds", "molecule weight"]
         if self.allowed_charges is not None:
             self._feature_name += ["charge one hot"] * len(self.allowed_charges)
+        if self.allowed_spins is not None:
+            self._feature_name += ["spin one hot"] * len(self.allowed_spins)
 
         # add extra features
         if self.selected_keys != []:
             for key in self.selected_keys:
-                self._feature_name.append(key)
-                g += [mol.global_features[key]]
+                if key != "spin" and key != "charge":
+                    self._feature_name.append(key)
+                    g += [mol.global_features[key]]
         feats = torch.tensor([g], dtype=getattr(torch, self.dtype))
         self._feature_size = len(self._feature_name)
 
