@@ -39,6 +39,9 @@ class TrainingObject:
                 "allowed_charges": self.sweep_config["parameters"]["allowed_charges"][
                     "values"
                 ][0],
+                "allowed_spins": self.sweep_config["parameters"]["allowed_spins"][
+                    "values"
+                ][0],
                 "self_loop": self.sweep_config["parameters"]["self_loop"]["values"][0],
                 "extra_keys": self.extra_keys,
                 "target_list": self.sweep_config["parameters"]["target_list"]["values"][

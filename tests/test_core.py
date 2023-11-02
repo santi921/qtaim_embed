@@ -133,6 +133,3 @@ def test_graph_datamodule():
     val_dl_size_no_test = len(dm.val_dataset)
     assert train_dl_size == train_dl_size_no_test, "Train size mismatch"
     assert val_dl_size == val_dl_size_no_test - 10, "Val size mismatch"
-
-
-test_graph_datamodule()
