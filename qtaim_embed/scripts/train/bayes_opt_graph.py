@@ -119,7 +119,7 @@ class TrainingObject:
                     "dropout": init_config["dropout"],
                     "batch_norm": init_config["batch_norm"],
                     "activation": init_config["activation"],
-                    "classifier": True,
+                    "classifier": False,
                     "bias": init_config["bias"],
                     "norm": init_config["norm"],
                     "aggregate": init_config["aggregate"],

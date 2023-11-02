@@ -115,7 +115,7 @@ class TrainingObject:
                     "batch_norm": init_config["batch_norm"],
                     "activation": init_config["activation"],
                     "bias": init_config["bias"],
-                    "classifier": False,
+                    "classifier": True,
                     "norm": init_config["norm"],
                     "aggregate": init_config["aggregate"],
                     "lr": init_config["lr"],
