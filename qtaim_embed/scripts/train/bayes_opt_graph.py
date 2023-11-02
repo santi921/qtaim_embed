@@ -254,7 +254,7 @@ if __name__ == "__main__":
         sweep_config["metric"] = {"name": "val_mae", "goal": "minimize"}
 
     # wandb loop
-    sweep_id = wandb.sweep(sweep_config, project=wandb_project_name)
+    sweep_id = wandb.sweep(sweep_config, project=wandb_project_name, entity="santi")
     training_obj = TrainingObject(
         sweep_config,
         log_save_dir,
