@@ -215,7 +215,8 @@ class TrainingObject:
             )
 
             trainer.fit(model, self.dm)
-            trainer.test(model, self.dm)
+            if config["dataset"]["test_prop"] > 0.0:
+                trainer.test(model, self.dm)
         run.finish()
 
 

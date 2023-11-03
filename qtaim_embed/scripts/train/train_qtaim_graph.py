@@ -119,5 +119,6 @@ if __name__ == "__main__":
         )
 
         trainer.fit(model, dm)
-        trainer.test(model, dm)
+        if config["dataset"]["test_prop"] > 0.0:
+            trainer.test(model, dm)
     run.finish()
