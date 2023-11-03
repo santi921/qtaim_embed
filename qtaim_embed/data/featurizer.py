@@ -28,8 +28,8 @@ class BaseFeaturizer:
                 "`dtype` should be `float32` or `float64`, but got `{}`.".format(dtype)
             )
         self.dtype = dtype
-        self._feature_size = None
-        self._feature_name = None
+        self._feature_size = 0
+        self._feature_name = []
 
     @property
     def feature_size(self):
@@ -71,8 +71,8 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
     def __init__(self, dtype="float32", selected_keys=[], allowed_ring_size=[]):
         super(BaseFeaturizer, self).__init__()
-        self._feature_size = None
-        self._feature_name = None
+        self._feature_size = 0
+        self._feature_name = []
         self.selected_keys = selected_keys
         self.dtype = dtype
         self.allowed_ring_size = allowed_ring_size
@@ -198,8 +198,8 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
         print("selected atomic keys", selected_keys)
 
         self.dtype = dtype
-        self._feature_size = None
-        self._feature_name = None
+        self._feature_size = 0
+        self._feature_name = []
         self.selected_keys = selected_keys
         self.allowed_ring_size = allowed_ring_size
         self.element_set = element_set
@@ -296,6 +296,8 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
         self.allowed_charges = allowed_charges
         self.selected_keys = selected_keys
         self.allowed_spins = allowed_spins
+        self._feature_size = 0
+        self._feature_name = []
         print("selected global keys", selected_keys)
 
     def __call__(self, mol, **kwargs):
