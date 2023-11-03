@@ -123,7 +123,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                 )
 
         else:
-            if stage == "fit":
+            if stage == "fit" or stage is None:
                 return (
                     self.train_dataset.feature_names(),
                     self.train_dataset.feature_size(),
@@ -258,7 +258,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                 )
 
         else:
-            if stage == "fit":
+            if stage == "fit" or stage is None:
                 return (
                     self.train_dataset.feature_names(),
                     self.train_dataset.feature_size(),
@@ -390,7 +390,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                 )
 
         else:
-            if stage == "fit":
+            if stage == "fit" or stage is None:
                 return (
                     self.train_dataset.feature_names(),
                     self.train_dataset.feature_size(),
