@@ -3,6 +3,8 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 from copy import deepcopy
+from scipy import stats
+
 from qtaim_embed.utils.grapher import get_grapher
 from qtaim_embed.data.molwrapper import mol_wrappers_from_df
 from qtaim_embed.data.processing import (
@@ -1018,3 +1020,104 @@ class Subset(torch.utils.data.Dataset):
         for key, value in self.dataset.exclude_names.items():
             len_dict[key] = len(value)
         return len_dict
+
+
+def gather_atom_level_stats(dataset_dev):
+    atoms_in = [
+        i.split("_")[-1]
+        for i in dataset_dev.exclude_names["atom"]
+        if "chemical_symbol_" in i
+    ]
+    atom_feats_qtaim = [
+        i for i in dataset_dev.include_names["atom"] if "extra_feat_atom_" in i
+    ]
+    feat_dict = {}
+    feat_dict_summary = {}
+    feat_dict_complete = {}
+
+    for probe_atom_type in atoms_in:
+        print("capturing stats for atom type: ", probe_atom_type)
+        for probe_descriptor in atom_feats_qtaim:
+            # probe_atom_type = "C"
+            # probe_descriptor = "extra_feat_atom_Lagrangian_K"
+
+            for graph in dataset_dev.graphs:
+                probe_ind = dataset_dev.exclude_names["atom"].index(
+                    "chemical_symbol_" + probe_atom_type
+                )
+                probe_col = graph.ndata["feat"]["atom"][:, probe_ind]
+
+                probe_desc_ind = dataset_dev.include_names["atom"].index(
+                    probe_descriptor
+                )
+                atom_type_positive_ind = np.where(probe_col == 1)[0]
+                feat_at_atom = graph.ndata["labels"]["atom"][
+                    atom_type_positive_ind, probe_desc_ind
+                ]
+
+                if probe_atom_type not in feat_dict.keys():
+                    feat_dict[probe_atom_type] = {}
+                if probe_descriptor not in feat_dict[probe_atom_type].keys():
+                    feat_dict[probe_atom_type][probe_descriptor] = []
+                feat_dict[probe_atom_type][probe_descriptor].extend(feat_at_atom)
+
+            feat_dict[probe_atom_type][probe_descriptor] = np.array(
+                feat_dict[probe_atom_type][probe_descriptor]
+            )
+
+    for probe_descriptor in atom_feats_qtaim:
+        for probe_atom_type in atoms_in:
+            if probe_descriptor not in feat_dict_complete.keys():
+                feat_dict_complete[probe_descriptor] = []
+            feat_dict_complete[probe_descriptor].extend(
+                feat_dict[probe_atom_type][probe_descriptor]
+            )
+
+    for k, v in feat_dict.items():
+        if k not in feat_dict_summary.keys():
+            feat_dict_summary[k] = {}
+        for sub_k, sub_v in v.items():
+            dict_summary_stats = {
+                "mean": np.mean(sub_v),
+                "std": np.std(sub_v),
+                "min": np.min(sub_v),
+                "max": np.max(sub_v),
+                "mode": stats.mode(sub_v)[0],
+            }
+            feat_dict_summary[k][sub_k] = dict_summary_stats
+
+    return feat_dict, feat_dict_complete, feat_dict_summary
+
+
+def gather_bond_level_stats(dataset_dev):
+    bond_feats_qtaim = [
+        i for i in dataset_dev.include_names["bond"] if "extra_feat_bond_" in i
+    ]
+    feat_dict_summary = {}
+    feat_dict_complete = {}
+
+    for probe_descriptor in bond_feats_qtaim:
+        for graph in dataset_dev.graphs:
+            probe_desc_ind = dataset_dev.include_names["bond"].index(probe_descriptor)
+            feat_at_atom = graph.ndata["labels"]["bond"][:, probe_desc_ind]
+
+            if probe_descriptor not in feat_dict_complete.keys():
+                feat_dict_complete[probe_descriptor] = []
+            feat_dict_complete[probe_descriptor].extend(feat_at_atom)
+
+        feat_dict_complete[probe_descriptor] = np.array(
+            feat_dict_complete[probe_descriptor]
+        )
+
+    for k, v in feat_dict_complete.items():
+        if k not in feat_dict_summary.keys():
+            feat_dict_summary[k] = {}
+        dict_summary_stats = {
+            "mean": np.mean(v),
+            "std": np.std(v),
+            "min": np.min(v),
+            "max": np.max(v),
+            "mode": stats.mode(v)[0],
+        }
+        feat_dict_summary[k] = dict_summary_stats
+    return feat_dict_complete, feat_dict_summary
