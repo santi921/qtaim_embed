@@ -2,7 +2,6 @@ from pathlib import Path
 import numpy as np
 from qtaim_embed.core.dataset import Subset
 
-
 def get_default_node_level_config():
     root = Path(__file__).parent.parent.parent
     # to string
