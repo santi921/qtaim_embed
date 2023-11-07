@@ -158,7 +158,9 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         # convert string activation to function
         if self.hparams.activation is not None:
-            self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
+            self.activation = getattr(torch.nn, self.hparams.activation)()
+        else: 
+            self.activation = None
 
         input_size = {
             "atom": self.hparams.atom_input_size,
@@ -180,7 +182,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 # if i == 0:
                 embedding_in = True
 
-                layer_args = get_layer_args(self.hparams, i, embedding_in=embedding_in)
+                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=embedding_in)
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
@@ -215,7 +217,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
                     layer_ind = -1
 
                 layer_args = get_layer_args(
-                    self.hparams, layer_ind, embedding_in=embedding_in
+                    self.hparams, layer_ind, activation=self.activation, embedding_in=embedding_in
                 )
                 # print("resid layer args", layer_args)
                 # for k, v in layer_args.items():
@@ -309,8 +311,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
             self.fc_layers.append(nn.Linear(input_size, out_size))
             if self.hparams.fc_batch_norm:
                 self.fc_layers.append(nn.BatchNorm1d(out_size))
-            if self.hparams.activation is not None:
-                self.fc_layers.append(self.hparams.activation)
+            if self.activation is not None:
+                self.fc_layers.append(self.activation)
             if self.hparams.fc_dropout > 0:
                 self.fc_layers.append(nn.Dropout(self.hparams.fc_dropout))
             input_size = out_size

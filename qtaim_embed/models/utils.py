@@ -25,20 +25,21 @@ def load_graph_level_model_from_config(config):
             # model.to(device)
             print(":::MODEL LOADED:::")
             return model
+        
+        else:
+            if load_dir == None:
+                load_dir = "./"
 
-        if load_dir == None:
-            load_dir = "./"
+            try:
+                model = GCNGraphPred.load_from_checkpoint(
+                    checkpoint_path=load_dir + "/last.ckpt"
+                )
+                # model.to(device)
+                print(":::MODEL LOADED:::")
+                return model
 
-        try:
-            model = GCNGraphPred.load_from_checkpoint(
-                checkpoint_path=load_dir + "/last.ckpt"
-            )
-            # model.to(device)
-            print(":::MODEL LOADED:::")
-            return model
-
-        except:
-            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+            except:
+                print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
     shape_fc = config["shape_fc"]
     base_fc = config["fc_hidden_size_1"]
