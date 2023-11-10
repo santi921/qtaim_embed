@@ -1,7 +1,7 @@
 import torch, dgl
 import pytorch_lightning as pl
 from torch.nn import functional as F
-from qtaim_embed.utils.tests import get_dataset_graph_level
+from qtaim_embed.utils.tests import get_dataset_graph_level, get_dataset_graph_level_multitask
 from qtaim_embed.utils.data import get_default_graph_level_config
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
@@ -138,3 +138,46 @@ def test_manual_eval_graph_level():
 
 
 
+def test_multi_task():
+    dataset_graph_level = get_dataset_graph_level_multitask(
+        log_scale_features=True,
+        log_scale_targets=False,
+        standard_scale_features=True,
+        standard_scale_targets=True,
+    )
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_graph_level, batch_size=len(dataset_graph_level.graphs), shuffle=False
+    )
+
+    model_config = get_default_graph_level_config()
+    model_config["model"]["max_epochs"] = 50
+    model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size()[
+        "atom"
+    ]
+    model_config["model"]["bond_feature_size"] = dataset_graph_level.feature_size()[
+        "bond"
+    ]
+    model_config["model"]["global_feature_size"] = dataset_graph_level.feature_size()[
+        "global"
+    ]
+    model_config["model"]["target_dict"]["global"] = dataset_graph_level.target_dict[
+        "global"
+    ]
+    #model_config["model"]["output_dims"] = 1
+
+    model = load_graph_level_model_from_config(model_config["model"])
+
+    trainer = pl.Trainer(
+        max_epochs=100,
+        accelerator="gpu",
+        enable_progress_bar=True,
+        devices=1,
+        strategy="auto",
+        enable_checkpointing=True,
+        default_root_dir="./test_save_load/",
+        precision=16,
+    )
+
+    trainer.fit(model, data_loader)
+
+    

@@ -84,7 +84,6 @@ class GCNGraphPred(pl.LightningModule):
         fc_batch_norm=True,
         lstm_iters=3,
         lstm_layers=1,
-        output_dims=1,
         pooling_ntypes=["atom", "bond"],
         pooling_ntypes_direct=["global"],
     ):
@@ -122,7 +121,6 @@ class GCNGraphPred(pl.LightningModule):
             "global_input_size": global_input_size,
             "conv_fn": conv_fn,
             "target_dict": target_dict,
-            "output_dims": output_dims,
             "dropout": dropout,
             "batch_norm_tf": batch_norm,
             "activation": activation,
@@ -145,9 +143,9 @@ class GCNGraphPred(pl.LightningModule):
             "global_pooling": global_pooling,
             "ntypes_pool": pooling_ntypes,
             "ntypes_pool_direct_cat": pooling_ntypes_direct,
-            "output_dims": output_dims,
             "lstm_iters": lstm_iters,
             "lstm_layers": lstm_layers,
+            "ntasks": len(target_dict["global"]),
         }
 
         self.hparams.update(params)
@@ -315,40 +313,41 @@ class GCNGraphPred(pl.LightningModule):
                 self.fc_layers.append(nn.Dropout(self.hparams.fc_dropout))
             input_size = out_size
 
-        self.fc_layers.append(nn.Linear(input_size, self.hparams.output_dims))
+        self.fc_layers.append(nn.Linear(input_size, self.hparams.ntasks))
 
         # print("number of output dims", output_dims)
+        print("... > number of tasks:", self.hparams.ntasks)
 
         # create multioutput wrapper for metrics
         self.train_r2 = MultioutputWrapper(
-            torchmetrics.R2Score(), num_outputs=self.hparams.output_dims
+            torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
         )
         self.train_torch_l1 = MultioutputWrapper(
-            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
+            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.ntasks
         )
         self.train_torch_mse = MultioutputWrapper(
             torchmetrics.MeanSquaredError(squared=False),
-            num_outputs=self.hparams.output_dims,
+            num_outputs=self.hparams.ntasks,
         )
         self.val_r2 = MultioutputWrapper(
-            torchmetrics.R2Score(), num_outputs=self.hparams.output_dims
+            torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
         )
         self.val_torch_l1 = MultioutputWrapper(
-            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
+            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.ntasks
         )
         self.val_torch_mse = MultioutputWrapper(
             torchmetrics.MeanSquaredError(squared=False),
-            num_outputs=self.hparams.output_dims,
+            num_outputs=self.hparams.ntasks,
         )
         self.test_r2 = MultioutputWrapper(
-            torchmetrics.R2Score(), num_outputs=self.hparams.output_dims
+            torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
         )
         self.test_torch_l1 = MultioutputWrapper(
-            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
+            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.ntasks
         )
         self.test_torch_mse = MultioutputWrapper(
             torchmetrics.MeanSquaredError(squared=False),
-            num_outputs=self.hparams.output_dims,
+            num_outputs=self.hparams.ntasks,
         )
 
     def forward(self, graph, inputs):
@@ -365,39 +364,48 @@ class GCNGraphPred(pl.LightningModule):
         for ind, layer in enumerate(self.fc_layers):
             readout_feats = layer(readout_feats)
 
-        # print("preds shape:", readout_feats.shape)
+        print("preds shape:", readout_feats.shape)
         return readout_feats
 
     def loss_function(self):
         """
         Initialize loss function
         """
-        if self.hparams.loss_fn == "mse":
-            # make multioutput wrapper for mse
-            loss_multi = MultioutputWrapper(
-                torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims
-            )
-        elif self.hparams.loss_fn == "smape":
-            loss_multi = MultioutputWrapper(
-                torchmetrics.SymmetricMeanAbsolutePercentageError(),
-                num_outputs=self.hparams.output_dims,
-            )
-        elif self.hparams.loss_fn == "mae":
-            loss_multi = MultioutputWrapper(
-                torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.output_dims
-            )
-        else:
-            loss_multi = MultioutputWrapper(
-                torchmetrics.MeanSquaredError(), num_outputs=self.hparams.output_dims
-            )
+        if self.hparams.ntasks > 1:
+            loss_fn = nn.ModuleList()
+            for i in range(self.hparams.ntasks):
+                if self.hparams.loss_fn == "mse":
+                    loss_fn.append(torchmetrics.MeanSquaredError())
+                elif self.hparams.loss_fn == "smape":
+                    loss_fn.append(torchmetrics.SymmetricMeanAbsolutePercentageError())
+                elif self.hparams.loss_fn == "mae":
+                    loss_fn.append(torchmetrics.MeanAbsoluteError())
+                else:
+                    loss_fn.append(torchmetrics.MeanSquaredError())
 
-        loss_fn = loss_multi
+        else: 
+            if self.hparams.loss_fn == "mse":
+                loss_fn = torchmetrics.MeanSquaredError()
+                
+            elif self.hparams.loss_fn == "smape":
+                loss_fn = torchmetrics.SymmetricMeanAbsolutePercentageError()
+            elif self.hparams.loss_fn == "mae":
+                loss_fn = torchmetrics.MeanAbsoluteError()
+            else:
+                loss_fn = torchmetrics.MeanSquaredError()
+
         return loss_fn
 
     def compute_loss(self, target, pred):
         """
         Compute loss
         """
+        if self.hparams.ntasks > 1:
+            loss = 0
+            #print("target shape", target.shape)
+            for i in range(self.hparams.ntasks):
+                loss += self.loss[i](target[:, i], pred[:, i])
+            return loss
         return self.loss(target, pred)
 
     def feature_at_each_layer(model, graph, feats):
@@ -442,8 +450,8 @@ class GCNGraphPred(pl.LightningModule):
         )  # returns a dict of node types
         labels = batch_label["global"]
         all_loss = self.compute_loss(logits, labels)
-        logits = logits.view(-1, self.hparams.output_dims)
-        labels = labels.view(-1, self.hparams.output_dims)
+        logits = logits.view(-1, self.hparams.ntasks)
+        labels = labels.view(-1, self.hparams.ntasks)
         # log loss
         self.log(
             f"{mode}_loss",
@@ -606,8 +614,8 @@ class GCNGraphPred(pl.LightningModule):
             labels_unscaled = scaler.inverse_feats(labels_unscaled)
             preds_unscaled = scaler.inverse_feats({"global": preds_unscaled})
 
-        preds_unscaled = preds_unscaled["global"].view(-1, self.hparams.output_dims)
-        labels_unscaled = labels_unscaled["global"].view(-1, self.hparams.output_dims)
+        preds_unscaled = preds_unscaled["global"].view(-1, self.hparams.ntasks)
+        labels_unscaled = labels_unscaled["global"].view(-1, self.hparams.ntasks)
         # manually compute metrics
         r2_eval = torchmetrics.R2Score()
         mae_eval = torchmetrics.MeanAbsoluteError()

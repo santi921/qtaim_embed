@@ -108,7 +108,7 @@ def get_default_graph_level_config():
             "fc_batch_norm": True,
             "lstm_iters": 3,
             "lstm_layers": 2,
-            "output_dims": 1,
+            #"output_dims": 1,
             "pooling_ntypes": ["atom", "bond", "global"],
             "pooling_ntypes_direct": ["global"],
             "restore": False,
