@@ -110,7 +110,7 @@ def load_graph_level_model_from_config(config):
             fc_batch_norm=config["fc_batch_norm"],
             lstm_iters=config["lstm_iters"],
             lstm_layers=config["lstm_layers"],
-            output_dims=config["output_dims"],
+            #output_dims=config["output_dims"],
             pooling_ntypes=["atom", "bond", "global"],
             pooling_ntypes_direct=["global"],
         )

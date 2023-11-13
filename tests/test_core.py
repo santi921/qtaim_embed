@@ -98,7 +98,6 @@ def test_node_datamodule():
     dm.setup("fit")
     train_dl = dm.train_dataloader()
     val_dl = dm.val_dataloader()
-    # TODO: test size of features, dimensions
 
 
 def test_graph_classifier_datamodule():
@@ -108,7 +107,6 @@ def test_graph_classifier_datamodule():
     dm.setup("fit")
     train_dl = dm.train_dataloader()
     val_dl = dm.val_dataloader()
-    # TODO: test size of features, dimensions
 
 
 def test_graph_datamodule():

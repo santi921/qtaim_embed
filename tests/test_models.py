@@ -1,7 +1,11 @@
 import torch, dgl
 import pytorch_lightning as pl
 from torch.nn import functional as F
-from qtaim_embed.utils.tests import get_dataset_graph_level, get_dataset_graph_level_multitask
+from qtaim_embed.utils.tests import (
+    get_dataset_graph_level, 
+    get_dataset_graph_level_multitask,
+    get_datasets_graph_level_classifier
+)
 from qtaim_embed.utils.data import get_default_graph_level_config
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
@@ -38,14 +42,14 @@ def test_save_load():
     model = load_graph_level_model_from_config(model_config["model"])
 
     trainer = pl.Trainer(
-    max_epochs=100,
-    accelerator="gpu",
-    enable_progress_bar=True,
-    devices=1,
-    strategy="auto",
-    enable_checkpointing=True,
-    default_root_dir="./test_save_load/",
-    precision=16,
+        max_epochs=100,
+        accelerator="gpu",
+        enable_progress_bar=True,
+        devices=1,
+        strategy="auto",
+        enable_checkpointing=True,
+        default_root_dir="./test_save_load/",
+        precision=16,
     )
 
     trainer.fit(model, data_loader)
@@ -55,9 +59,76 @@ def test_save_load():
     reload_config["model"]["restore_path"] = "./test_save_load/lightning_logs/version_0/checkpoints/epoch=99-step=100.ckpt"
     model_reload = load_graph_level_model_from_config(reload_config["model"])
 
+#test_save_load()
 def test_manual_eval_graph_level_classifier():
-    # TODO
-    pass
+    dataset_single, dataset_multi = get_datasets_graph_level_classifier(
+        log_scale_features=True, 
+        standard_scale_features=True
+    )
+    
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_single, batch_size=len(dataset_single.graphs), shuffle=False
+    )
+
+    model_config = get_default_graph_level_config()
+    model_config["model"]["atom_feature_size"] = dataset_single.feature_size()[
+        "atom"
+    ]
+    model_config["model"]["bond_feature_size"] = dataset_single.feature_size()[
+        "bond"
+    ]
+    model_config["model"]["global_feature_size"] = dataset_single.feature_size()[
+        "global"
+    ]
+    model_config["model"]["target_dict"]["global"] = dataset_single.target_dict[
+        "global"
+    ]
+
+    model_config["model"]["classifier"] = True
+
+    model = load_graph_level_model_from_config(model_config["model"])
+
+    batch_graph, batched_labels = next(iter(data_loader))
+
+    acc_pre, auroc_pre, f1_pre = model.evaluate_manually(
+        (batch_graph,batched_labels)
+    )
+    print("-" * 50)
+    print(
+        "Prior to training:\t acc: {:.4f}\t auroc: {:.4f}\t f1: {:.4f}".format(
+            acc_pre, auroc_pre, f1_pre
+        )
+    )
+
+    opt = torch.optim.Adam(model.parameters(), lr=0.01)
+    for epoch in range(50):
+        model.train()
+        # training_loss = 0
+        for step, (batch_graph, batch_label) in enumerate(data_loader):
+            # forward propagation by using all nodes and extracting the user embeddings
+            batch_graph, batch_label = next(iter(data_loader))
+            labels = batch_label["global"]
+            labels_one_hot = torch.argmax(labels, axis=2)
+            labels_one_hot = labels_one_hot.reshape(-1)
+            logits = model(batch_graph, batch_graph.ndata["feat"])
+            logits_one_hot = torch.argmax(logits, axis=-1)
+            loss = F.cross_entropy(logits, labels_one_hot)
+            # backward propagation
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+    acc, auroc, f1 = model.evaluate_manually(
+        (batch_graph,
+        batched_labels)
+    )
+    print(
+        "After 10 Epochs \t acc: {:.4f}\t auroc: {:.4f}\t f1: {:.4f}".format(
+            acc, auroc, f1
+        )
+    )
+
+    assert acc > acc_pre, "R2 score did not improve after training"
 
 
 def test_manual_eval_graph_level():
@@ -137,7 +208,6 @@ def test_manual_eval_graph_level():
     assert r2_post > r2_pre, "R2 score did not improve after training"
 
 
-
 def test_multi_task():
     dataset_graph_level = get_dataset_graph_level_multitask(
         log_scale_features=True,
@@ -180,4 +250,3 @@ def test_multi_task():
 
     trainer.fit(model, data_loader)
 
-    

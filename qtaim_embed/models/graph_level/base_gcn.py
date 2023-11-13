@@ -364,7 +364,7 @@ class GCNGraphPred(pl.LightningModule):
         for ind, layer in enumerate(self.fc_layers):
             readout_feats = layer(readout_feats)
 
-        print("preds shape:", readout_feats.shape)
+        #print("preds shape:", readout_feats.shape)
         return readout_feats
 
     def loss_function(self):

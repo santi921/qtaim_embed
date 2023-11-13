@@ -611,33 +611,40 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         batch_graph, batch_label = batch
 
-        # batch_label = batch_label["global"]
-        preds = self.forward(batch_graph, batch_graph.ndata["feat"])
         labels = batch_label["global"]
-        labels_max_encoded = np.argmax(labels, axis=2).reshape(-1)
+        labels_one_hot = torch.argmax(labels, axis=2)
+        logits = self.forward(batch_graph, batch_graph.ndata["feat"])
+        logits_one_hot = torch.argmax(logits, axis=-1)
 
-        # manually compute metrics
-        f1 = MultioutputWrapper(
-            torchmetrics.F1(num_classes=self.hparams.output_dims, task="multiclass"),
-            num_outputs=self.hparams.ntasks,
-        )
-        auroc = MultioutputWrapper(
-            torchmetrics.AUROC(num_classes=self.hparams.output_dims, task="multiclass"),
-            num_outputs=self.hparams.ntasks,
-        )
 
-        accuracy = MultioutputWrapper(
-            torchmetrics.Accuracy(
-                num_classes=self.hparams.output_dims, task="multiclass"
-            ),
-            num_outputs=self.hparams.ntasks,
-        )
-        f1.update(preds, labels_max_encoded)
-        auroc.update(preds, labels_max_encoded)
-        accuracy.update(preds, labels_max_encoded)
+        if self.hparams.ntasks > 1:
+            # create a dict of softmax layers
+            test_auroc = torchmetrics.classification.MultilabelAUROC(
+                num_labels=self.hparams.ntasks
+            )
+            test_acc = torchmetrics.classification.MultilabelAccuracy(
+                num_labels=self.hparams.ntasks
+            )
+            test_f1 = torchmetrics.classification.MultilabelF1Score(
+                num_labels=self.hparams.ntasks
+            )
 
-        f1 = f1.compute()
-        auroc = auroc.compute()
-        accuracy = accuracy.compute()
+            test_auroc.update()
+            
+        else:
+            labels_one_hot = labels_one_hot.reshape(-1)
+        
+            test_auroc = torchmetrics.classification.AUROC(
+                num_labels=1, task="binary"
+            )
+            test_f1 = torchmetrics.F1Score(num_classes=2, task="binary")
+            test_acc = torchmetrics.Accuracy(num_classes=2, task="binary")
 
-        return f1, auroc, accuracy
+        test_f1.update(logits_one_hot, labels_one_hot)
+        f1 = test_f1.compute()
+        test_auroc.update(logits_one_hot, labels_one_hot)
+        auroc = test_auroc.compute()
+        test_acc.update(logits_one_hot, labels_one_hot)
+        acc = test_acc.compute()
+        
+        return acc, auroc, f1
