@@ -332,10 +332,12 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     standard_scale_features=self.config["dataset"][
                         "standard_scale_features"
                     ],
+                    impute=self.config["dataset"]["impute"],
                 )
 
                 validation = self.config["dataset"]["val_prop"]
                 test_size = self.config["dataset"]["test_prop"]
+                
                 if test_size > 0.0:
                     (
                         self.train_dataset,
@@ -359,6 +361,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                         random_seed=self.config["dataset"]["seed"],
                     )
                 self.prepare_tf = True
+                
                 return (
                     self.train_dataset.feature_names(),
                     self.train_dataset.feature_size(),

@@ -73,6 +73,7 @@ class TrainingObject:
                 "num_workers": self.sweep_config["parameters"]["num_workers"]["values"][
                     0
                 ],
+                "impute": self.impute,
             },
         }
         print("config settings:")
