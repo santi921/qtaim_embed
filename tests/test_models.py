@@ -175,7 +175,7 @@ def test_manual_eval_graph_level():
     print("-" * 50)
     print(
         "Prior to training:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
-            r2_pre, mae, mse
+            r2_pre.numpy()[0], mae.numpy()[0], mse.numpy()[0]
         )
     )
 
@@ -201,11 +201,11 @@ def test_manual_eval_graph_level():
     )
     print(
         "After 10 Epochs \t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
-            r2_post, mae, mse
+            r2_post.numpy()[0], mae.numpy()[0], mse.numpy()[0]
         )
     )
 
-    assert r2_post > r2_pre, "R2 score did not improve after training"
+    assert r2_post.numpy() > r2_pre.numpy(), "R2 score did not improve after training"
 
 
 def test_multi_task():

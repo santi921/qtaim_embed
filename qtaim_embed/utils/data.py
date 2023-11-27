@@ -79,6 +79,7 @@ def get_default_graph_level_config():
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
             "num_workers": 1,
+            "impute": False
         },
         "model": {
             "classifier": False,

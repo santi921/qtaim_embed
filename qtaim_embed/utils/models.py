@@ -9,7 +9,8 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
     assert hparams.conv_fn in [
         "GraphConvDropoutBatch",
         "ResidualBlock",
-    ], "conv_fn must be either GraphConvDropoutBatch or ResidualBlock"
+        "GATConv",
+    ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
 
     layer_args = {}
     if hparams.conv_fn == "GraphConvDropoutBatch":
@@ -135,7 +136,6 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
-        return layer_args
 
     elif hparams.conv_fn == "ResidualBlock":
         atom_out = hparams.atom_input_size
@@ -363,7 +363,147 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
-        return layer_args
+    elif hparams.conv_fn == "GATConv":
+        atom_out = hparams.hidden_size
+        bond_out = hparams.hidden_size
+        global_out = hparams.hidden_size
+        atom_in = hparams.atom_input_size
+        bond_in = hparams.bond_input_size
+        global_in = hparams.global_input_size
+        num_heads = hparams.num_heads
+
+        if layer_ind > 0: 
+            atom_in = hparams.hidden_size 
+            bond_in = hparams.hidden_size
+            global_in = hparams.hidden_size 
+
+            if num_heads > 1: 
+                atom_in = hparams.hidden_size * num_heads
+                bond_in = hparams.hidden_size * num_heads 
+                global_in = hparams.hidden_size * num_heads 
+        else: 
+            if embedding_in:
+                atom_in = hparams.embedding_size
+                bond_in = hparams.embedding_size
+                global_in = hparams.embedding_size
+
+        if layer_ind == hparams.n_conv_layers - 1:
+            num_heads = 1
+            
+
+            #atom_out = hparams.embedding_size
+            #bond_out = hparams.embedding_size
+            #global_out = hparams.embedding_size
+
+        layer_args["a2b"] = {
+            "in_feats": atom_in,
+            "out_feats": bond_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["b2a"] = {
+            "in_feats": bond_in,
+            "out_feats": atom_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["a2g"] = {
+            "in_feats": atom_in,
+            "out_feats": global_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["b2g"] = {
+            "in_feats": bond_in,
+            "out_feats": global_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["g2a"] = {
+            "in_feats": global_in,
+            "out_feats": atom_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["g2b"] = {
+            "in_feats": global_in,
+            "out_feats": bond_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["a2a"] = {
+            "in_feats": atom_in,
+            "out_feats": atom_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["b2b"] = {
+            "in_feats": bond_in,
+            "out_feats": bond_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+        layer_args["g2g"] = {
+            "in_feats": global_in,
+            "out_feats": global_out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+        
+    return layer_args
 
 
 def link_fmt_to_node_fmt(dict_feats):
