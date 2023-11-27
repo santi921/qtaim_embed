@@ -10,6 +10,7 @@ import pytorch_lightning as pl
 import dgl.nn.pytorch as dglnn
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
+from dgl.nn.pytorch import GATConv
 
 from qtaim_embed.utils.models import (
     get_layer_args,
@@ -68,6 +69,11 @@ class GCNGraphPredClassifier(pl.LightningModule):
         conv_fn="GraphConvDropoutBatch",
         global_pooling="WeightAndSumThenCat",
         resid_n_graph_convs=None,
+        num_heads_gat=2, 
+        dropout_feat_gat=0.2, 
+        dropout_attn_gat=0.2,
+        hidden_size_gat=128,
+        residual_gat=True,
         dropout=0.2,
         batch_norm=True,
         activation="ReLU",
@@ -97,8 +103,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
         # for k, v in target_dict.items():
         #    output_dims += len(v)
 
-        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock", (
-            "conv_fn must be either GraphConvDropoutBatch or ResidualBlock"
+        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
+            "conv_fn must be either GraphConvDropoutBatch, GATConvDropoutBatch or ResidualBlock"
             + f"but got {conv_fn}"
         )
 
@@ -150,6 +156,11 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "output_dims": output_dims,
             "lstm_iters": lstm_iters,
             "lstm_layers": lstm_layers,
+            "num_heads": num_heads_gat,
+            "feat_drop": dropout_feat_gat,
+            "attn_drop": dropout_attn_gat,
+            "residual": residual_gat,
+            "hidden_size": hidden_size_gat,
             "ntasks": len(target_dict["global"]),
         }
 
@@ -238,6 +249,33 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 )
 
                 layer_tracker += self.hparams.resid_n_graph_convs
+
+        elif self.hparams.conv_fn == "GATConv":
+            for i in range(self.hparams.n_conv_layers):
+                # embedding_in = False
+                # if i == 0:
+                embedding_in = True
+
+                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)
+                # print("resid layer args", layer_args)
+
+                self.conv_layers.append(
+                    dglnn.HeteroGraphConv(
+                        {
+                            "a2b": GATConv(**layer_args["a2b"]),
+                            "b2a": GATConv(**layer_args["b2a"]),
+                            "a2g": GATConv(**layer_args["a2g"]),
+                            "g2a": GATConv(**layer_args["g2a"]),
+                            "b2g": GATConv(**layer_args["b2g"]),
+                            "g2b": GATConv(**layer_args["g2b"]),
+                            "a2a": GATConv(**layer_args["a2a"]),
+                            "b2b": GATConv(**layer_args["b2b"]),
+                            "g2g": GATConv(**layer_args["g2g"]),
+                        },
+                        aggregate=self.hparams.aggregate,
+                    )
+                )
+
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
         # print("conv layer out modes", self.conv_layers[-1].mods)
@@ -387,6 +425,13 @@ class GCNGraphPredClassifier(pl.LightningModule):
         for ind, conv in enumerate(self.conv_layers):
             # print("conv layer", ind)
             feats = conv(graph, feats)
+            if self.hparams.conv_fn == "GATConv":
+                if ind < self.hparams.n_conv_layers - 1:
+                    for k, v in feats.items():
+                        feats[k] = v.reshape(-1, self.hparams.num_heads * self.hparams.hidden_size)
+                else:         
+                    for k, v in feats.items():
+                        feats[k] = v.reshape(-1, self.hparams.hidden_size)
 
         readout_feats = self.readout(graph, feats)
         for ind, layer in enumerate(self.fc_layers):
