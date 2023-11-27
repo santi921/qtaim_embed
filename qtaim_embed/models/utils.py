@@ -19,13 +19,24 @@ def load_graph_level_model_from_config(config):
         print(":::RESTORING MODEL FROM EXISTING FILE:::")
 
         if config["restore_path"] != None:
-            model = GCNGraphPred.load_from_checkpoint(
-                checkpoint_path=config["restore_path"]
-            )
-            # model.to(device)
-            print(":::MODEL LOADED:::")
-            return model
-        
+            try: 
+                try:
+                    model = GCNGraphPred.load_from_checkpoint(
+                        checkpoint_path=config["restore_path"]
+                    )
+                    # model.to(device)
+                    print(":::MODEL LOADED:::")
+                    return model
+                except: 
+                    model = GCNGraphPredClassifier.load_from_checkpoint(
+                        checkpoint_path=config["restore_path"]
+                    )
+                    # model.to(device)
+                    print(":::MODEL LOADED:::")
+                    return model     
+            except:
+                pass
+            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")   
         else:
             if load_dir == None:
                 load_dir = "./"

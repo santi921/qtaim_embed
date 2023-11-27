@@ -209,6 +209,10 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                         validation=validation,
                         random_seed=self.config["dataset"]["seed"],
                     )
+                    print("training set size: ", len(self.train_dataset))
+                    print("validation set size: ", len(self.val_dataset))
+                    print("test set size: ", len(self.test_dataset))
+
                 else:
                     print("... > no test set in datamodule")
                     (
@@ -220,7 +224,9 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                         validation=validation,
                         random_seed=self.config["dataset"]["seed"],
                     )
-
+                    print("training set size: ", len(self.train_dataset))
+                    print("validation set size: ", len(self.val_dataset))
+                    
                 self.prepare_tf = True
                 return (
                     self.train_dataset.feature_names(),
@@ -251,6 +257,8 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                 )
+                print("test set size: ", len(self.test_dataset))
+
                 self.prepare_tf = True
                 return (
                     self.test_dataset.feature_names(),
@@ -349,6 +357,10 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                         validation=validation,
                         random_seed=self.config["dataset"]["seed"],
                     )
+                    print("training set size: ", len(self.train_dataset))
+                    print("validation set size: ", len(self.val_dataset))
+                    print("test set size: ", len(self.test_dataset))
+
                 else:
                     print("... > no test set in datamodule")
                     (
@@ -360,6 +372,9 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                         validation=validation,
                         random_seed=self.config["dataset"]["seed"],
                     )
+                    print("training set size: ", len(self.train_dataset))
+                    print("validation set size: ", len(self.val_dataset))
+
                 self.prepare_tf = True
                 
                 return (
@@ -386,6 +401,8 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                         "standard_scale_features"
                     ],
                 )
+                print("test set size: ", len(self.test_dataset))
+
                 self.prepare_tf = True
                 return (
                     self.test_dataset.feature_names(),

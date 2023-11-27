@@ -629,7 +629,9 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 num_labels=self.hparams.ntasks
             )
 
-            test_auroc.update()
+            test_auroc.update(logits, labels)
+            test_acc.update(logits, labels)
+            test_f1.update(logits, labels)
             
         else:
             labels_one_hot = labels_one_hot.reshape(-1)

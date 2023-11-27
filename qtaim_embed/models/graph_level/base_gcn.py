@@ -617,9 +617,20 @@ class GCNGraphPred(pl.LightningModule):
         preds_unscaled = preds_unscaled["global"].view(-1, self.hparams.ntasks)
         labels_unscaled = labels_unscaled["global"].view(-1, self.hparams.ntasks)
         # manually compute metrics
-        r2_eval = torchmetrics.R2Score()
-        mae_eval = torchmetrics.MeanAbsoluteError()
-        mse_eval = torchmetrics.MeanSquaredError(squared=False)
+        #r2_eval = torchmetrics.R2Score()
+        #mae_eval = torchmetrics.MeanAbsoluteError()
+        #mse_eval = torchmetrics.MeanSquaredError(squared=False)
+        r2_eval = MultioutputWrapper(
+            torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
+        )
+        mae_eval = MultioutputWrapper(
+            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.ntasks
+        )
+        mse_eval = MultioutputWrapper(
+            torchmetrics.MeanSquaredError(squared=False),
+            num_outputs=self.hparams.ntasks,
+        )
+        
 
         r2_eval.update(preds_unscaled, labels_unscaled)
         mae_eval.update(preds_unscaled, labels_unscaled)
