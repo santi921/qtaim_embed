@@ -91,6 +91,12 @@ def load_graph_level_model_from_config(config):
             output_dims=2,
             pooling_ntypes=["atom", "bond", "global"],
             pooling_ntypes_direct=["global"],
+            num_heads_gat=config["num_heads_gat"], 
+            dropout_feat_gat=config["dropout_feat_gat"],
+            dropout_attn_gat=config["dropout_attn_gat"],
+            hidden_size_gat=config["hidden_size_gat"],
+            residual_gat=config["residual_gat"],
+            
         )
     else:
         print(":::REGRESSION MODEL:::")
@@ -124,6 +130,11 @@ def load_graph_level_model_from_config(config):
             #output_dims=config["output_dims"],
             pooling_ntypes=["atom", "bond", "global"],
             pooling_ntypes_direct=["global"],
+            num_heads_gat=config["num_heads_gat"], 
+            dropout_feat_gat=config["dropout_feat_gat"],
+            dropout_attn_gat=config["dropout_attn_gat"],
+            hidden_size_gat=config["hidden_size_gat"],
+            residual_gat=config["residual_gat"],
         )
     # model.to(device)
 

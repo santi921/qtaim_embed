@@ -1,34 +1,121 @@
 {
-  "allowed_ring_size": { "values": [[3, 4, 5, 6]] },
-  "allowed_charges": { "values": [[]] },
-  "self_loop": { "values": [true] },
+  "allowed_ring_size": {
+    "values": [
+      [
+        3,
+        4,
+        5,
+        6
+      ]
+    ]
+  },
+  "allowed_charges": {
+    "values": [
+      []
+    ]
+  },
+  "allowed_spins": {
+    "values": [
+      []
+    ]
+  },
+  "self_loop": {
+    "values": [
+      true
+    ]
+  },
   "extra_keys": {
     "values": [
       {
-        "atom": ["extra_feat_atom_esp_total"],
+        "atom": [
+          "extra_feat_atom_esp_total"
+        ],
         "bond": [
           "extra_feat_bond_esp_total",
           "extra_feat_bond_ellip_e_dens",
           "extra_feat_bond_eta",
           "bond_length"
         ],
-        "global": ["extra_feat_global_E1_CAM"]
+        "global": [
+          "extra_feat_global_E1_CAM"
+        ]
       }
     ]
   },
-  "extra_dataset_info": { "values": [{}] },
-  "log_scale_features": { "values": [true] },
-  "log_scale_targets": { "values": [false] },
-  "standard_scale_features": { "values": [true] },
-  "standard_scale_targets": { "values": [true] },
-  "val_prop": { "values": [0.15] },
-  "test_prop": { "values": [0.1] },
-  "seed": { "values": [42] },
-  "train_batch_size": { "values": [512] },
-  "n_conv_layers": { "values": [3, 4, 5, 6, 10] },
-  "resid_n_graph_convs": { "values": [2, 3] },
-  "target_list": { "values": [["extra_feat_global_E1_CAM"]] },
-  "conv_fn": { "values": ["GraphConvDropoutBatch", "ResidualBlock"] },
+  "extra_dataset_info": {
+    "values": [
+      {}
+    ]
+  },
+  "log_scale_features": {
+    "values": [
+      true
+    ]
+  },
+  "log_scale_targets": {
+    "values": [
+      false
+    ]
+  },
+  "standard_scale_features": {
+    "values": [
+      true
+    ]
+  },
+  "standard_scale_targets": {
+    "values": [
+      true
+    ]
+  },
+  "val_prop": {
+    "values": [
+      0.15
+    ]
+  },
+  "test_prop": {
+    "values": [
+      0.1
+    ]
+  },
+  "seed": {
+    "values": [
+      42
+    ]
+  },
+  "train_batch_size": {
+    "values": [
+      512
+    ]
+  },
+  "n_conv_layers": {
+    "values": [
+      3,
+      4,
+      5,
+      6,
+      10
+    ]
+  },
+  "resid_n_graph_convs": {
+    "values": [
+      2,
+      3
+    ]
+  },
+  "target_list": {
+    "values": [
+      [
+        "extra_feat_global_E1_CAM"
+      ]
+    ]
+  },
+  "conv_fn": {
+    "values": [
+      "GraphConvDropoutBatch",
+      "ResidualBlock",
+      "GATConv"
+    ]
+  },
   "global_pooling_fn": {
     "values": [
       "GlobalAttentionPoolingThenCat",
@@ -37,41 +124,240 @@
       "Set2SetThenCat"
     ]
   },
-  "dropout": { "values": [0.0, 0.1, 0.2] },
-  "batch_norm": { "values": [true, false] },
-  "on_gpu": { "values": [true] },
-  "activation": { "values": ["ReLU"] },
-  "bias": { "values": [true] },
-  "norm": { "values": ["both"] },
-  "aggregate": { "values": ["sum"] },
+  "dropout": {
+    "values": [
+      0.0,
+      0.1,
+      0.2
+    ]
+  },
+  "batch_norm": {
+    "values": [
+      true,
+      false
+    ]
+  },
+  "on_gpu": {
+    "values": [
+      true
+    ]
+  },
+  "activation": {
+    "values": [
+      "ReLU"
+    ]
+  },
+  "bias": {
+    "values": [
+      true
+    ]
+  },
+  "norm": {
+    "values": [
+      "both"
+    ]
+  },
+  "aggregate": {
+    "values": [
+      "sum"
+    ]
+  },
   "lr": {
     "max": 0.1,
     "min": 0.0001,
     "distribution": "log_uniform_values"
   },
-  "scheduler_name": { "values": ["reduce_on_plateau"] },
-  "weight_decay": { "values": [0.00001, 0.0] },
-  "lr_plateau_patience": { "values": [25, 50] },
-  "lr_scale_factor": { "values": [0.5, 0.75] },
-  "loss_fn": { "values": ["mse", "mae"] },
-  "embedding_size": { "values": [16, 25, 50, 100] },
-  "shape_fc": { "values": ["flat", "cone"] },
-  "fc_dropout": { "values": [0.0, 0.1, 0.2] },
-  "fc_batch_norm": { "values": [true, false] },
-  "fc_num_layers": { "values": [1, 2, 3] },
-  "fc_hidden_size_1": { "values": [256, 512, 1024] },
-  "lstm_iters": { "values": [3, 5, 9, 15] },
-  "lstm_layers": { "values": [1, 2, 3] },
-  "output_dims": { "values": [1] },
-  "pooling_ntypes": { "values": [["atom", "bond", "global"]] },
-  "pooling_ntypes_direct": { "values": [["global"]] },
-  "restore": { "values": [false] },
-  "max_epochs": { "values": [10] },
-  "precision": { "values": [16, "bf16", 32] },
-  "num_workers": { "values": [1] },
-  "num_devices": { "values": [1] },
-  "num_nodes": { "values": [1] },
-  "accumulate_grad_batches": { "values": [1, 3, 5] },
-  "gradient_clip_val": { "values": [0.5, 1.0, 5.0, 10.0] },
-  "strategy": { "values": ["auto"] }
+  "scheduler_name": {
+    "values": [
+      "reduce_on_plateau"
+    ]
+  },
+  "weight_decay": {
+    "values": [
+      0.00001,
+      0.0
+    ]
+  },
+  "lr_plateau_patience": {
+    "values": [
+      25,
+      50
+    ]
+  },
+  "lr_scale_factor": {
+    "values": [
+      0.5,
+      0.75
+    ]
+  },
+  "loss_fn": {
+    "values": [
+      "mse",
+      "mae"
+    ]
+  },
+  "embedding_size": {
+    "values": [
+      16,
+      25,
+      50,
+      100
+    ]
+  },
+  "shape_fc": {
+    "values": [
+      "flat",
+      "cone"
+    ]
+  },
+  "fc_dropout": {
+    "values": [
+      0.0,
+      0.1,
+      0.2
+    ]
+  },
+  "fc_batch_norm": {
+    "values": [
+      true,
+      false
+    ]
+  },
+  "fc_num_layers": {
+    "values": [
+      1,
+      2,
+      3
+    ]
+  },
+  "fc_hidden_size_1": {
+    "values": [
+      256,
+      512,
+      1024
+    ]
+  },
+  "lstm_iters": {
+    "values": [
+      3,
+      5,
+      9,
+      15
+    ]
+  },
+  "lstm_layers": {
+    "values": [
+      1,
+      2,
+      3
+    ]
+  },
+  "num_heads_gat": {
+    "values": [
+      1,
+      2,
+      3
+    ]
+  },
+  "dropout_feat_gat": {
+    "values": [
+      0.0,
+      0.1,
+      0.2
+    ]
+  },
+  "dropout_attn_gat": {
+    "values": [
+      0.0,
+      0.1,
+      0.2
+    ]
+  },
+  "hidden_size_gat": {
+    "values": [
+      10,
+      16,
+      25,
+      50
+    ]
+  },
+  "residual_gat": {
+    "values": [
+      true,
+      false
+    ]
+  },
+  "output_dims": {
+    "values": [
+      1
+    ]
+  },
+  "pooling_ntypes": {
+    "values": [
+      [
+        "atom",
+        "bond",
+        "global"
+      ]
+    ]
+  },
+  "pooling_ntypes_direct": {
+    "values": [
+      [
+        "global"
+      ]
+    ]
+  },
+  "restore": {
+    "values": [
+      false
+    ]
+  },
+  "max_epochs": {
+    "values": [
+      10
+    ]
+  },
+  "precision": {
+    "values": [
+      16,
+      "bf16",
+      32
+    ]
+  },
+  "num_workers": {
+    "values": [
+      1
+    ]
+  },
+  "num_devices": {
+    "values": [
+      1
+    ]
+  },
+  "num_nodes": {
+    "values": [
+      1
+    ]
+  },
+  "accumulate_grad_batches": {
+    "values": [
+      1,
+      3,
+      5
+    ]
+  },
+  "gradient_clip_val": {
+    "values": [
+      0.5,
+      1.0,
+      5.0,
+      10.0
+    ]
+  },
+  "strategy": {
+    "values": [
+      "auto"
+    ]
+  }
 }
