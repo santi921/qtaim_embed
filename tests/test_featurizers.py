@@ -310,7 +310,6 @@ class TestGrapher:
             graph_list_spin.append(graph_spin_only)
             graph_list_charge.append(graph_charge_only)
 
-        # id_list = [2, 10, 300]
         for ind in range(len(graph_list)):
             assert (
                 graph_list[ind].ndata["feat"]["global"].shape[1]

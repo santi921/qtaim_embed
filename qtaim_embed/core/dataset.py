@@ -23,6 +23,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         log_scale_targets=False,
         standard_scale_targets=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
+        element_set=None,
         allowed_charges=None,
         allowed_spins=None,
         self_loop=True,
@@ -80,13 +81,15 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
 
-        mol_wrappers, element_set = mol_wrappers_from_df(
+        mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
             bond_key="bonds",
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
         )
+        if element_set == None:
+            element_set = element_set_ret
 
         grapher = get_grapher(
             element_set,
@@ -333,6 +336,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         log_scale_targets=False,
         standard_scale_targets=True,
         allowed_ring_size=[3, 4, 5, 6, 7],
+        element_set=None,
         allowed_charges=None,
         allowed_spins=None,
         self_loop=True,
@@ -386,13 +390,16 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
 
-        mol_wrappers, element_set = mol_wrappers_from_df(
+
+        mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
             bond_key="bonds",
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
         )
+        if element_set == None:
+            element_set = element_set_ret
 
         grapher = get_grapher(
             element_set,

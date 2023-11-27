@@ -31,6 +31,7 @@ def get_default_node_level_config():
             },
             "extra_dataset_info": {},
             "debug": False,
+            "element_set": None, 
             "log_scale_features": False,
             "log_scale_targets": False,
             "standard_scale_features": True,

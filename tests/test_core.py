@@ -92,12 +92,20 @@ def test_dataset():
 
 
 def test_node_datamodule():
-    dm = QTAIMNodeTaskDataModule()
-    print(dm.config)
-    feature_size, feat_name = dm.prepare_data("fit")
-    dm.setup("fit")
-    train_dl = dm.train_dataloader()
-    val_dl = dm.val_dataloader()
+    config = get_default_node_level_config()
+    
+    #print(config)
+    config["dataset"]["allowed_charges"] = [0, 1, -1]
+    config["dataset"]["allowed_spins"] = [1, 2, 3]
+    config["dataset"]["train_dataset_loc"] = "./data/labelled_spin_charge.pkl"
+    config["dataset"]["extra_keys"]["global"] = ["charge", "spin"]
+    print(config)
+    dm = QTAIMNodeTaskDataModule(config=config)
+    #print(dm.config)
+    feat_name, feature_size = dm.prepare_data("fit")
+    global_feats = feat_name["global"]
+    assert "charge one hot" in global_feats, "Charge not in global feats"
+    assert "spin one hot" in global_feats, "Spin not in global feats"
 
 
 def test_graph_classifier_datamodule():
@@ -131,4 +139,5 @@ def test_graph_datamodule():
     val_dl_size_no_test = len(dm.val_dataset)
     assert train_dl_size == train_dl_size_no_test, "Train size mismatch"
     assert val_dl_size == val_dl_size_no_test - 10, "Val size mismatch"
-test_graph_datamodule()
+
+
