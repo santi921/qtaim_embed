@@ -27,6 +27,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         allowed_charges=None,
         allowed_spins=None,
         self_loop=True,
+        size=None,
         debug=False,
         extra_keys={
             "atom": [
@@ -77,6 +78,11 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         if debug:
             print("... > running in debug mode")
             df = df.head(100)
+        else: 
+            if size != None: 
+                # randomly sample size number of rows
+                df = df.sample(size)
+
         for key_check in ["atom", "bond", "global"]:
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
@@ -341,6 +347,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         allowed_spins=None,
         self_loop=True,
         debug=False,
+        size = None,
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -386,6 +393,11 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         if debug:
             print("... > running in debug mode")
             df = df.head(100)
+        else: 
+            if size != None: 
+                # randomly sample size number of rows
+                df = df.sample(size)
+        
         for key_check in ["atom", "bond", "global"]:
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
@@ -644,6 +656,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         allowed_spins=None,
         self_loop=True,
         debug=False,
+        size = None,
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -691,6 +704,11 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         if debug:
             print("... > running in debug mode")
             df = df.head(100)
+        else: 
+            if size != None: 
+                # randomly sample size number of rows
+                df = df.sample(size)
+
         for key_check in ["atom", "bond", "global"]:
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []

@@ -241,7 +241,7 @@ if __name__ == "__main__":
         "-dataset_loc", type=str, default="../../dataset/qm_9_merge_3_qtaim.json"
     )
     parser.add_argument("-log_save_dir", type=str, default="./logs_lightning/")
-    parser.add_argument("-project_name", type=str, default="hydro_lightning")
+    parser.add_argument("-project_name", type=str, default="qtaim_embed_lightning")
     parser.add_argument("-sweep_config", type=str, default="./sweep_config.json")
 
     args = parser.parse_args()
