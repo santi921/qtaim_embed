@@ -188,7 +188,7 @@ class TrainingObject:
 
             checkpoint_callback = ModelCheckpoint(
                 dirpath=self.log_save_dir,
-                filename="model_lightning_{epoch:02d}-{val_mae:.2f}",
+                filename="model_lightning_{epoch:02d}-{val_mae:.4f}",
                 monitor="val_mae",
                 mode="min",
                 auto_insert_metric_name=True,
