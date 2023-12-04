@@ -188,15 +188,15 @@ class TrainingObject:
 
             checkpoint_callback = ModelCheckpoint(
                 dirpath=self.log_save_dir,
-                filename="model_lightning_{epoch:02d}-{val_mae:.4f}",
-                monitor="val_mae",
+                filename="model_lightning_{epoch:03d}-{val_loss:.4f}",
+                monitor="val_loss",
                 mode="min",
                 auto_insert_metric_name=True,
                 save_last=True,
             )
 
             early_stopping_callback = EarlyStopping(
-                monitor="val_mae",
+                monitor="val_loss",
                 min_delta=0.00,
                 patience=200,
                 verbose=False,
@@ -243,6 +243,7 @@ if __name__ == "__main__":
     parser.add_argument("-log_save_dir", type=str, default="./logs_lightning/")
     parser.add_argument("-project_name", type=str, default="qtaim_embed_lightning")
     parser.add_argument("-sweep_config", type=str, default="./sweep_config.json")
+    parser.add_argument("-wandb_entity", type=str, default="santi")
 
     args = parser.parse_args()
     method = str(args.method)
@@ -252,6 +253,7 @@ if __name__ == "__main__":
     log_save_dir = args.log_save_dir
     wandb_project_name = args.project_name
     sweep_config_loc = args.sweep_config
+    wandb_entity = args.wandb_entity
     sweep_config = {}
     sweep_params = json.load(open(sweep_config_loc, "r"))
     sweep_params["debug"] = {"values": [debug]}
@@ -259,10 +261,10 @@ if __name__ == "__main__":
     # sweep_config["log_save_dir"] = log_save_dir
     if method == "bayes":
         sweep_config["method"] = method
-        sweep_config["metric"] = {"name": "val_mae", "goal": "minimize"}
+        sweep_config["metric"] = {"name": "val_loss", "goal": "minimize"}
 
     # wandb loop
-    sweep_id = wandb.sweep(sweep_config, project=wandb_project_name, entity="santi")
+    sweep_id = wandb.sweep(sweep_config, project=wandb_project_name, entity=wandb_entity)
     training_obj = TrainingObject(
         sweep_config,
         log_save_dir,

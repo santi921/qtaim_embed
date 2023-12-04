@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument("-dataset_loc", type=str, default=None)
     parser.add_argument("-log_save_dir", type=str, default="./test_logs/")
     parser.add_argument("-config", type=str, default=None)
+    parser.add_argument("-wandb_entity", type=str, default="santi")
 
     args = parser.parse_args()
 
@@ -34,6 +35,7 @@ if __name__ == "__main__":
     project_name = args.project_name
     dataset_loc = args.dataset_loc
     log_save_dir = args.log_save_dir
+    wandb_entity = args.wandb_entity
     config = args.config
 
     if config is None:
@@ -81,12 +83,12 @@ if __name__ == "__main__":
         logger_tb = TensorBoardLogger(
             config["dataset"]["log_save_dir"], name="test_logs"
         )
-        logger_wb = WandbLogger(project=project_name, name="test_logs", entity="santi")
+        logger_wb = WandbLogger(project=project_name, name="test_logs", entity=wandb_entity)
         lr_monitor = LearningRateMonitor(logging_interval="step")
 
         checkpoint_callback = ModelCheckpoint(
             dirpath=config["dataset"]["log_save_dir"],
-            filename="model_lightning_{epoch:02d}-{val_mae:.2f}",
+            filename="model_lightning_{epoch:03d}-{val_loss:.4f}",
             monitor="val_mae",
             mode="min",
             auto_insert_metric_name=True,
@@ -94,7 +96,7 @@ if __name__ == "__main__":
         )
 
         early_stopping_callback = EarlyStopping(
-            monitor="val_mae", min_delta=0.00, patience=200, verbose=False, mode="min"
+            monitor="val_loss", min_delta=0.00, patience=200, verbose=False, mode="min"
         )
 
         trainer = pl.Trainer(
