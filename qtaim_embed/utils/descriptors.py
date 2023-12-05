@@ -64,8 +64,14 @@ def get_bond_features(row, map_key, keys=None):
     for bond in bonds:
         if (bond[0], bond[1]) not in bond_features.keys():
             bond_features[(bond[0], bond[1])] = {}
-        #if old_parser:
-        bond_index_map = row[map_key][0].index(tuple(bond))
+        #if old_parser
+        #:
+        #print(bond)
+        #print(row[map_key])
+        try:
+            bond_index_map = row[map_key][0].index(tuple(bond))
+        except: 
+            bond_index_map = row[map_key].index(tuple(bond))
         #bond_index_map = row[map_key].index(tuple(bond))
         #else: 
         #    bond_index_map = row[map_key].index(tuple(bond))
