@@ -232,6 +232,7 @@ class HeteroGraphLogMagnitudeScaler:
         for nt in node_types:
             if len(node_feats[nt]) != 0:
                 # log scale
+                # error here
                 feats = torch.cat(node_feats[nt])
                 # get the sign of the data
                 sign = torch.sign(feats)

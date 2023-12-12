@@ -89,6 +89,7 @@ class TrainingObject:
         feature_names, feature_size = self.dm.prepare_data(stage="fit")
         self.feature_names = feature_names
         self.feature_size = feature_size
+        
 
     def make_model(self, config):
         # config["model"]["in_feats"] = self.in_feats
