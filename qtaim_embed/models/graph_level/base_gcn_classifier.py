@@ -281,15 +281,21 @@ class GCNGraphPredClassifier(pl.LightningModule):
         # print("conv layer out modes", self.conv_layers[-1].mods)
 
         # print("conv layer out feats", self.conv_layers[-1].out_feats)
-        conv_out_size = self.conv_layers[-1].out_feats
+        #conv_out_size = self.conv_layers[-1].out_feats
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             conv_out_size = {}
             for k, v in self.conv_layers[-1].mods.items():
                 conv_out_size[k] = v.out_feats
+
         elif self.hparams.conv_fn == "ResidualBlock":
             conv_out_size = self.conv_layers[-1].out_feats
-
+        
+        elif self.hparams.conv_fn == "GATConv":
+            conv_out_size = {}
+            for k, v in self.conv_layers[-1].mods.items():
+                conv_out_size[k] = v._out_feats
+        
         # print("conv out raw", conv_out_size)
         self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
         # print("conv out size: ", self.conv_out_size)
