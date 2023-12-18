@@ -11,50 +11,23 @@ from pytorch_lightning.callbacks import (
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
-from qtaim_embed.scripts.train.learning_utils import get_datasets_qm9
+from qtaim_embed.scripts.train.learning_utils import get_datasets_qm8
 
 torch.set_float32_matmul_precision('high')
-
-
-def manual_statistics(model, batch_graph,batched_labels,scaler_list):
-    preds = model.forward(batch_graph, batch_graph.ndata["feat"])
-
-    preds_unscaled = deepcopy(preds.detach())
-    labels_unscaled = deepcopy(batched_labels)
-    # print("preds unscaled", preds_unscaled)  # * this looks good
-    # print("labels unscaled", labels_unscaled)  # * this looks good
-    for scaler in scaler_list:
-        labels_unscaled = scaler.inverse_feats(labels_unscaled)
-        preds_unscaled = scaler.inverse_feats({"global": preds_unscaled})
-
-    preds_unscaled = preds_unscaled["global"].view(-1, model.hparams.ntasks)
-    labels_unscaled = labels_unscaled["global"].view(-1, model.hparams.ntasks)
-    # manually compute mae and r2
-    mae = torch.mean(torch.abs(preds_unscaled - labels_unscaled))
-    # convert to numpy 
-    preds_unscaled = preds_unscaled.cpu().numpy()
-    r2 = r2_score(labels_unscaled, preds_unscaled)
-    # convert to single float
-    mae = mae.cpu().numpy().tolist()
-    return mae, r2
-
-
-# best qtaim model
 
 
 # main 
 def main(): 
     results_dict = {}
     loc_dict = {
-        "10": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_10.pkl",
-        "100": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_100.pkl",
-        "1000": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_1000.pkl",
-        "10000": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_10000.pkl",
-        "100000": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_100000.pkl",
-        "all": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled.pkl",
-        "test": "../../../data/splits_1205/test_qm9_qtaim_1205_labelled.pkl"
+        "10": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_10.pkl",
+        "100": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_100.pkl",
+        "1000": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_1000.pkl",
+        "10000": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_10000.pkl",
+        "all": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled.pkl",
+        "test": "../../../data/splits_1205/test_qm8_qtaim_1205_labelled.pkl"
     }
-    model_dict, dict_keys, dict_datasets = get_datasets_qm9(loc_dict)
+    model_dict, dict_keys, dict_datasets = get_datasets_qm8(loc_dict)
 
 
     for keys in dict_datasets.keys():
@@ -107,25 +80,16 @@ def main():
                 r2_metrics = r2_metrics.tolist()
                 mae_metrics = mae_metrics.tolist()
                 mse_metrics = mse_metrics.tolist()
-
-                mae_man, r2_man = manual_statistics(
-                    model_temp, 
-                    batch_graph,
-                    batched_labels,
-                    scaler_list=test_dataset.label_scalers,
-                )
                 
                 results_dict[f"{keys}_{name}"] = {
                     "r2_metrics": r2_metrics,
                     "mae_metrics": mae_metrics,
                     "mse_metrics": mse_metrics,
-                    "r2_manual": r2_man, 
-                    "mae_manual": mae_man
                 }
 
 
     print(results_dict)
     # save results dict
-    json.dump(results_dict, open("./qm9_learning_results_dict.json", "w"), indent=4)
+    json.dump(results_dict, open("./qm8_learning_results_dict.json", "w"), indent=4)
 
 main()
