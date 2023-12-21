@@ -81,7 +81,7 @@ def main():
                 "extra_feat_bond_density_beta", 
                 "extra_feat_bond_density_alpha", 
                 "extra_feat_bond_spin_density", 
-                "extra_feat_bond_lol"
+                "extra_feat_bond_lol",
                 "bond_length",
             ],
             "global": [],
@@ -133,7 +133,7 @@ def main():
                 "extra_feat_bond_density_beta", 
                 "extra_feat_bond_density_alpha", 
                 "extra_feat_bond_spin_density", 
-                "extra_feat_bond_lol"
+                "extra_feat_bond_lol",
                 "bond_length",
             ],
             "global": [],
