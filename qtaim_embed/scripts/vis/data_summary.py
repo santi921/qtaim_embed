@@ -53,6 +53,11 @@ def main():
                 "extra_feat_atom_det_hessian",
                 "extra_feat_atom_ellip_e_dens",
                 "extra_feat_atom_eta",
+                "extra_feat_atom_energy_density", 
+                "extra_feat_atom_density_beta", 
+                "extra_feat_atom_density_alpha", 
+                "extra_feat_atom_spin_density",
+                "extra_feat_atom_lol"
             ],
             "bond": [
                 "extra_feat_bond_Lagrangian_K",
@@ -72,6 +77,11 @@ def main():
                 "extra_feat_bond_det_hessian",
                 "extra_feat_bond_ellip_e_dens",
                 "extra_feat_bond_eta",
+                "extra_feat_bond_energy_density", 
+                "extra_feat_bond_density_beta", 
+                "extra_feat_bond_density_alpha", 
+                "extra_feat_bond_spin_density", 
+                "extra_feat_bond_lol"
                 "bond_length",
             ],
             "global": [],
@@ -95,6 +105,11 @@ def main():
                 "extra_feat_atom_det_hessian",
                 "extra_feat_atom_ellip_e_dens",
                 "extra_feat_atom_eta",
+                "extra_feat_atom_energy_density", 
+                "extra_feat_atom_density_beta", 
+                "extra_feat_atom_density_alpha", 
+                "extra_feat_atom_spin_density",
+                "extra_feat_atom_lol"
             ],
             "bond": [
                 "extra_feat_bond_Lagrangian_K",
@@ -114,6 +129,11 @@ def main():
                 "extra_feat_bond_det_hessian",
                 "extra_feat_bond_ellip_e_dens",
                 "extra_feat_bond_eta",
+                "extra_feat_bond_energy_density", 
+                "extra_feat_bond_density_beta", 
+                "extra_feat_bond_density_alpha", 
+                "extra_feat_bond_spin_density", 
+                "extra_feat_bond_lol"
                 "bond_length",
             ],
             "global": [],
