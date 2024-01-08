@@ -72,7 +72,7 @@ def get_datasets_qm9(loc_dict):
 
     qtaim_keys = {
         "atom": [
-       "extra_feat_atom_Lagrangian_K", "extra_feat_atom_Hamiltonian_K",
+       "extra_feat_atom_Hamiltonian_K",
        "extra_feat_atom_e_density", "extra_feat_atom_lap_e_density",
        "extra_feat_atom_e_loc_func", "extra_feat_atom_ave_loc_ion_E",
        "extra_feat_atom_delta_g_promolecular", "extra_feat_atom_delta_g_hirsh",
@@ -81,8 +81,7 @@ def get_datasets_qm9(loc_dict):
        "extra_feat_atom_lap_norm", "extra_feat_atom_eig_hess",
        "extra_feat_atom_det_hessian", "extra_feat_atom_ellip_e_dens",
        "extra_feat_atom_eta","extra_feat_atom_energy_density", 
-       "extra_feat_atom_density_beta", "extra_feat_atom_density_alpha", 
-       "extra_feat_atom_spin_density","extra_feat_atom_lol"
+       "extra_feat_atom_lol"
         ],
     "bond": [
     "extra_feat_bond_Lagrangian_K",
@@ -94,16 +93,14 @@ def get_datasets_qm9(loc_dict):
        "extra_feat_bond_grad_norm", "extra_feat_bond_lap_norm",
        "extra_feat_bond_eig_hess", "extra_feat_bond_det_hessian",
        "extra_feat_bond_ellip_e_dens", "extra_feat_bond_eta",
-       "extra_feat_bond_energy_density", "extra_feat_bond_density_beta", 
-       "extra_feat_bond_density_alpha", "extra_feat_bond_spin_density", 
-       "extra_feat_bond_lol"
+       "extra_feat_bond_energy_density", "extra_feat_bond_lol"
         ],
         "global":  ["homo", "lumo", "gap", "u0"]
     }
 
     qtaim_keys_bl = {
         "atom": [
-       "extra_feat_atom_Lagrangian_K", "extra_feat_atom_Hamiltonian_K",
+       "extra_feat_atom_Hamiltonian_K",
        "extra_feat_atom_e_density", "extra_feat_atom_lap_e_density",
        "extra_feat_atom_e_loc_func", "extra_feat_atom_ave_loc_ion_E",
        "extra_feat_atom_delta_g_promolecular", "extra_feat_atom_delta_g_hirsh",
@@ -112,8 +109,7 @@ def get_datasets_qm9(loc_dict):
        "extra_feat_atom_lap_norm", "extra_feat_atom_eig_hess",
        "extra_feat_atom_det_hessian", "extra_feat_atom_ellip_e_dens",
        "extra_feat_atom_eta","extra_feat_atom_energy_density", 
-       "extra_feat_atom_density_beta", "extra_feat_atom_density_alpha", 
-       "extra_feat_atom_spin_density","extra_feat_atom_lol"
+       "extra_feat_atom_lol"
         ],
     "bond": [
     "extra_feat_bond_Lagrangian_K", "bond_length",
@@ -125,9 +121,7 @@ def get_datasets_qm9(loc_dict):
        "extra_feat_bond_grad_norm", "extra_feat_bond_lap_norm",
        "extra_feat_bond_eig_hess", "extra_feat_bond_det_hessian",
        "extra_feat_bond_ellip_e_dens", "extra_feat_bond_eta",
-       "extra_feat_bond_energy_density", "extra_feat_bond_density_beta", 
-       "extra_feat_bond_density_alpha", "extra_feat_bond_spin_density", 
-       "extra_feat_bond_lol"
+       "extra_feat_bond_energy_density", "extra_feat_bond_lol"
         ],
         "global":  ["homo", "lumo", "gap", "u0"]
     }
@@ -165,7 +159,7 @@ def get_datasets_qm9(loc_dict):
             target_list=["homo", "lumo", "gap", "u0"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -182,7 +176,7 @@ def get_datasets_qm9(loc_dict):
             target_list=["homo", "lumo", "gap", "u0"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -199,7 +193,7 @@ def get_datasets_qm9(loc_dict):
             target_list=["homo", "lumo", "gap", "u0"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -216,7 +210,7 @@ def get_datasets_qm9(loc_dict):
             target_list=["homo", "lumo", "gap", "u0"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -324,7 +318,6 @@ def get_datasets_qm8(loc_dict):
           "extra_feat_atom_esp_total",
           "extra_feat_atom_esp_e",
           "extra_feat_atom_esp_nuc",
-          "extra_feat_atom_Lagrangian_K",
           "extra_feat_atom_Hamiltonian_K",
           "extra_feat_atom_energy_density",
           "extra_feat_atom_density_alpha",
@@ -340,9 +333,6 @@ def get_datasets_qm8(loc_dict):
           "extra_feat_bond_e_loc_func",
           "extra_feat_bond_Lagrangian_K",
           "extra_feat_bond_Hamiltonian_K",
-          "extra_feat_bond_density_beta", 
-          "extra_feat_bond_density_alpha",
-          "extra_feat_bond_spin_density",
           "extra_feat_bond_grad_norm"
         ],
         "global":  ["E1-CC2", "E2-CC2"]
@@ -353,7 +343,6 @@ def get_datasets_qm8(loc_dict):
           "extra_feat_atom_esp_total",
           "extra_feat_atom_esp_e",
           "extra_feat_atom_esp_nuc",
-          "extra_feat_atom_Lagrangian_K",
           "extra_feat_atom_Hamiltonian_K",
           "extra_feat_atom_energy_density",
           "extra_feat_atom_density_alpha",
@@ -369,9 +358,6 @@ def get_datasets_qm8(loc_dict):
           "extra_feat_bond_e_loc_func",
           "extra_feat_bond_Lagrangian_K",
           "extra_feat_bond_Hamiltonian_K",
-          "extra_feat_bond_density_beta", 
-          "extra_feat_bond_density_alpha",
-          "extra_feat_bond_spin_density",
           "extra_feat_bond_grad_norm",
           "bond_length"
         ],
@@ -411,7 +397,7 @@ def get_datasets_qm8(loc_dict):
             target_list=["E1-CC2", "E2-CC2"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -428,7 +414,7 @@ def get_datasets_qm8(loc_dict):
             target_list=["E1-CC2", "E2-CC2"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -445,7 +431,7 @@ def get_datasets_qm8(loc_dict):
             target_list=["E1-CC2", "E2-CC2"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -462,7 +448,7 @@ def get_datasets_qm8(loc_dict):
             target_list=["E1-CC2", "E2-CC2"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -568,7 +554,7 @@ def get_datasets_libe(loc_dict):
 
     qtaim_keys = {
         "atom": [
-       "extra_feat_atom_Lagrangian_K", "extra_feat_atom_Hamiltonian_K",
+       "extra_feat_atom_Hamiltonian_K",
        "extra_feat_atom_e_density", "extra_feat_atom_lap_e_density",
        "extra_feat_atom_e_loc_func", "extra_feat_atom_ave_loc_ion_E",
        "extra_feat_atom_delta_g_promolecular", "extra_feat_atom_delta_g_hirsh",
@@ -599,7 +585,7 @@ def get_datasets_libe(loc_dict):
 
     qtaim_keys_bl = {
         "atom": [
-      "extra_feat_atom_Lagrangian_K", "extra_feat_atom_Hamiltonian_K",
+      "extra_feat_atom_Hamiltonian_K",
        "extra_feat_atom_e_density", "extra_feat_atom_lap_e_density",
        "extra_feat_atom_e_loc_func", "extra_feat_atom_ave_loc_ion_E",
        "extra_feat_atom_delta_g_promolecular", "extra_feat_atom_delta_g_hirsh",
@@ -661,7 +647,7 @@ def get_datasets_libe(loc_dict):
             target_list=["shifted_rrho_ev_free_energy"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -678,7 +664,7 @@ def get_datasets_libe(loc_dict):
             target_list=["shifted_rrho_ev_free_energy"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -695,7 +681,7 @@ def get_datasets_libe(loc_dict):
             target_list=["shifted_rrho_ev_free_energy"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
@@ -712,7 +698,7 @@ def get_datasets_libe(loc_dict):
             target_list=["shifted_rrho_ev_free_energy"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=True,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,

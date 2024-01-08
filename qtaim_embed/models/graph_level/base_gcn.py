@@ -694,4 +694,4 @@ class GCNGraphPred(pl.LightningModule):
         mae_val = mae_eval.compute()
         mse_val = mse_eval.compute()
 
-        return r2_val, mae_val, mse_val
+        return r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled
