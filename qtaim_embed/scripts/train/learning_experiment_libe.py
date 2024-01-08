@@ -92,7 +92,7 @@ def main():
                 trainer.save_checkpoint(f"./libe_learning_test/{keys}_{name}.ckpt")
                 
                 batch_graph, batched_labels = next(iter(dataloader_test))
-                r2_metrics, mae_metrics, mse_metrics = model_temp.evaluate_manually(
+                r2_metrics, mae_metrics, mse_metrics, _, _ = model_temp.evaluate_manually(
                     batch_graph,
                     batched_labels,
                     scaler_list=test_dataset.label_scalers,
