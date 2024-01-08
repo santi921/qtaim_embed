@@ -5,8 +5,8 @@ from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
 def get_datasets_qm9(loc_dict):
     
     qtaim_model_bl_dict = {
-        'atom_feature_size': 35,
-        'bond_feature_size': 30,
+        'atom_feature_size': 31,
+        'bond_feature_size': 27,
         'global_feature_size': 3,
         'conv_fn': 'ResidualBlock',
         'target_dict': {'global': ["homo", "lumo", "gap", "u0"]},
@@ -57,18 +57,17 @@ def get_datasets_qm9(loc_dict):
 
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    qtaim_model_dict['bond_feature_size'] = 29
-    qtaim_model_dict['atom_feature_size'] = 35
+    qtaim_model_dict['bond_feature_size'] = 26
+    qtaim_model_dict['atom_feature_size'] = 31
     
     non_qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
     non_qtaim_model_dict['atom_feature_size'] = 13
     non_qtaim_model_dict['bond_feature_size'] = 7
-    non_qtaim_model_dict['global_feature_size'] = 3
 
     non_qtaim_model_bl_dict = deepcopy(qtaim_model_bl_dict)
     non_qtaim_model_bl_dict['atom_feature_size'] = 13
     non_qtaim_model_bl_dict['bond_feature_size'] = 8
-    non_qtaim_model_bl_dict['global_feature_size'] = 3
+
 
     qtaim_keys = {
         "atom": [
@@ -247,8 +246,8 @@ def get_datasets_qm9(loc_dict):
 def get_datasets_qm8(loc_dict):
 
     qtaim_model_bl_dict ={
-        'atom_feature_size': 22,
-        'bond_feature_size': 18,
+        'atom_feature_size': 21,
+        'bond_feature_size': 15,
         'global_feature_size': 3,
         'conv_fn': 'GATConv',
         'target_dict': {'global': ['E1-CC2', 'E2-CC2']},
@@ -299,19 +298,19 @@ def get_datasets_qm8(loc_dict):
 
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    qtaim_model_dict['atom_feature_size'] = 22
-    qtaim_model_dict['bond_feature_size'] = 17
+    qtaim_model_dict['atom_feature_size'] = 21
+    qtaim_model_dict['bond_feature_size'] = 14
     
+    
+    non_qtaim_model_bl_dict = deepcopy(qtaim_model_bl_dict)
+    non_qtaim_model_bl_dict['atom_feature_size'] = 12
+    non_qtaim_model_bl_dict['bond_feature_size'] = 7
     
     non_qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
     non_qtaim_model_dict['atom_feature_size'] = 12
     non_qtaim_model_dict['bond_feature_size'] = 6
-    non_qtaim_model_dict['global_feature_size'] = 3
 
-    non_qtaim_model_bl_dict = deepcopy(qtaim_model_bl_dict)
-    non_qtaim_model_bl_dict['atom_feature_size'] = 12
-    non_qtaim_model_bl_dict['bond_feature_size'] = 7
-    non_qtaim_model_bl_dict['global_feature_size'] = 3
+    
 
     qtaim_keys = {
         "atom": [
@@ -482,11 +481,10 @@ def get_datasets_qm8(loc_dict):
     return model_dict, dict_keys, dict_datasets
 
 
-
 def get_datasets_libe(loc_dict):
 
     qtaim_model_bl_dict ={
-        'atom_feature_size': 37,
+        'atom_feature_size': 36,
         'bond_feature_size': 30,
         'global_feature_size': 9,
         'conv_fn': 'ResidualBlock',
@@ -538,19 +536,19 @@ def get_datasets_libe(loc_dict):
 
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    qtaim_model_dict['atom_feature_size'] = 37
+    qtaim_model_dict['atom_feature_size'] = 36
     qtaim_model_dict['bond_feature_size'] = 29
     qtaim_model_dict['global_feature_size'] = 9
     
-    non_qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    non_qtaim_model_dict['atom_feature_size'] = 16
-    non_qtaim_model_dict['bond_feature_size'] = 7
-    non_qtaim_model_dict['global_feature_size'] = 9
-
     non_qtaim_model_bl_dict = deepcopy(qtaim_model_bl_dict)
     non_qtaim_model_bl_dict['atom_feature_size'] = 16
     non_qtaim_model_bl_dict['bond_feature_size'] = 8
     non_qtaim_model_bl_dict['global_feature_size'] = 9
+
+    non_qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
+    non_qtaim_model_dict['atom_feature_size'] = 16
+    non_qtaim_model_dict['bond_feature_size'] = 7
+    non_qtaim_model_dict['global_feature_size'] = 9
 
     qtaim_keys = {
         "atom": [
