@@ -167,7 +167,7 @@ def test_manual_eval_graph_level():
     labels_unscaled = torch.cat(labels_unscaled, dim=0)
 
     batch_graph, batched_labels = next(iter(data_loader))
-    r2_pre, mae, mse = model.evaluate_manually(
+    r2_pre, mae, mse, _, _ = model.evaluate_manually(
         batch_graph,
         batched_labels,
         scaler_list=dataset_graph_level.label_scalers,
@@ -194,7 +194,7 @@ def test_manual_eval_graph_level():
             loss.backward()
             opt.step()
 
-    r2_post, mae, mse = model.evaluate_manually(
+    r2_post, mae, mse, _, _ = model.evaluate_manually(
         batch_graph,
         batched_labels,
         scaler_list=dataset_graph_level.label_scalers,
