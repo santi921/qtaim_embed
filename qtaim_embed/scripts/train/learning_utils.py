@@ -272,7 +272,7 @@ def get_datasets_qm8(loc_dict):
         'fc_batch_norm': True,
         'fc_num_layers': 2,
         'n_fc_layers': 2,
-        'global_pooling_fn': 'SumPoolingThenCat',
+        'global_pooling_fn': 'MeanPoolingThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
         'lstm_iters': 15,
