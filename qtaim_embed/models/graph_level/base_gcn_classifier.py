@@ -26,9 +26,9 @@ from qtaim_embed.models.layers import (
     SumPoolingThenCat,
     WeightAndSumThenCat,
     GlobalAttentionPoolingThenCat,
-    MultitaskLinearSoftmax,
+    MeanPoolingThenCat,
+    WeightAndMeanThenCat
 )
-
 
 class GCNGraphPredClassifier(pl.LightningModule):
     """
@@ -103,9 +103,16 @@ class GCNGraphPredClassifier(pl.LightningModule):
         # for k, v in target_dict.items():
         #    output_dims += len(v)
 
-        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
-            "conv_fn must be either GraphConvDropoutBatch, GATConvDropoutBatch or ResidualBlock"
-            + f"but got {conv_fn}"
+        assert global_pooling in [
+            "WeightAndSumThenCat",
+            "SumPoolingThenCat",
+            "GlobalAttentionPoolingThenCat",
+            "Set2SetThenCat",
+            "MeanPoolingThenCat",
+            "WeightedMeanPoolingThenCat"
+        ], (
+            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
+            + f"but got {global_pooling}"
         )
 
         if conv_fn == "ResidualBlock":
@@ -308,6 +315,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
             readout_fn = GlobalAttentionPoolingThenCat
         elif self.hparams.global_pooling == "Set2SetThenCat":
             readout_fn = Set2SetThenCat
+        elif self.hparams.global_pooling == "MeanPoolingThenCat":
+            readout_fn = MeanPoolingThenCat
+        elif self.hparams.global_pooling == "WeightedMeanPoolingThenCat":
+            readout_fn = WeightAndMeanThenCat
 
         list_in_feats = []
         for type_feat in self.hparams.pooling_ntypes:

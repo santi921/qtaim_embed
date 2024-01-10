@@ -11,7 +11,7 @@ import dgl.nn.pytorch as dglnn
 import pytorch_lightning as pl
 import dgl
 from dgl import function as fn
-from dgl.readout import sum_nodes, max_nodes, mean_nodes, softmax_nodes
+from dgl.readout import sum_nodes, softmax_nodes
 
 
 class UnifySize(nn.Module):
@@ -438,6 +438,112 @@ class WeightAndSumThenCat(nn.Module):
 
         return torch.cat(rst, dim=-1)
 
+class MeanPoolingThenCat(nn.Module):
+    """
+    SumPooling for nodes (separate for different node type) and then concatenate the
+    features of different node types to create a representation of the graph.
+
+     Args:
+        ntypes: node types to perform SumPooling, e.g. ['atom', 'bond']
+        in_feats: node feature sizes. The order should be the same as `ntypes`.
+        ntypes_direct_cat: node types to which not perform SumPooling, whose feature is
+            directly concatenated. e.g. ['global']
+    """
+
+    def __init__(
+        self,
+        ntypes: list,
+        in_feats: list,
+        ntypes_direct_cat: list,
+    ):
+        super(MeanPoolingThenCat, self).__init__()
+        self.ntypes = ntypes
+        self.ntypes_direct_cat = ntypes_direct_cat
+        self.in_feats = in_feats
+        # self.layers = nn.ModuleDict()
+        # for nt, sz in zip(ntypes, in_feats):
+        #    if nt not in ntypes_direct_cat:
+        #        self.layers[nt] = dgl.SumPooling(ntype=nt)
+
+    def forward(
+        self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute the sumpooling of each node type and each graph in the batch.
+        """
+        rst = []
+        with graph.local_scope():
+            graph.ndata["h"] = feats
+
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    rst.append(dgl.readout_nodes(graph, "h", ntype=ntype, op="mean"))
+
+        if self.ntypes_direct_cat is not None:
+            for ntype in self.ntypes_direct_cat:
+                rst.append(feats[ntype])
+
+        return torch.cat(rst, dim=-1)
+
+
+class WeightAndMeanThenCat(nn.Module):
+    """
+    WeightAndSum for nodes (separate for different node type) and then concatenate the
+    features of different node types to create a representation of the graph.
+
+     Args:
+        ntypes: node types to perform WeightAndSum, e.g. ['atom', 'bond']
+        in_feats: node feature sizes. The order should be the same as `ntypes`.
+        ntypes_direct_cat: node types to which not perform WeightAndSum, whose feature is
+            directly concatenated. e.g. ['global']
+    """
+
+    def __init__(
+        self,
+        ntypes: list,
+        in_feats: list,
+        ntypes_direct_cat: list,
+    ):
+        super(WeightAndMeanThenCat, self).__init__()
+        self.ntypes = ntypes
+        self.ntypes_direct_cat = ntypes_direct_cat
+        self.in_feats = in_feats
+        self.atom_weighting = nn.ModuleDict()
+        for ntype, size in zip(ntypes, in_feats):
+            if ntype not in ntypes_direct_cat:
+                self.atom_weighting[ntype] = nn.Linear(size, 1)
+
+        # for ntype, size in zip(ntypes, in_feats):
+        #    self.layers[ntype] = WeightAndSum(in_feats=size)
+
+    def forward(
+        self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Compute the sumpooling of each node type and each graph in the batch.
+        """
+        rst = []
+        with graph.local_scope():
+            weight_dict = {}
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    weight_dict[ntype] = self.atom_weighting[ntype](feats[ntype])
+
+            graph.ndata["h"] = feats
+            graph.ndata["w"] = weight_dict
+
+            for ntype in self.ntypes:
+                if ntype not in self.ntypes_direct_cat:
+                    rst.append(
+                        dgl.readout_nodes(graph, "h", "w", ntype=ntype, op="mean")
+                    )
+
+        if self.ntypes_direct_cat is not None:
+            for ntype in self.ntypes_direct_cat:
+                rst.append(feats[ntype])
+
+        return torch.cat(rst, dim=-1)
+    
 
 class GlobalAttentionPoolingThenCat(nn.Module):
     """

@@ -25,6 +25,8 @@ from qtaim_embed.models.layers import (
     SumPoolingThenCat,
     WeightAndSumThenCat,
     GlobalAttentionPoolingThenCat,
+    MeanPoolingThenCat,
+    WeightAndMeanThenCat
 )
 
 
@@ -116,8 +118,10 @@ class GCNGraphPred(pl.LightningModule):
             "SumPoolingThenCat",
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
+            "MeanPoolingThenCat",
+            "WeightedMeanPoolingThenCat"
         ], (
-            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, or GlobalAttentionPoolingThenCat"
+            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
             + f"but got {global_pooling}"
         )
 
@@ -304,6 +308,10 @@ class GCNGraphPred(pl.LightningModule):
             readout_fn = GlobalAttentionPoolingThenCat
         elif self.hparams.global_pooling == "Set2SetThenCat":
             readout_fn = Set2SetThenCat
+        elif self.hparams.global_pooling == "MeanPoolingThenCat":
+            readout_fn = MeanPoolingThenCat
+        elif self.hparams.global_pooling == "WeightedMeanPoolingThenCat":
+            readout_fn = WeightAndMeanThenCat
 
         list_in_feats = []
         for type_feat in self.hparams.pooling_ntypes:

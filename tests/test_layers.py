@@ -14,6 +14,8 @@ from qtaim_embed.models.layers import (
     SumPoolingThenCat,
     WeightAndSumThenCat,
     UnifySize,
+    MeanPoolingThenCat,
+    WeightAndMeanThenCat
 )
 from qtaim_embed.utils.models import (
     get_layer_args,
@@ -113,6 +115,41 @@ class TestLayers:
         out = weight_sum_pool(self.graph, out)
         assert out.shape == (1, np.sum(self.in_feats))
         assert torch.allclose(out, torch.zeros_like(out))
+
+
+    def test_mean(self):
+        out = self.uni(self.feats)
+        ntypes = ["atom", "bond", "global"]
+        ntypes_direct_cat = ["global"]
+
+        sum_pool = MeanPoolingThenCat(
+            ntypes=ntypes, ntypes_direct_cat=ntypes_direct_cat, in_feats=self.in_feats
+        )
+        out = sum_pool(self.graph, out)
+
+        assert out.shape == (1, np.sum(self.in_feats))
+
+    def test_weight_sum(self):
+        out = self.uni(self.feats)
+        ntypes = ["atom", "bond", "global"]
+        ntypes_direct_cat = []
+
+        weight_sum_pool = WeightAndMeanThenCat(
+            ntypes=ntypes, ntypes_direct_cat=ntypes_direct_cat, in_feats=self.in_feats
+        )
+        # reset weights to 0 for testing
+        for ntype in ["atom", "bond", "global"]:
+            weight_sum_pool.atom_weighting[ntype].weight.data = torch.zeros_like(
+                weight_sum_pool.atom_weighting[ntype].weight.data
+            )
+            weight_sum_pool.atom_weighting[ntype].bias.data = torch.zeros_like(
+                weight_sum_pool.atom_weighting[ntype].bias.data
+            )
+
+        out = weight_sum_pool(self.graph, out)
+        assert out.shape == (1, np.sum(self.in_feats))
+        assert torch.allclose(out, torch.zeros_like(out))
+
 
     def test_set2set(self):
         out = self.uni(self.feats)
