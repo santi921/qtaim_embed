@@ -176,8 +176,8 @@
   "global_pooling_fn": {
     "values": [
       "GlobalAttentionPoolingThenCat",
-      "SumPoolingThenCat",
-      "WeightAndSumThenCat",
+      "MeanPoolingThenCat",
+      "WeightAndMeanThenCat",
       "Set2SetThenCat"
     ]
   },

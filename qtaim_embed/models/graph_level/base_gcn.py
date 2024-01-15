@@ -549,7 +549,8 @@ class GCNGraphPred(pl.LightningModule):
         """
         r2, mae, mse = self.compute_metrics(mode="train")
         # get epoch number
-        if self.trainer.current_epoch == 0:
+        
+        if self.trainer.current_epoch < 2:
             self.log("val_mae", 10**10, prog_bar=False)
         self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
@@ -643,7 +644,7 @@ class GCNGraphPred(pl.LightningModule):
         if scheduler_name == "reduce_on_plateau":
             scheduler = lr_scheduler.ReduceLROnPlateau(
                 optimizer,
-                mode="max",
+                mode="min",
                 factor=self.hparams.lr_scale_factor,
                 patience=self.hparams.lr_plateau_patience,
                 verbose=True,

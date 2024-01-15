@@ -651,7 +651,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         if scheduler_name == "reduce_on_plateau":
             scheduler = lr_scheduler.ReduceLROnPlateau(
                 optimizer,
-                mode="max",
+                mode="min",
                 factor=self.hparams.lr_scale_factor,
                 patience=self.hparams.lr_plateau_patience,
                 verbose=True,
