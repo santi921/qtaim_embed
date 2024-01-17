@@ -27,7 +27,8 @@ from qtaim_embed.models.layers import (
     WeightAndSumThenCat,
     GlobalAttentionPoolingThenCat,
     MeanPoolingThenCat,
-    WeightAndMeanThenCat
+    WeightAndMeanThenCat,
+    MultitaskLinearSoftmax
 )
 
 class GCNGraphPredClassifier(pl.LightningModule):
