@@ -1,9 +1,14 @@
+"""
+This script qm9 or qm8 datasets into the format for training with dimenet, schnet, or painn
+"""
+
 import argparse
 import pandas as pd
 from qtaim_embed.utils.translation import (
     get_molecule_translation_dimenet_qm8,
     get_molecule_translation_dimenet_qm9,
 )
+
 
 
 def main():

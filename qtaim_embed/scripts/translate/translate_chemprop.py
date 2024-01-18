@@ -1,3 +1,6 @@
+"""
+This script qm9 or qm8 datasets into the format for training with chemprop with atomic qtaim features
+"""
 
 import argparse
 import pandas as pd
@@ -9,7 +12,6 @@ ob_log_handler.SetOutputLevel(0)
 RDLogger.DisableLog("rdApp.*")
 
 from qtaim_embed.utils.translation import translate_qm8, translate_qm9
-
 
 
 def main():
