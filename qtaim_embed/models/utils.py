@@ -1,8 +1,10 @@
 import torch
 import numpy as np
 import pytorch_lightning as pl
+import pandas as pd
 from qtaim_embed.models.graph_level.base_gcn import GCNGraphPred
 from qtaim_embed.models.graph_level.base_gcn_classifier import GCNGraphPredClassifier
+from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 
 
 def load_graph_level_model_from_config(config):
@@ -166,3 +168,127 @@ class LogParameters(pl.Callback):
             trainer.logger.experiment.add_histogram(
                 "Parameters", p, trainer.current_epoch
             )
+
+
+def get_charge_spin_libe(batch_graph):
+    global_feats = batch_graph.ndata["feat"]["global"]
+    # 3th to 6th index inclusive
+    ind_charges = (3, 6)
+    ind_spins = (5, 8)
+    charge_one_hot = global_feats[:, ind_charges[0] : ind_charges[1]]
+    spin_one_hot = global_feats[:, ind_spins[0] : ind_spins[1]]
+    charge_one_hot = charge_one_hot.detach().numpy()
+    spin_one_hot = spin_one_hot.detach().numpy()
+    charge_one_hot = list(np.argmax(charge_one_hot, axis=1) - 1)
+    spin_one_hot = list(np.argmax(spin_one_hot, axis=1))
+
+    return charge_one_hot, spin_one_hot
+
+
+def test_and_predict_libe(dataset_test, dataset_train, model):
+    statistics_dict = {}
+
+    ### Train set
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_train, batch_size=len(dataset_train.graphs), shuffle=False
+    )
+    batch_graph, batched_labels = next(iter(data_loader))
+    charge_list_train, spin_list_train = get_charge_spin_libe(batch_graph)
+    preds_train = model.forward(batch_graph, batch_graph.ndata["feat"])
+    preds_train = preds_train.detach()
+
+    r2_pre, mae, mse, _, _ = model.evaluate_manually(
+        batch_graph,
+        batched_labels,
+        scaler_list=dataset_train.label_scalers,
+    )
+    r2_pre = r2_pre.numpy()[0]
+    mae = mae.numpy()[0]
+    mse = mse.numpy()[0]
+    statistics_dict["train"] = {"r2": r2_pre, "mae": mae, "mse": mse}
+
+    print("--" * 50)
+    print(
+        "Performance training set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
+            r2_pre, mae, mse
+        )
+    )
+
+    ### Test set
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_test, batch_size=len(dataset_test.graphs), shuffle=False
+    )
+    batch_graph, batched_labels = next(iter(data_loader))
+    charge_list_test, spin_list_test = get_charge_spin_libe(batch_graph)
+    r2_pre, mae, mse, _, _ = model.evaluate_manually(
+        batch_graph,
+        batched_labels,
+        scaler_list=dataset_test.label_scalers,
+    )
+    r2_pre = r2_pre.numpy()[0]
+    mae = mae.numpy()[0]
+    mse = mse.numpy()[0]
+
+    print(
+        "Performance test set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
+            r2_pre, mae, mse
+        )
+    )
+    print("--" * 50)
+    statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
+
+    preds_test = model.forward(batch_graph, batch_graph.ndata["feat"])
+    label_list = torch.tensor(
+        [i.ndata["labels"]["global"].tolist()[0][0] for i in dataset_test.graphs]
+    )
+    label_list_train = torch.tensor(
+        [i.ndata["labels"]["global"].tolist()[0][0] for i in dataset_train.graphs]
+    )
+
+    for scaler in dataset_test.label_scalers:
+        label_list_train = scaler.inverse_feats({"global": label_list_train})[
+            "global"
+        ].view(-1, 1)
+        preds_test = scaler.inverse_feats({"global": preds_test})["global"].view(-1, 1)
+        label_list = scaler.inverse_feats({"global": label_list})["global"].view(-1, 1)
+        preds_train = scaler.inverse_feats({"global": preds_train})["global"].view(
+            -1, 1
+        )
+
+    # return preds_test, preds_train, label_list, label_list_train, statistics_dict, charge_list_test, spin_list_test, charge_list_train, spin_list_train
+    return {
+        "preds_test": preds_test.detach().numpy(),
+        "preds_train": preds_train.detach().numpy(),
+        "label_list": label_list.detach().numpy(),
+        "label_list_train": label_list_train.detach().numpy(),
+        "statistics_dict": statistics_dict,
+        "charge_list_test": charge_list_test,
+        "spin_list_test": spin_list_test,
+        "charge_list_train": charge_list_train,
+        "spin_list_train": spin_list_train,
+    }
+
+
+def get_test_train_preds_as_df(results_dict, key="qtaim_full"):
+    dict_test =  {
+        "preds": results_dict[key]["test_preds"].flatten(),
+        "labels": results_dict[key]["test_labels"].flatten(),
+
+    }
+    dict_train = {
+        "preds": results_dict[key]["train_preds"].flatten(),
+        "labels": results_dict[key]["train_labels"].flatten(),
+    }
+
+    if "charge_list_test" in results_dict[key].keys():
+        dict_test["charge"] = results_dict[key]["charge_list_test"]
+        dict_test["spin"] = results_dict[key]["spin_list_test"]
+
+    if "charge_list_train" in results_dict[key].keys():
+        dict_train["charge"] = results_dict[key]["charge_list_train"]
+        dict_train["spin"] = results_dict[key]["spin_list_train"]
+
+    df_test = pd.DataFrame(dict_test)   
+    df_train = pd.DataFrame(dict_train)   
+
+    return df_test, df_train
