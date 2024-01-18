@@ -97,6 +97,10 @@ def main():
                     batched_labels,
                     scaler_list=test_dataset.label_scalers,
                 )
+
+                mean_mae, mean_mse, ewt, _, _ = model_temp.evaluate_manually(
+                       batch_graph, batched_labels, test_dataset.label_scalers, per_atom=True
+                )
                 # convert to numpy
                 r2_metrics = r2_metrics.cpu().numpy()
                 mae_metrics = mae_metrics.cpu().numpy()
@@ -119,7 +123,10 @@ def main():
                     "mae_metrics": mae_metrics,
                     "mse_metrics": mse_metrics,
                     "r2_manual": r2_man, 
-                    "mae_manual": mae_man
+                    "mae_manual": mae_man,
+                    "mean_mae_per_atom": mean_mae,
+                    "mean_rmse_per_atom": mean_mse,
+                    "ewt": ewt,
                 }
 
 

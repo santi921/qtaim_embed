@@ -657,7 +657,7 @@ class GCNGraphPred(pl.LightningModule):
 
         return scheduler
 
-    def evaluate_manually(self, batch_graph, batch_label, scaler_list):
+    def evaluate_manually(self, batch_graph, batch_label, scaler_list, per_atom=False):
         """
         Evaluate a set of data manually
         Takes
@@ -679,28 +679,47 @@ class GCNGraphPred(pl.LightningModule):
 
         preds_unscaled = preds_unscaled["global"].view(-1, self.hparams.ntasks)
         labels_unscaled = labels_unscaled["global"].view(-1, self.hparams.ntasks)
-        # manually compute metrics
-        #r2_eval = torchmetrics.R2Score()
-        #mae_eval = torchmetrics.MeanAbsoluteError()
-        #mse_eval = torchmetrics.MeanSquaredError(squared=False)
-        r2_eval = MultioutputWrapper(
-            torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
-        )
-        mae_eval = MultioutputWrapper(
-            torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.ntasks
-        )
-        mse_eval = MultioutputWrapper(
-            torchmetrics.MeanSquaredError(squared=False),
-            num_outputs=self.hparams.ntasks,
-        )
         
+        if per_atom: 
+            abs_diff = torch.abs(preds_unscaled - labels_unscaled)
+            abs_diff = abs_diff.view(-1, self.hparams.ntasks)
+            n_atoms = batch_graph.batch_num_nodes("atom")
+            n_mols = batch_graph.batch_size
+            abs_diff = abs_diff.view(n_mols, -1)
+            # energies within tolerance
+            
+            # mae per atom
+            mae_per_atom = torch.sum(abs_diff, dim=1) / n_atoms
+            ewt_prop = torch.sum(mae_per_atom < 0.043) / len(mae_per_atom)
+            #mse per atom
+            mse_per_atom = torch.sum(abs_diff**2, dim=1) / n_atoms
+            mean_mae = torch.mean(mae_per_atom)
+            mean_rmse = torch.sqrt(torch.mean(mse_per_atom))
+            return mean_mae, mean_rmse, ewt_prop, preds_unscaled, labels_unscaled
+        
+        else: 
+            # manually compute metrics
+            #r2_eval = torchmetrics.R2Score()
+            #mae_eval = torchmetrics.MeanAbsoluteError()
+            #mse_eval = torchmetrics.MeanSquaredError(squared=False)
+            r2_eval = MultioutputWrapper(
+                torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
+            )
+            mae_eval = MultioutputWrapper(
+                torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.ntasks
+            )
+            mse_eval = MultioutputWrapper(
+                torchmetrics.MeanSquaredError(squared=False),
+                num_outputs=self.hparams.ntasks,
+            )
+            
 
-        r2_eval.update(preds_unscaled, labels_unscaled)
-        mae_eval.update(preds_unscaled, labels_unscaled)
-        mse_eval.update(preds_unscaled, labels_unscaled)
+            r2_eval.update(preds_unscaled, labels_unscaled)
+            mae_eval.update(preds_unscaled, labels_unscaled)
+            mse_eval.update(preds_unscaled, labels_unscaled)
 
-        r2_val = r2_eval.compute()
-        mae_val = mae_eval.compute()
-        mse_val = mse_eval.compute()
-
-        return r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled
+            r2_val = r2_eval.compute()
+            mae_val = mae_eval.compute()
+            mse_val = mse_eval.compute()
+            
+            return r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled
