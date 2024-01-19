@@ -690,7 +690,9 @@ class GCNGraphPred(pl.LightningModule):
             
             # mae per atom
             mae_per_atom = torch.sum(abs_diff, dim=1) / n_atoms
-            ewt_prop = torch.sum(mae_per_atom < 0.043) / len(mae_per_atom)
+            mae_per_molecule = torch.sum(abs_diff, dim=1)
+            ewt_prop = torch.sum(mae_per_molecule < 0.043) / len(mae_per_atom) # assumes eV
+            
             #mse per atom
             mse_per_atom = torch.sum(abs_diff**2, dim=1) / n_atoms
             mean_mae = torch.mean(mae_per_atom)
