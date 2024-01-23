@@ -269,6 +269,80 @@ def test_and_predict_libe(dataset_test, dataset_train, model):
     }
 
 
+def test_and_predict(dataset_test, dataset_train, model):
+    statistics_dict = {}
+
+    ### Train set
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_train, batch_size=len(dataset_train.graphs), shuffle=False
+    )
+    batch_graph, batched_labels = next(iter(data_loader))
+    # charge_list_train, spin_list_train = get_charge_spin_libe(batch_graph)
+    # preds_train = model.forward(batch_graph, batch_graph.ndata["feat"])
+    # preds_train = preds_train.detach()
+
+    (
+        r2_pre,
+        mae,
+        mse,
+        preds_unscaled_train,
+        labels_unscaled_train,
+    ) = model.evaluate_manually(
+        batch_graph, batched_labels, scaler_list=dataset_train.label_scalers
+    )
+    r2_pre = r2_pre.numpy()[0]
+    mae = mae.numpy()[0]
+    mse = mse.numpy()[0]
+    statistics_dict["train"] = {"r2": r2_pre, "mae": mae, "mse": mse}
+
+    print("--" * 50)
+    print(
+        "Performance training set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
+            r2_pre, mae, mse
+        )
+    )
+
+    ### Test set
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_test, batch_size=len(dataset_test.graphs), shuffle=False
+    )
+    batch_graph, batched_labels = next(iter(data_loader))
+    # charge_list_test, spin_list_test = get_charge_spin_libe(batch_graph)
+    (
+        r2_pre,
+        mae,
+        mse,
+        preds_unscaled_test,
+        labels_unscaled_test,
+    ) = model.evaluate_manually(
+        batch_graph, batched_labels, scaler_list=dataset_test.label_scalers
+    )
+    r2_pre = r2_pre.numpy()[0]
+    mae = mae.numpy()[0]
+    mse = mse.numpy()[0]
+
+    print(
+        "Performance test set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
+            r2_pre, mae, mse
+        )
+    )
+    print("--" * 50)
+    statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
+
+    # return preds_test, preds_train, label_list, label_list_train, statistics_dict, charge_list_test, spin_list_test, charge_list_train, spin_list_train
+    return {
+        "preds_test": preds_unscaled_test.detach().numpy(),
+        "preds_train": preds_unscaled_train.detach().numpy(),
+        "label_list": labels_unscaled_test.detach().numpy(),
+        "label_list_train": labels_unscaled_train.detach().numpy(),
+        "statistics_dict": statistics_dict,
+        # "charge_list_test": charge_list_test,
+        # "spin_list_test": spin_list_test,
+        # "charge_list_train": charge_list_train,
+        # "spin_list_train": spin_list_train,
+    }
+
+
 def get_test_train_preds_as_df(results_dict, key="qtaim_full"):
     dict_test =  {
         "preds": results_dict[key]["test_preds"].flatten(),
