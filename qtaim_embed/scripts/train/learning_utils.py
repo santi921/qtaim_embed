@@ -639,8 +639,8 @@ def get_datasets_libe(loc_dict):
 
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    qtaim_model_dict['atom_feature_size'] = 37
-    qtaim_model_dict['bond_feature_size'] = 29
+    qtaim_model_dict['atom_feature_size'] = 33
+    qtaim_model_dict['bond_feature_size'] = 26
     qtaim_model_dict['global_feature_size'] = 9
 
     non_qtaim_model_dict = deepcopy(non_qtaim_model_bl_dict)
@@ -781,7 +781,7 @@ def get_datasets_libe(loc_dict):
             allowed_ring_size=[3, 4, 5, 6, 7],
             element_set={'S', 'Li', 'O', 'N', 'H', 'C', 'F', 'P'},
             allowed_charges=[-1, 0, 1],
-            allowed_spins=[1, 2, 3],corrected_E
+            allowed_spins=[1, 2, 3],
             self_loop=True,
             extra_keys=base_dict_bl,
             target_list=["corrected_E"],

@@ -46,13 +46,13 @@ def manual_statistics(model, batch_graph,batched_labels,scaler_list):
 def main(): 
     results_dict = {}
     loc_dict = {
-        "10": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_10.pkl",
-        "100": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_100.pkl",
-        "1000": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_1000.pkl",
-        "10000": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_10000.pkl",
-        "100000": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled_100000.pkl",
-        "all": "../../../data/splits_1205/train_qm9_qtaim_1205_labelled.pkl",
-        "test": "../../../data/splits_1205/test_qm9_qtaim_1205_labelled.pkl"
+        "10": "../../../datasets/1205_splits/train_qm9_qtaim_1205_labelled_10.pkl",
+        "100": "../../../datasets/1205_splits/train_qm9_qtaim_1205_labelled_100.pkl",
+        "1000": "../../../datasets/1205_splits/train_qm9_qtaim_1205_labelled_1000.pkl",
+        "10000": "../../../datasets/1205_splits/train_qm9_qtaim_1205_labelled_10000.pkl",
+        "100000": "../../../datasets/1205_splits/train_qm9_qtaim_1205_labelled_100000.pkl",
+        "all": "../../../datasets/1205_splits/train_qm9_qtaim_1205_labelled.pkl",
+        "test": "../../../datasets/1205_splits/test_qm9_qtaim_1205_labelled.pkl"
     }
     model_dict, dict_keys, dict_datasets = get_datasets_qm9(loc_dict)
 

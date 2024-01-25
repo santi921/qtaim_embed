@@ -46,12 +46,12 @@ def manual_statistics(model, batch_graph,batched_labels,scaler_list):
 def main(): 
     results_dict = {}
     loc_dict = {
-        "10": "../../../data/splits_1205/train_libe_qtaim_1205_labelled_10.pkl",
-        "100": "../../../data/splits_1205/train_libe_qtaim_1205_labelled_100.pkl",
-        "1000": "../../../data/splits_1205/train_libe_qtaim_1205_labelled_1000.pkl",
-        "10000": "../../../data/splits_1205/train_libe_qtaim_1205_labelled_10000.pkl",
-        "all": "../../../data/splits_1205/train_libe_qtaim_1205_labelled.pkl",
-        "test": "../../../data/splits_1205/test_libe_qtaim_1205_labelled.pkl"
+        "10": "../../../datasets/1205_splits/train_libe_qtaim_1205_labelled_10_corrected.pkl",
+        "100": "../../../datasets/1205_splits/train_libe_qtaim_1205_labelled_100_corrected.pkl",
+        "1000": "../../../dadatasetsta/1205_splits/train_libe_qtaim_1205_labelled_1000_corrected.pkl",
+        "10000": "../../../datasets/1205_splits/train_libe_qtaim_1205_labelled_10000_corrected.pkl",
+        "all": "../../../datasets/1205_splits/train_libe_qtaim_1205_labelled_corrected.pkl",
+        "test": "../../../datasets/1205_splits/test_libe_qtaim_1205_labelled_corrected.pkl"
     }
     model_dict, dict_keys, dict_datasets = get_datasets_libe(loc_dict)
 

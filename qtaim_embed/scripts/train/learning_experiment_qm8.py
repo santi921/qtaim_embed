@@ -20,12 +20,12 @@ torch.set_float32_matmul_precision('high')
 def main(): 
     results_dict = {}
     loc_dict = {
-        "10": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_10.pkl",
-        "100": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_100.pkl",
-        "1000": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_1000.pkl",
-        "10000": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled_10000.pkl",
-        "all": "../../../data/splits_1205/train_qm8_qtaim_1205_labelled.pkl",
-        "test": "../../../data/splits_1205/test_qm8_qtaim_1205_labelled.pkl"
+        "10": "../../../datasets/1205_splits/train_qm8_qtaim_1205_labelled_10.pkl",
+        "100": "../../../datasets/1205_splits/train_qm8_qtaim_1205_labelled_100.pkl",
+        "1000": "../../../datasets/1205_splits/train_qm8_qtaim_1205_labelled_1000.pkl",
+        "10000": "../../../datasets/1205_splits/train_qm8_qtaim_1205_labelled_10000.pkl",
+        "all": "../../../datasets/1205_splits/train_qm8_qtaim_1205_labelled.pkl",
+        "test": "../../../datasets/1205_splits/test_qm8_qtaim_1205_labelled.pkl"
     }
     model_dict, dict_keys, dict_datasets = get_datasets_qm8(loc_dict)
 
