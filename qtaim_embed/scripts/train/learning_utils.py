@@ -9,7 +9,7 @@ def get_datasets_qm9(loc_dict):
         'bond_feature_size': 27,
         'global_feature_size': 3,
         'conv_fn': 'ResidualBlock',
-        'target_dict': {'global': ["homo", "lumo", "gap", "u0"]},
+        'target_dict': {'global': ["homo", "lumo", "gap"]},
         'dropout': 0.1,
         'batch_norm_tf': True,
         'activation': 'ReLU',
@@ -94,7 +94,7 @@ def get_datasets_qm9(loc_dict):
        "extra_feat_bond_ellip_e_dens", "extra_feat_bond_eta",
        "extra_feat_bond_energy_density", "extra_feat_bond_lol"
         ],
-        "global":  ["homo", "lumo", "gap", "u0"]
+        "global":  ["homo", "lumo", "gap"]
     }
 
     qtaim_keys_bl = {
@@ -122,19 +122,19 @@ def get_datasets_qm9(loc_dict):
        "extra_feat_bond_ellip_e_dens", "extra_feat_bond_eta",
        "extra_feat_bond_energy_density", "extra_feat_bond_lol"
         ],
-        "global":  ["homo", "lumo", "gap", "u0"]
+        "global":  ["homo", "lumo", "gap"]
     }
 
     base_dict_bl = {
         "atom": [],
         "bond": ["bond_length"],
-        "global": ["homo", "lumo", "gap", "u0"],
+        "global": ["homo", "lumo", "gap"],
     }
 
     base_dict = {
         "atom": [],
         "bond": [],
-        "global": ["homo", "lumo", "gap", "u0"],
+        "global": ["homo", "lumo", "gap"],
     }
 
 
@@ -155,7 +155,7 @@ def get_datasets_qm9(loc_dict):
             allowed_spins=None,
             self_loop=True,
             extra_keys=base_dict,
-            target_list=["homo", "lumo", "gap", "u0"],
+            target_list=["homo", "lumo", "gap"],
             extra_dataset_info={},
             debug=False,
             log_scale_features=False,
@@ -172,7 +172,7 @@ def get_datasets_qm9(loc_dict):
             allowed_spins=None,
             self_loop=True,
             extra_keys=qtaim_keys,
-            target_list=["homo", "lumo", "gap", "u0"],
+            target_list=["homo", "lumo", "gap"],
             extra_dataset_info={},
             debug=False,
             log_scale_features=False,
@@ -189,7 +189,7 @@ def get_datasets_qm9(loc_dict):
             allowed_spins=None,
             self_loop=True,
             extra_keys=qtaim_keys_bl,
-            target_list=["homo", "lumo", "gap", "u0"],
+            target_list=["homo", "lumo", "gap"],
             extra_dataset_info={},
             debug=False,
             log_scale_features=False,
@@ -206,7 +206,7 @@ def get_datasets_qm9(loc_dict):
             allowed_spins=None,
             self_loop=True,
             extra_keys=base_dict_bl,
-            target_list=["homo", "lumo", "gap", "u0"],
+            target_list=["homo", "lumo", "gap"],
             extra_dataset_info={},
             debug=False,
             log_scale_features=False,
@@ -787,7 +787,7 @@ def get_datasets_libe(loc_dict):
             target_list=["corrected_E"],
             extra_dataset_info={},
             debug=False,
-            log_scale_features=Falses,
+            log_scale_features=False,
             log_scale_targets=False,
             standard_scale_features=True,
             standard_scale_targets=True,
