@@ -246,7 +246,7 @@ def get_datasets_qm9(loc_dict):
 def get_datasets_qm8(loc_dict):
 
     qtaim_model_bl_dict ={
-        'atom_feature_size': 34,
+        'atom_feature_size': 33,
         'bond_feature_size': 29,
         'global_feature_size': 3,
         'conv_fn': 'ResidualBlock',
@@ -271,7 +271,7 @@ def get_datasets_qm8(loc_dict):
         'fc_dropout': 0.1,
         'fc_batch_norm': True,
         'fc_num_layers': 2,
-        'n_fc_layers': 3,
+        'n_fc_layers': 2,
         'global_pooling_fn': 'MeanPoolingThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
@@ -298,7 +298,7 @@ def get_datasets_qm8(loc_dict):
 
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    qtaim_model_dict['atom_feature_size'] = 34
+    qtaim_model_dict['atom_feature_size'] = 33
     qtaim_model_dict['bond_feature_size'] = 28
     
     

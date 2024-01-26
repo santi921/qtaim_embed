@@ -103,7 +103,7 @@ class GCNGraphPred(pl.LightningModule):
         #    output_dims += len(v)
 
         assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
-            "conv_fn must be either GraphConvDropoutBatch, GATConvDropoutBatch or ResidualBlock"
+            "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
             + f"but got {conv_fn}"
         )
 
