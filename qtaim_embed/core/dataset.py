@@ -439,7 +439,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self.label_scalers = []
         self.data = mol_wrappers
         self.element_set = element_set
-        self.feature_names = names
+        self.feat_names = names
         self.allowed_spins = allowed_spins
         self.allowed_spins = allowed_charges
         self.graphs = graph_list
@@ -466,7 +466,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
 
             for value in value_list:
                 target_locs[node_type].append(
-                    self.feature_names[node_type].index(value)
+                    self.feat_names[node_type].index(value)
                 )
 
         # now partition features into feats in target_locs and feats not in target_locs
@@ -475,7 +475,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         include_names = {}
         exclude_names = {}
 
-        for node_type, value_list in self.feature_names.items():
+        for node_type, value_list in self.feat_names.items():
             # if node_type not in include_locs:
             #    include_locs[node_type] = []
             #    exclude_locs[node_type] = []

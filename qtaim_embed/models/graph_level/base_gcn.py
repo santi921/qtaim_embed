@@ -505,7 +505,7 @@ class GCNGraphPred(pl.LightningModule):
             )
             layer_idx += 1
 
-    def shared_step(self, batch, mode):
+    def shared_step(self, batch, mode, scalers=None):
         batch_graph, batch_label = batch
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
@@ -525,6 +525,8 @@ class GCNGraphPred(pl.LightningModule):
             sync_dist=True,
         )
         self.update_metrics(logits, labels, mode)
+
+
         return all_loss
 
     def training_step(self, batch, batch_idx):
@@ -539,9 +541,9 @@ class GCNGraphPred(pl.LightningModule):
         """
         return self.shared_step(batch, mode="val")
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx, scalers=None):
         # Todo
-        return self.shared_step(batch, mode="test")
+        return self.shared_step(batch, mode="test", scalers=scalers)
 
     def on_train_epoch_end(self):
         """

@@ -241,7 +241,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                 ), "test_dataset_loc is None"
 
                 self.test_dataset = HeteroGraphGraphLabelDataset(
-                    file=self.test_dataset_loc,
+                    file=self.config["dataset"]["train_dataset_loc"],
                     allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
                     allowed_charges=self.config["dataset"]["allowed_charges"],
                     allowed_spins=self.config["dataset"]["allowed_spins"],
@@ -259,8 +259,11 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                 )
-                print("test set size: ", len(self.test_dataset))
 
+                print("test set size: ", len(self.test_dataset))
+                self.test_dataset.feature_size()
+                self.test_dataset.feature_names()
+                
                 self.prepare_tf = True
                 return (
                     self.test_dataset.feature_names(),
