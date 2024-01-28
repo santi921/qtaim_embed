@@ -533,17 +533,17 @@ class GCNGraphPred(pl.LightningModule):
         """
         Train step
         """
-        return self.shared_step(batch, mode="train")
+        return {"train_loss": self.shared_step(batch, mode="train")}
 
     def validation_step(self, batch, batch_idx):
         """
         Val step
         """
-        return self.shared_step(batch, mode="val")
+        return {"val_loss": self.shared_step(batch, mode="val")}
 
     def test_step(self, batch, batch_idx, scalers=None):
         # Todo
-        return self.shared_step(batch, mode="test", scalers=scalers)
+        return {"test_loss": self.shared_step(batch, mode="test", scalers=scalers)}
 
     def on_train_epoch_end(self):
         """

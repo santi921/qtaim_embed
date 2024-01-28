@@ -127,6 +127,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "SumPoolingThenCat",
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
+            "MeanPoolingThenCat",
+            "WeightedMeanPoolingThenCat"
         ], (
             "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, or GlobalAttentionPoolingThenCat"
             + f"but got {global_pooling}"
@@ -539,11 +541,12 @@ class GCNGraphPredClassifier(pl.LightningModule):
         self.log(
             f"{mode}_loss",
             all_loss,
-            on_step=False,
+            on_step=True,
             on_epoch=True,
             prog_bar=True,
             batch_size=len(labels),
-            sync_dist=True,
+            sync_dist=False,
+            logger=True,
         )
 
         return all_loss
@@ -552,17 +555,19 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         Train step
         """
-        return self.shared_step(batch, mode="train")
+        #return self.shared_step(batch, mode="train")
+        return {"loss": self.shared_step(batch, mode="train")}
 
     def validation_step(self, batch, batch_idx):
         """
         Val step
         """
-        return self.shared_step(batch, mode="val")
+        return {"val_loss": self.shared_step(batch, mode="val")}
 
     def test_step(self, batch, batch_idx):
         # Todo
-        return self.shared_step(batch, mode="test")
+        #return self.shared_step(batch, mode="test")
+        return {"test_loss": self.shared_step(batch, mode="test")}
 
     def on_train_epoch_end(self):
         """
@@ -572,17 +577,17 @@ class GCNGraphPredClassifier(pl.LightningModule):
         self.log("train_f1", f1.mean(), prog_bar=False, sync_dist=True)
         self.log("train_auroc", auroc.mean(), prog_bar=False, sync_dist=True)
         # get epoch number
-        # if self.trainer.current_epoch == 0:
-        #    self.log("val_mae", 10**10, prog_bar=False)
+
 
     def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
         f1, auroc = self.compute_metrics(mode="val")
-        self.log("val_f1", f1.mean(), prog_bar=False, sync_dist=True)
-        self.log("val_auroc", auroc.mean(), prog_bar=False, sync_dist=True)
-
+        self.log("val_f1", f1.mean(), prog_bar=True, sync_dist=True)
+        self.log("val_auroc", auroc.mean(), prog_bar=True, sync_dist=True)
+        return {"val_f1": f1.mean(), "val_auroc": auroc.mean()}
+    
     def on_test_epoch_end(self):
         """
         Test epoch end
