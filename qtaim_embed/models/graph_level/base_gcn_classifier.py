@@ -472,9 +472,9 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 # create module list
                 loss_fn = nn.ModuleList()
                 for i in range(self.hparams.ntasks):
-                    loss_fn.append(nn.CrossEntropyLoss())
+                    loss_fn.append(nn.CrossEntropyLoss(reduction="mean"))
             else:
-                loss_fn = nn.CrossEntropyLoss()
+                loss_fn = nn.CrossEntropyLoss(reduction="mean")
         return loss_fn
 
     def compute_loss(self, target, pred):
@@ -484,9 +484,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
         if self.hparams.ntasks > 1:
             loss = 0
             for i in range(self.hparams.ntasks):
-                loss += self.loss[i](target[:, i], pred[:, i])
-            return loss
-        return self.loss(target, pred)
+                loss += self.loss[i](target=target[:, i], input=pred[:, i])
+
+            return loss / int(self.hparams.ntasks)
+        return self.loss(target=target, input=pred)
 
     def feature_at_each_layer(model, graph, feats):
         """
@@ -535,7 +536,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             self.update_metrics(pred=logits_one_hot, target=labels_one_hot, mode=mode)
         else:
             self.update_metrics(pred=logits, target=labels, mode=mode)
-        all_loss = self.compute_loss(logits, labels_one_hot)
+        all_loss = self.compute_loss(pred=logits, target=labels_one_hot)
 
         # log loss
         self.log(
