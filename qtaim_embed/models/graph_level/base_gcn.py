@@ -526,14 +526,14 @@ class GCNGraphPred(pl.LightningModule):
         )
         self.update_metrics(logits, labels, mode)
 
-
         return all_loss
 
     def training_step(self, batch, batch_idx):
         """
         Train step
         """
-        return {"train_loss": self.shared_step(batch, mode="train")}
+        loss = self.shared_step(batch, mode="train")
+        return {"train_loss": loss, "loss": loss}
 
     def validation_step(self, batch, batch_idx):
         """
