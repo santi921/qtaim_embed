@@ -44,6 +44,9 @@ class TrainingObject:
                 "allowed_charges": self.sweep_config["parameters"]["allowed_charges"][
                     "values"
                 ][0],
+                "per_atom": self.sweep_config["parameters"]["per_atom"][
+                    "values"
+                ][0],
                 "allowed_spins": self.sweep_config["parameters"]["allowed_spins"][
                     "values"
                 ][0],
@@ -170,6 +173,7 @@ class TrainingObject:
                     "train_dataset_loc": self.dataset_loc,
                     "log_save_dir": self.log_save_dir,
                     "num_workers": init_config["num_workers"],
+                    "per_atom": init_config["per_atom"]
                 },
                 "optim": {
                     "num_devices": init_config["num_devices"],
