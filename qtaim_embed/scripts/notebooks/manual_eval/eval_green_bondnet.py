@@ -173,6 +173,7 @@ def main():
                 "esp_nuc", "delta_g_hirsh", "delta_g_promolecular", "lap_e_density", "Lagrangian_K"
             ],
             "global": ["global_dHrxn298"],
+            #"global": [],
             "mappings": ["indices_qtaim"]
             },
             "extra_info": [],
@@ -198,6 +199,7 @@ def main():
             "log_save_dir": "./100/",
             "lmdb_dir": "./lmdb_data/",
             "target_var": "dE0",
+            #"target_var": "dHrxn298",
             "overwrite": True
         },
         "dataset_transfer": {
@@ -236,34 +238,32 @@ def main():
         "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0126/non/model_lightning_epoch=427-val_l1=8.97.ckpt"}
     }
 
-    """model_qtaim_100= {
-        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0126/qtaim/model_lightning_epoch=15-val_l1=14.81.ckpt"}
+    model= {
+        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0126/non/model_lightning_epoch=78-val_l1=7.85.ckpt"}
     }
 
-    model_qtaim_1000= {
-        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0126/qtaim/model_lightning_epoch=586-val_l1=12.17.ckpt"}
-    }
-
-    model_qtaim_10000= {
-        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0126/qtaim/model_lightning_epoch=367-val_l1=9.36.ckpt"}
-    }
-    """
 
     model_qtaim_100= {
-        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0206_2/model_lightning_epoch=218-val_l1=8.75.ckpt"}
+        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0208_3/model_lightning_epoch=07-val_l1=16.47.ckpt"}
     }
 
     model_qtaim_1000= {
-        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0206_2/last.ckpt"}
+        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0208_3/model_lightning_epoch=47-val_l1=10.76.ckpt"}
     }
 
     model_qtaim_10000= {
-        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0206_2/model_lightning_epoch=159-val_l1=9.02.ckpt"}
+        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0208_3/model_lightning_epoch=187-val_l1=7.75.ckpt"}
     }
 
-    
+
+    model_qtaim= {
+        "model": {"restore": True, "restore_path": "/home/santiagovargas/dev/qtaim_embed/data/saved_models/final_set/bondnet/0208_3/model_lightning_epoch=250-val_l1=7.38.ckpt"}
+    }
+
+
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    """
+    
     # No QTAIM
     dm = BondNetLightningDataModule(config)
     feature_size, feature_names = dm.prepare_data()
@@ -271,13 +271,18 @@ def main():
     model_100 = load_model_lightning(model_100["model"], load_dir=log_save_dir)
     model_1000 = load_model_lightning(model_1000["model"], load_dir=log_save_dir)
     model_10000 = load_model_lightning(model_10000["model"], load_dir=log_save_dir)  
+    model = load_model_lightning(model["model"], load_dir=log_save_dir)  
+    
     model_100.to(device)
     model_1000.to(device)
     model_10000.to(device)
+    model.to(device)
+
     data_loader = dm.test_dataloader()
     l1_acc_100, _, sc_100, df_pred_100 = evaluate(model_100, feature_names, data_loader, device)
     l1_acc_1000, _, sc_1000, df_pred_1000 = evaluate(model_1000, feature_names, data_loader, device)
     l1_acc_10000, _, sc_10000, df_pred_10000 = evaluate(model_10000, feature_names, data_loader, device)
+    l1_acc, _, sc, df_pred = evaluate(model, feature_names, data_loader, device)
     
     print("100")
     print("MAE: ", l1_acc_100)
@@ -293,7 +298,12 @@ def main():
     print("MAE: ", l1_acc_10000)
     #print("MSE: ", mse_10000)
     print("R2: ", sc_10000)
-    """
+
+    print("full")
+    print("MAE: ", l1_acc)
+    #print("MSE: ", mse_10000)
+    print("R2: ", sc)
+    
     # QTAIM
     dm_qtaim = BondNetLightningDataModule(config_qtaim)
     feature_size, feature_names = dm_qtaim.prepare_data()
@@ -301,13 +311,16 @@ def main():
     model_qtaim_100 = load_model_lightning(model_qtaim_100["model"], load_dir=log_save_dir)
     model_qtaim_1000 = load_model_lightning(model_qtaim_1000["model"], load_dir=log_save_dir)
     model_qtaim_10000 = load_model_lightning(model_qtaim_10000["model"], load_dir=log_save_dir)
+    model_qtaim = load_model_lightning(model_qtaim["model"], load_dir=log_save_dir)
     model_qtaim_100.to(device)
     model_qtaim_1000.to(device)
     model_qtaim_10000.to(device)
+    model_qtaim.to(device)
     data_loader_qtaim = dm_qtaim.test_dataloader()
     l1_acc_qtaim_100, _, sc_qtaim_100, df_pred_qtaim_100 = evaluate(model_qtaim_100, feature_names, data_loader_qtaim, device)
     l1_acc_qtaim_1000, _, sc_qtaim_1000, df_pred_qtaim_1000 = evaluate(model_qtaim_1000, feature_names, data_loader_qtaim, device)
     l1_acc_qtaim_10000, _, sc_qtaim_10000, df_pred_qtaim_10000 = evaluate(model_qtaim_10000, feature_names, data_loader_qtaim, device)
+    l1_acc_qtaim, _, sc_qtaim, df_pred_qtaim = evaluate(model_qtaim, feature_names, data_loader_qtaim, device)
 
 
 
@@ -329,13 +342,20 @@ def main():
     #print("MSE: ", mse_qtaim_10000)
     print("R2: ", sc_qtaim_10000)
 
+    print("Qtaim")
+    print("MAE: ", l1_acc_qtaim)
+    #print("MSE: ", mse_qtaim_10000)
+    print("R2: ", sc_qtaim)
+
     dict_results_full = {
-        #"100": df_pred_100,
-        #"1000": df_pred_1000,
-        #"10000": df_pred_10000,
+        "100": df_pred_100,
+        "1000": df_pred_1000,
+        "10000": df_pred_10000,
+        "full": df_pred,
         "qtaim_100": df_pred_qtaim_100,
         "qtaim_1000": df_pred_qtaim_1000,
         "qtaim_10000": df_pred_qtaim_10000,
+        "qtaim": df_pred_qtaim
     }
 
     json.dump(dict_results_full, open("./green_bondnet_results_revamp.json", "w"), indent=4)
