@@ -11,7 +11,8 @@ from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
 
 from qtaim_embed.utils.models import _split_batched_output, get_layer_args
-from qtaim_embed.models.layers import GraphConvDropoutBatch, ResidualBlock
+from qtaim_embed.models.layers import GraphConvDropoutBatch, ResidualBlock, UnifySize
+from dgl.nn.pytorch import GATConv
 
 
 class GCNNodePred(pl.LightningModule):
@@ -57,6 +58,12 @@ class GCNNodePred(pl.LightningModule):
         norm="both",
         aggregate="sum",
         lr=1e-3,
+        embedding_size=16,
+        hidden_size_gat=128,
+        num_heads_gat=4,
+        dropout_feat_gat=0.2,
+        dropout_attn_gat=0.2,
+        residual_gat=True,
         scheduler_name="reduce_on_plateau",
         weight_decay=0.0,
         lr_plateau_patience=5,
@@ -69,8 +76,16 @@ class GCNNodePred(pl.LightningModule):
         output_dims = 0
         for k, v in target_dict.items():
             output_dims += len(v)
-        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock", (
-            "conv_fn must be either GraphConvDropoutBatch or ResidualBlock"
+        
+        if "atom" not in target_dict:
+            target_dict["atom"] = [None]
+        if "bond" not in target_dict:
+            target_dict["bond"] = [None]
+        if "global" not in target_dict:
+            target_dict["global"] = [None]
+
+        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
+            "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
             + f"but got {conv_fn}"
         )
 
@@ -100,7 +115,13 @@ class GCNNodePred(pl.LightningModule):
             "lr_scale_factor": lr_scale_factor,
             "scheduler_name": scheduler_name,
             "loss_fn": loss_fn,
+            "num_heads": num_heads_gat,
+            "feat_drop": dropout_feat_gat,
+            "attn_drop": dropout_attn_gat,
+            "residual": residual_gat,
             "resid_n_graph_convs": resid_n_graph_convs,
+            "hidden_size": hidden_size_gat,
+            "embedding_size": embedding_size,
         }
 
         self.hparams.update(params)
@@ -110,11 +131,24 @@ class GCNNodePred(pl.LightningModule):
         if self.hparams.activation is not None:
             self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
 
+        input_size = {
+            "atom": self.hparams.atom_input_size,
+            "bond": self.hparams.bond_input_size,
+            "global": self.hparams.global_input_size,
+        }
+
+        self.embedding = UnifySize(
+            input_dim=input_size,
+            output_dim=self.hparams.embedding_size,
+        )
+
         self.conv_layers = nn.ModuleList()
+
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             for i in range(self.hparams.n_conv_layers):
-                layer_args = get_layer_args(self.hparams, i)
+                embedding_in = True
+                layer_args = get_layer_args(self.hparams, i, activation=self.hparams.activation, embedding_in=embedding_in)
 
                 self.conv_layers.append(
                     dglnn.HeteroGraphConv(
@@ -146,7 +180,9 @@ class GCNNodePred(pl.LightningModule):
                 else:
                     layer_ind = -1
 
-                layer_args = get_layer_args(self.hparams, layer_ind)
+                layer_args = get_layer_args(
+                    self.hparams, layer_ind, embedding_in=True, activation=self.hparams.activation
+                )
 
                 output_block = False
                 if layer_ind != -1:
@@ -161,6 +197,30 @@ class GCNNodePred(pl.LightningModule):
                 )
 
                 layer_tracker += self.hparams.resid_n_graph_convs
+
+
+        elif self.hparams.conv_fn == "GATConv":
+            for i in range(self.hparams.n_conv_layers):
+
+                layer_args = get_layer_args(self.hparams, i, activation=self.hparams.activation, embedding_in=True)
+                # print("resid layer args", layer_args)
+
+                self.conv_layers.append(
+                    dglnn.HeteroGraphConv(
+                        {
+                            "a2b": GATConv(**layer_args["a2b"]),
+                            "b2a": GATConv(**layer_args["b2a"]),
+                            "a2g": GATConv(**layer_args["a2g"]),
+                            "g2a": GATConv(**layer_args["g2a"]),
+                            "b2g": GATConv(**layer_args["b2g"]),
+                            "g2b": GATConv(**layer_args["g2b"]),
+                            "a2a": GATConv(**layer_args["a2a"]),
+                            "b2b": GATConv(**layer_args["b2b"]),
+                            "g2g": GATConv(**layer_args["g2g"]),
+                        },
+                        aggregate=self.hparams.aggregate,
+                    )
+                )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
 
@@ -201,13 +261,28 @@ class GCNNodePred(pl.LightningModule):
         """
         Forward pass
         """
+        feats = self.embedding(inputs)
 
         for ind, conv in enumerate(self.conv_layers):
-            if ind == 0:
-                feats = conv(graph, inputs)
-            else:
-                feats = conv(graph, feats)
 
+            #if ind == 0:
+            #    feats = conv(graph, inputs)
+            #else:
+            feats = conv(graph, feats)
+                
+            if self.hparams.conv_fn == "GATConv":
+                if ind < self.hparams.n_conv_layers - 1:
+                    for k, v in feats.items():
+                        feats[k] = v.reshape(-1, self.hparams.num_heads * self.hparams.hidden_size)
+                else:         
+                    for k, v in feats.items():
+                        feats[k] = v.reshape(-1, self.hparams.hidden_size)
+        # filter features if output is None for one of the node types
+        
+        for k, v in self.hparams.target_dict.items():
+            if v == [None]:
+                del feats[k]
+        
         return feats
 
     def feature_at_each_layer(model, graph, feats):
@@ -247,6 +322,7 @@ class GCNNodePred(pl.LightningModule):
 
         return bond_feats, atom_feats, global_feats
 
+    
     def shared_step(self, batch, mode):
         batch_graph, batch_label = batch
         logits_list = []
@@ -254,9 +330,10 @@ class GCNNodePred(pl.LightningModule):
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
+        
         max_nodes = -1
         for target_type, target_list in self.hparams.target_dict.items():
-            if target_list is not None and len(target_list) > 0:
+            if target_list != [None] and len(target_list) > 0:
                 labels = batch_label[target_type]
                 logits_temp = logits[target_type]
                 if max_nodes < logits_temp.shape[0]:
@@ -456,25 +533,44 @@ class GCNNodePred(pl.LightningModule):
             feats: dict, dictionary of batched features
             scaler_list: list, list of scalers
         """
-        # batch_graph, batch_label = batch
-        preds = self.forward(batch_graph, batched_label)
-        preds_unscaled = deepcopy(preds)
+        
+
+        #batch_graph, batch_label = batch
+        preds = self.forward(batch_graph, batch_graph.ndata["feat"])
+        preds_unscaled = deepcopy(preds.detach())
         labels_unscaled = deepcopy(batched_label)
+
         for scaler in scaler_list:
             labels_unscaled = scaler.inverse_feats(labels_unscaled)
             preds_unscaled = scaler.inverse_feats(preds_unscaled)
 
-        # manually compute metrics
-        r2 = torchmetrics.R2Score()
-        mae = torchmetrics.MeanAbsoluteError()
-        mse = torchmetrics.MeanSquaredError()
 
-        r2.update(preds_unscaled, labels_unscaled)
-        mae.update(preds_unscaled, labels_unscaled)
-        mse.update(preds_unscaled, labels_unscaled)
+        #logits = self.forward(
+        #    batch_graph, batch_graph.ndata["feat"]
+        #)  # returns a dict of node types
+        r2_dict = {}
+        mae_dict = {}
+        #max_nodes = -1
+        for target_type, target_list in self.hparams.target_dict.items():
+            if target_list != [None] and len(target_list) > 0:
+                            
+                r2_eval = MultioutputWrapper(
+                    torchmetrics.R2Score(), num_outputs=len(self.hparams.target_dict[target_type])
+                )
+                mae_eval = MultioutputWrapper(
+                    torchmetrics.MeanAbsoluteError(), num_outputs=len(self.hparams.target_dict[target_type])
+                )
+                logits = preds[target_type]
+                labels = batched_label[target_type]
 
-        r2 = r2.compute()
-        mae = mae.compute()
-        mse = mse.compute()
+                r2_eval.update(logits, labels)
+                mae_eval.update(logits, labels)
+                
+                r2_val = r2_eval.compute()
+                mae_val = mae_eval.compute()
 
-        return r2, mae, mse
+                r2_dict[target_type] = r2_val
+                mae_dict[target_type] = mae_val
+        
+        return r2_dict, mae_dict
+            

@@ -229,11 +229,7 @@ class GCNGraphPred(pl.LightningModule):
                 layer_args = get_layer_args(
                     self.hparams, layer_ind, embedding_in=embedding_in, activation=self.activation
                 )
-                # print("resid layer args", layer_args)
-                # for k, v in layer_args.items():
-                #    print(k, v["in_feats"], v["out_feats"])
 
-                # embedding_in = False
                 output_block = False
                 if layer_ind != -1:
                     output_block = True
@@ -251,8 +247,7 @@ class GCNGraphPred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "GATConv":
             for i in range(self.hparams.n_conv_layers):
-                # embedding_in = False
-                # if i == 0:
+
                 embedding_in = True
 
                 layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)

@@ -181,8 +181,8 @@ class HeteroGraphStandardScaler:
             if len(feats[nt]) != 0:
                 # node_feats_flat = torch.cat(feats[nt])
                 node_feats_flat = feats[nt]
-                feats = node_feats_flat * self._std[nt] + self._mean[nt]
-                feats_ret[nt] = feats
+                feats_temp = node_feats_flat * self._std[nt] + self._mean[nt]
+                feats_ret[nt] = feats_temp
         return feats_ret
 
 
