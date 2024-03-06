@@ -74,6 +74,7 @@ def get_default_graph_level_config():
             "standard_scale_features": True,
             "standard_scale_targets": True,
             "val_prop": 0.15,
+            "edge_dropout": 0.0,  
             "test_prop": 0.1,
             "seed": 42,
             "train_batch_size": 128,

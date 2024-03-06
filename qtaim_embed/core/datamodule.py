@@ -15,7 +15,7 @@ from qtaim_embed.core.dataset import (
     HeteroGraphGraphLabelClassifierDataset,
 )
 from qtaim_embed.utils.data import train_validation_test_split
-
+from qtaim_embed.data.transforms import DropBondHeterograph
 
 class QTAIMNodeTaskDataModule(pl.LightningDataModule):
     def __init__(
@@ -28,6 +28,20 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
             self.config = get_default_node_level_config()
         else:
             self.config = config
+
+        if "edge_dropout" not in self.config["dataset"].keys():
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        elif type(self.config["dataset"]["edge_dropout"]) != float:
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        else:
+            if self.config["dataset"]["edge_dropout"] > 0.0: 
+                print("... > using edge dropout on datamodule")
+                self.transforms = DropBondHeterograph(dropout=config["dataset"]["edge_dropout"])
+            else:
+                self.transforms = None
+
 
     def setup(self, stage: str):
         if stage in (None, "fit", "validate"):
@@ -138,17 +152,17 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         return DataLoaderMoleculeNodeTask(
-            self.train_dataset, batch_size=self.config["dataset"]["train_batch_size"]
+            self.train_dataset, batch_size=self.config["dataset"]["train_batch_size"], transforms=self.transforms
         )
 
     def val_dataloader(self):
         return DataLoaderMoleculeNodeTask(
-            self.val_dataset, batch_size=len(self.val_dataset)
+            self.val_dataset, batch_size=len(self.val_dataset), transforms=self.transforms
         )
 
     def test_dataloader(self):
         return DataLoaderMoleculeNodeTask(
-            self.test_dataset, batch_size=len(self.test_dataset)
+            self.test_dataset, batch_size=len(self.test_dataset), transforms=self.transforms
         )
 
 
@@ -164,6 +178,20 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
             self.config = get_default_graph_level_config()
         else:
             self.config = config
+
+        if "edge_dropout" not in self.config["dataset"].keys():
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        elif type(self.config["dataset"]["edge_dropout"]) != float:
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        else:
+            if self.config["dataset"]["edge_dropout"] > 0.0: 
+                print("... > using edge dropout on datamodule")
+                self.transforms = DropBondHeterograph(dropout=config["dataset"]["edge_dropout"])
+            else:
+                self.transforms = None
+
 
     def setup(self, stage: str):
         if stage in (None, "fit", "validate"):
@@ -288,6 +316,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
             batch_size=self.config["dataset"]["train_batch_size"],
             shuffle=True,
             num_workers=self.config["dataset"]["num_workers"],
+            transforms=self.transforms
         )
 
     def val_dataloader(self):
@@ -296,6 +325,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
             batch_size=len(self.val_dataset),
             shuffle=False,
             num_workers=self.config["dataset"]["num_workers"],
+            transforms=self.transforms
         )
 
     def test_dataloader(self):
@@ -304,6 +334,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
             batch_size=len(self.test_dataset),
             shuffle=False,
             num_workers=self.config["dataset"]["num_workers"],
+            transforms=self.transforms
         )
 
 
@@ -319,6 +350,21 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             self.config = get_default_graph_level_config()
         else:
             self.config = config
+        #print(type(self.config["dataset"]["edge_dropout"]))
+        
+        if "edge_dropout" not in self.config["dataset"].keys():
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        elif type(self.config["dataset"]["edge_dropout"]) != float:
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        else:
+            if self.config["dataset"]["edge_dropout"] > 0.0: 
+                print("... > using edge dropout on datamodule")
+                self.transforms = DropBondHeterograph(dropout=config["dataset"]["edge_dropout"])
+            else:
+                self.transforms = None
+
 
     def setup(self, stage: str):
         if stage in (None, "fit", "validate"):
@@ -432,6 +478,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             batch_size=self.config["dataset"]["train_batch_size"],
             shuffle=True,
             num_workers=self.config["dataset"]["num_workers"],
+            transforms=self.transforms
         )
 
     def val_dataloader(self):
@@ -440,6 +487,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             batch_size=len(self.val_dataset),
             shuffle=False,
             num_workers=self.config["dataset"]["num_workers"],
+            transforms=self.transforms
         )
 
     def test_dataloader(self):
@@ -448,4 +496,5 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             batch_size=len(self.test_dataset),
             shuffle=False,
             num_workers=self.config["dataset"]["num_workers"],
+            transforms=self.transforms
         )

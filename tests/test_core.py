@@ -99,6 +99,8 @@ def test_node_datamodule():
     config["dataset"]["allowed_spins"] = [1, 2, 3]
     config["dataset"]["train_dataset_loc"] = "./data/labelled_spin_charge.pkl"
     config["dataset"]["extra_keys"]["global"] = ["charge", "spin"]
+    config["dataset"]["edge_dropout"] = None
+
     print(config)
     dm = QTAIMNodeTaskDataModule(config=config)
     #print(dm.config)
@@ -121,6 +123,8 @@ def test_graph_datamodule():
     config_w_test = get_default_graph_level_config()
     config_w_test["dataset"]["val_prop"] = 0.15
     config_w_test["dataset"]["test_prop"] = 0.1
+    config_w_test["dataset"]["edge_dropout"] = None
+
     dm = QTAIMGraphTaskClassifyDataModule()
 
     feature_size, feat_name = dm.prepare_data("fit")
@@ -141,3 +145,5 @@ def test_graph_datamodule():
     assert val_dl_size == val_dl_size_no_test - 10, "Val size mismatch"
 
 
+test_graph_datamodule()
+test_node_datamodule()

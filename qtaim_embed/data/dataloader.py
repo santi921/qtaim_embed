@@ -8,15 +8,18 @@ class DataLoaderMoleculeNodeTask(DataLoader):
     This assumes a heterograph dataset
     """
 
-    def __init__(self, dataset, **kwargs):
+    def __init__(self, dataset, transforms=None, **kwargs):
         if "collate_fn" in kwargs:
             raise ValueError(
                 "'collate_fn' provided internally', you need not to provide one"
             )
+        self.transforms = transforms
 
         def collate(samples):
             graphs = samples
             batched_graphs = dgl.batch(graphs)
+            if self.transforms is not None:
+                batched_graphs = self.transforms(batched_graphs)
             # batched_labels = [graph.ndata["labels"] for graph in graphs]
             batched_labels = batched_graphs.ndata["labels"]
             return batched_graphs, batched_labels
@@ -32,15 +35,19 @@ class DataLoaderMoleculeGraphTask(DataLoader):
     This assumes a heterograph dataset
     """
 
-    def __init__(self, dataset, **kwargs):
+    def __init__(self, dataset, transforms=None, **kwargs):
         if "collate_fn" in kwargs:
             raise ValueError(
                 "'collate_fn' provided internally', you need not to provide one"
             )
+        
+        self.transforms = transforms
 
         def collate(samples):
             graphs = samples
             batched_graphs = dgl.batch(graphs)
+            if self.transforms is not None:
+                batched_graphs = self.transforms(batched_graphs)
             # batched_labels = [graph.ndata["labels"] for graph in graphs]
             batched_labels = batched_graphs.ndata["labels"]
             return batched_graphs, batched_labels
