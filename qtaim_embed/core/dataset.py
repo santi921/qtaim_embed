@@ -28,6 +28,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         allowed_spins=None,
         self_loop=True,
         size=None,
+        filter_self_bonds=True,
         debug=False,
         extra_keys={
             "atom": [
@@ -93,6 +94,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
+            filter_self_bonds=filter_self_bonds
         )
         if element_set == None:
             element_set = element_set_ret
@@ -347,6 +349,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         allowed_spins=None,
         self_loop=True,
         debug=False,
+        filter_self_bonds=True,
         size = None,
         extra_keys={
             "atom": [
@@ -422,6 +425,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             allowed_charges=allowed_charges,
             allowed_spins=allowed_spins,
             self_loop=self_loop,
+            filter_self_bonds=filter_self_bonds
         )
 
         graph_list = []
@@ -657,6 +661,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self_loop=True,
         debug=False,
         size = None,
+        filter_self_bonds=True,
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -719,6 +724,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
+            filter_self_bonds=filter_self_bonds
         )
         if element_set == None:
             element_set = element_set_ret

@@ -3,6 +3,11 @@ from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit.Geometry import Point3D
+from rdkit.Chem import rdDetermineBonds
+
 def gather_atom_level_stats(dataset_dev):
     atoms_in = [
         i.split("_")[-1]
@@ -231,3 +236,102 @@ def plot_violin_from_atom_dict(feat_dict, atom_plot, plot_per_row=3, line_width=
     #plt.show()
     # save figure
     plt.savefig("atom_features_{}.png".format(atom_plot), dpi=300)
+
+
+def get_bond_guess(atomic_elements, atomic_positions):
+    """
+    Takes elements and positions and returns a list of bond guesses
+    Takes:
+        atomic_elements(list) - list of atomic elements 
+        atomic_positions(list) - list of atomic positions
+    Returns:
+        bonds_as_inds(list) - list of bond guesses
+    """
+    # Add atoms to the molecule
+    molecule_string = "{}\ncomment\n".format(len(atomic_elements))
+    for atomic_position, atomic_element in zip(atomic_positions, atomic_elements):
+        molecule_string += atomic_element + "\t" + str(atomic_position[0]) + "\t" + str(atomic_position[1]) + "\t" + str(atomic_position[2]) + "\n"
+    molecule_string += "\n"
+    # create molecule object 
+    molecule = Chem.MolFromXYZBlock(molecule_string)
+    rdDetermineBonds.DetermineConnectivity(molecule)
+    bonds = molecule.GetBonds()
+    bonds_as_inds = [[bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()] for bond in bonds]
+    
+    return bonds_as_inds
+
+
+def get_bond_guess_dataset(dataset): 
+    """
+    Takes a dataset and returns a list of bond guesses
+    Takes:
+        dataset(HeteroGraphGraphLabelClassifierDataset) - dataset to pull values from 
+    Returns:
+        bond_guesses(list) - list of bond guesses
+    """
+    elements = get_elements_from_ft(dataset)
+    positions = get_positions(dataset)
+    
+    bond_guesses = []
+    for ind, element in enumerate(elements):
+        bond_guesses.append(get_bond_guess(element, positions[ind]))
+    return bond_guesses
+
+
+def get_elements_from_ft(dataset): 
+    """
+    From a dataset object, pull elements from molecular atom features 
+    Takes:
+        dataset(HeteroGraphGraphLabelClassifierDataset): dataset to pull values from 
+    Returns:
+        list_lens(list of lists) - list with elements
+    """
+    list_atom_names = dataset.exclude_names["atom"]
+    list_pos = []
+    list_elements = []
+    ret_list = []
+    for ind, name in enumerate(list_atom_names): 
+        if "chemical_symbol" in name: 
+            list_pos.append(ind)
+            list_elements.append(name.split("_")[-1])
+    
+    for graph in dataset.graphs:
+        ft_atom = graph.ndata["feat"]["atom"]
+        ft_un_atom_position = ft_atom[:, list_pos]
+        ft_un_atom_position = ft_un_atom_position.argmax(axis=1)
+        ft_atom_elements = [list_elements[i] for i in ft_un_atom_position]
+        ret_list.append(ft_atom_elements)
+    return ret_list
+
+
+def get_bond_lengths(dataset):
+    """
+    From a dataset object, pull bond lengths from molecular bond features 
+    Takes:
+        dataset(HeteroGraphGraphLabelClassifierDataset): dataset to pull values from 
+    Returns:
+        list_lens(list of lists) - list with bond distances
+    """
+
+    list_lens = []
+    ind_bond_length = dataset.exclude_names["bond"].index("bond_length")
+    graphs_unscale = dataset.unscale_features(dataset.graphs)
+    for graph in graphs_unscale:
+        ft_un = graph.ndata["feat"]["bond"][:, ind_bond_length]
+        list_lens.append(ft_un.tolist())
+    return list_lens
+
+
+def get_positions(dataset):
+    """
+    From a dataset object, pull coordinates from molecular bond features
+    Takes:
+        dataset(HeteroGraphGraphLabelClassifierDataset): dataset to pull values from 
+    Returns:
+        list_lens(list of lists) - list with atom positions 
+    """
+    position_list = []
+    for mol_wrapper in dataset.data:
+        #print(mol_wrapper.coords)
+        position_list.append(mol_wrapper.coords)
+    return position_list

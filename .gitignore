@@ -45,6 +45,7 @@ ckpt*
 *log
 *wandb
 *yaml
+*ipynb
 *tfevents*
 qtaim_embed.egg-info/not-zip-safe
 
