@@ -8,6 +8,9 @@ from rdkit.Chem import AllChem
 from rdkit.Geometry import Point3D
 from rdkit.Chem import rdDetermineBonds
 
+from pymatgen.analysis.local_env import OpenBabelNN, metal_edge_extender
+from pymatgen.analysis.graphs import MoleculeGraph
+
 def gather_atom_level_stats(dataset_dev):
     atoms_in = [
         i.split("_")[-1]
@@ -238,7 +241,7 @@ def plot_violin_from_atom_dict(feat_dict, atom_plot, plot_per_row=3, line_width=
     plt.savefig("atom_features_{}.png".format(atom_plot), dpi=300)
 
 
-def get_bond_guess(atomic_elements, atomic_positions):
+def get_bond_guess(atomic_elements, atomic_positions, charge=None):
     """
     Takes elements and positions and returns a list of bond guesses
     Takes:
@@ -254,27 +257,50 @@ def get_bond_guess(atomic_elements, atomic_positions):
     molecule_string += "\n"
     # create molecule object 
     molecule = Chem.MolFromXYZBlock(molecule_string)
-    rdDetermineBonds.DetermineConnectivity(molecule)
+
+    if charge:
+        rdDetermineBonds.DetermineConnectivity(molecule, charge = charge)
+    
+    else:
+        rdDetermineBonds.DetermineConnectivity(molecule)
+        
     bonds = molecule.GetBonds()
     bonds_as_inds = [[bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()] for bond in bonds]
     
     return bonds_as_inds
 
 
-def get_bond_guess_dataset(dataset): 
+
+
+def get_bond_guess_dataset(dataset, mee=False, check_charge=False): 
     """
     Takes a dataset and returns a list of bond guesses
     Takes:
         dataset(HeteroGraphGraphLabelClassifierDataset) - dataset to pull values from 
+        mee(bool) - whether to use metal edge extender to guess bonds
     Returns:
         bond_guesses(list) - list of bond guesses
     """
-    elements = get_elements_from_ft(dataset)
-    positions = get_positions(dataset)
-    
     bond_guesses = []
-    for ind, element in enumerate(elements):
-        bond_guesses.append(get_bond_guess(element, positions[ind]))
+    if mee:
+        pes = OpenBabelNN()
+        for graph_no_bond in dataset.data:
+            bonded_graph = pes.get_bonded_structure(graph_no_bond.pymatgen_mol)
+            bonded_graph = metal_edge_extender(bonded_graph)
+            bond_guesses.append([list(i) for i in pes.get_bonded_structure(bonded_graph.molecule).graph.edges(data=False)])
+
+    else:
+        elements = get_elements_from_ft(dataset)
+        positions = get_positions(dataset)
+        if check_charge:
+            charge_list = [mol_wrapper.charge for mol_wrapper in dataset.data]
+        
+        bond_guesses = []
+        for ind, element in enumerate(elements):
+            if check_charge:
+                bond_guesses.append(get_bond_guess(element, positions[ind], charge=charge_list[ind]))
+            else:
+                bond_guesses.append(get_bond_guess(element, positions[ind]))
     return bond_guesses
 
 
@@ -335,3 +361,5 @@ def get_positions(dataset):
         #print(mol_wrapper.coords)
         position_list.append(mol_wrapper.coords)
     return position_list
+
+

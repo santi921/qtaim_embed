@@ -424,8 +424,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             allowed_ring_size=allowed_ring_size,
             allowed_charges=allowed_charges,
             allowed_spins=allowed_spins,
-            self_loop=self_loop,
-            filter_self_bonds=filter_self_bonds
+            self_loop=self_loop
         )
 
         graph_list = []
