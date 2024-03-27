@@ -68,9 +68,10 @@ if __name__ == "__main__":
     feature_names, feature_size = dm.prepare_data(stage="fit")    
     
     if dataset_test_loc is not None:
-        config["dataset"]["test_dataset_loc"] = dataset_test_loc
+        test_config = deepcopy(config)
+        test_config["dataset"]["test_dataset_loc"] = dataset_test_loc
         dm_test = QTAIMGraphTaskDataModule(
-            config=deepcopy(config), 
+            config=test_config, 
         )
         dm_test.prepare_data(stage="test")
 
