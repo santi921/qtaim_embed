@@ -1,17 +1,14 @@
-import torch
-from torch import nn
-import torch.nn.functional as F
 
-from copy import deepcopy
 from typing import List, Tuple, Dict, Optional
 
 
-import torchmetrics
 import dgl.nn.pytorch as dglnn
-import pytorch_lightning as pl
 import dgl
-from dgl import function as fn
 from dgl.readout import sum_nodes, softmax_nodes
+
+import torch
+from torch import nn
+import torch.nn.functional as F
 
 
 class UnifySize(nn.Module):
@@ -437,6 +434,7 @@ class WeightAndSumThenCat(nn.Module):
                 rst.append(feats[ntype])
 
         return torch.cat(rst, dim=-1)
+
 
 class MeanPoolingThenCat(nn.Module):
     """

@@ -194,7 +194,7 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
             raise ValueError(
                 "`dtype` should be `float32` or `float64`, but got `{}`.".format(dtype)
             )
-        print("element set", element_set)
+        print("element set in featurizer", element_set)
         print("selected atomic keys", selected_keys)
 
         self.dtype = dtype

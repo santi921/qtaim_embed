@@ -190,9 +190,9 @@ class GCNGraphPred(pl.LightningModule):
             for i in range(self.hparams.n_conv_layers):
                 # embedding_in = False
                 # if i == 0:
-                embedding_in = True
+                # embedding_in = True
 
-                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=embedding_in)
+                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
@@ -214,7 +214,7 @@ class GCNGraphPred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "ResidualBlock":
             layer_tracker = 0
-            embedding_in = True
+            #embedding_in = True
 
             while layer_tracker < self.hparams.n_conv_layers:
                 if (
@@ -227,7 +227,7 @@ class GCNGraphPred(pl.LightningModule):
                     layer_ind = -1
 
                 layer_args = get_layer_args(
-                    self.hparams, layer_ind, embedding_in=embedding_in, activation=self.activation
+                    self.hparams, layer_ind, embedding_in=True, activation=self.activation
                 )
 
                 output_block = False

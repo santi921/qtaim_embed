@@ -90,4 +90,6 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
                 atom_feats_error_count += 1
     print("... > bond_feats_error_count: ", bond_feats_error_count)
     print("... > atom_feats_error_count: ", atom_feats_error_count)
+    # sort element set 
+    element_set = set(sorted(list(element_set)))
     return mol_wrappers, element_set

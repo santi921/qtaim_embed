@@ -5,7 +5,7 @@ import pandas as pd
 from qtaim_embed.models.graph_level.base_gcn import GCNGraphPred
 from qtaim_embed.models.graph_level.base_gcn_classifier import GCNGraphPredClassifier
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
-
+from qtaim_embed.models.initializers import xavier_init, kaiming_init, equi_var_init
 
 def load_graph_level_model_from_config(config):
     """
@@ -139,6 +139,22 @@ def load_graph_level_model_from_config(config):
             residual_gat=config["residual_gat"],
         )
     # model.to(device)
+
+
+    if config["initializer"] == "kaiming":
+        print(":::USING KAIMING INITIALIZER:::")
+        kaiming_init(model)
+
+    elif config["initializer"] == "xavier":
+        print(":::USING XAVIER INITIALIZER:::")
+        xavier_init(model)
+
+    elif config["initializer"] == "equi_var":
+        print(":::USING EQUIVARIANCE INITIALIZER:::")
+        equi_var_init(model)
+
+    else:
+        print(":::NO INITIALIZER USED:::")
 
     return model
 

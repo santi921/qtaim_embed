@@ -96,11 +96,15 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             filter_self_bonds=filter_self_bonds
         )
+        
         if element_set == None:
-            element_set = element_set_ret
+           self.element_set = element_set_ret
+        else: 
+            self.element_set = element_set
+
 
         grapher = get_grapher(
-            element_set,
+            element_set=element_set,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
@@ -413,11 +417,15 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
         )
+
         if element_set == None:
-            element_set = element_set_ret
+           self.element_set = element_set_ret
+        else: 
+            self.element_set = element_set
+
 
         grapher = get_grapher(
-            element_set,
+            element_set=element_set,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
@@ -725,11 +733,14 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             filter_self_bonds=filter_self_bonds
         )
+
         if element_set == None:
-            element_set = element_set_ret
+           self.element_set = element_set_ret
+        else: 
+            self.element_set = element_set
 
         grapher = get_grapher(
-            element_set,
+            element_set=self.element_set,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
@@ -1102,6 +1113,7 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
 
+
         mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
             bond_key="bonds",
@@ -1110,10 +1122,12 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
         )
         if element_set == None:
-            element_set = element_set_ret
+           self.element_set = element_set_ret
+        else: 
+            self.element_set = element_set
 
         grapher = get_grapher(
-            element_set,
+            element_set=self.element_set,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
@@ -1137,7 +1151,6 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
         self.feature_scalers = []
         self.label_scalers = []
         self.data = mol_wrappers
-        self.element_set = element_set
         self.feature_names = names
         self.graphs = graph_list
         self.allowed_spins = allowed_spins
