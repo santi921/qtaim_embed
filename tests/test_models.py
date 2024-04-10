@@ -38,6 +38,7 @@ def test_save_load():
     model_config["model"]["target_dict"]["global"] = dataset_graph_level.target_dict[
         "global"
     ]
+    model_config["model"]["initializer"] = None
 
     model = load_graph_level_model_from_config(model_config["model"])
 
@@ -85,6 +86,7 @@ def test_manual_eval_graph_level_classifier():
     ]
 
     model_config["model"]["classifier"] = True
+    model_config["model"]["initializer"] = None
 
     model = load_graph_level_model_from_config(model_config["model"])
 
@@ -157,6 +159,7 @@ def test_manual_eval_graph_level():
     model_config["model"]["target_dict"]["global"] = dataset_graph_level.target_dict[
         "global"
     ]
+    model_config["model"]["initializer"] = None
 
     model = load_graph_level_model_from_config(model_config["model"])
 
@@ -233,6 +236,7 @@ def test_multi_task():
     model_config["model"]["target_dict"]["global"] = dataset_graph_level.target_dict[
         "global"
     ]
+    model_config["model"]["initializer"] = None
     #model_config["model"]["output_dims"] = 1
 
     model = load_graph_level_model_from_config(model_config["model"])

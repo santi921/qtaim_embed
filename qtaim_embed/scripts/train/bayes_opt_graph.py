@@ -44,6 +44,7 @@ class TrainingObject:
                 "allowed_charges": self.sweep_config["parameters"]["allowed_charges"][
                     "values"
                 ][0],
+                "element_set": self.sweep_config["parameters"]["element_set"]["values"][0],
                 "per_atom": self.sweep_config["parameters"]["per_atom"][
                     "values"
                 ][0],
@@ -128,6 +129,7 @@ class TrainingObject:
                     "norm": init_config["norm"],
                     "aggregate": init_config["aggregate"],
                     "lr": init_config["lr"],
+                    "initializer": init_config["initializer"],
                     "scheduler_name": init_config["scheduler_name"],
                     "weight_decay": init_config["weight_decay"],
                     "lr_plateau_patience": init_config["lr_plateau_patience"],
@@ -173,7 +175,8 @@ class TrainingObject:
                     "train_dataset_loc": self.dataset_loc,
                     "log_save_dir": self.log_save_dir,
                     "num_workers": init_config["num_workers"],
-                    "per_atom": init_config["per_atom"]
+                    "per_atom": init_config["per_atom"],
+                    "element_set": init_config["element_set"],
                 },
                 "optim": {
                     "num_devices": init_config["num_devices"],

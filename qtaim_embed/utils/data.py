@@ -8,6 +8,7 @@ def get_default_node_level_config():
     root = str(root)
     return {
         "dataset": {
+            "element_set": [],
             "allowed_ring_size": [3, 4, 5, 6, 7],
             "allowed_charges": None,
             "allowed_spins": None,
@@ -58,6 +59,7 @@ def get_default_graph_level_config():
             "allowed_charges": None,
             "allowed_spins": None,
             "self_loop": True,
+            "element_set": [],
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [
@@ -144,6 +146,7 @@ def get_default_graph_level_config_classif():
             "allowed_charges": None,
             "allowed_spins": None,
             "self_loop": True,
+            "element_set": [],
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [

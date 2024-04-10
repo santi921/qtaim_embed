@@ -33,6 +33,7 @@ class TrainingObject:
 
         dm_config = {
             "dataset": {
+                "element_set": self.sweep_config["parameters"]["element_set"]["values"][0],
                 "allowed_ring_size": self.sweep_config["parameters"][
                     "allowed_ring_size"
                 ]["values"][0],
@@ -145,6 +146,7 @@ class TrainingObject:
                     "dropout_attn_gat": init_config["dropout_attn_gat"],
                     "hidden_size_gat": init_config["hidden_size_gat"],
                     "residual_gat": init_config["residual_gat"],
+                    "initializer": init_config["initializer"],
                 },
                 "dataset": {
                     "allowed_ring_size": init_config["allowed_ring_size"],  # check
@@ -164,6 +166,7 @@ class TrainingObject:
                     "log_save_dir": self.log_save_dir,
                     "num_workers": init_config["num_workers"],
                     "impute": self.impute,
+                    "element_set": init_config["element_set"],
                 },
                 "optim": {
                     "num_devices": init_config["num_devices"],

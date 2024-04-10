@@ -57,6 +57,7 @@ def get_dataset(
         target_dict={"global": ["extra_feat_global_E1_CAM"]},
         extra_dataset_info={},
         debug=True,
+        element_set=[],
         log_scale_features=log_scale_features,
         log_scale_targets=log_scale_targets,
         standard_scale_features=standard_scale_features,
@@ -81,6 +82,7 @@ def get_dataset_graph_level(
         allowed_charges=None,
         allowed_spins=None,
         self_loop=True,
+        element_set=[],
         extra_keys={
             "atom": ["extra_feat_atom_esp_total"],
             "bond": [
@@ -116,6 +118,7 @@ def get_dataset_graph_level_multitask(
         allowed_charges=None,
         allowed_spins=None,
         self_loop=True,
+        element_set=[],
         extra_keys={
             "atom": ["extra_feat_atom_esp_total"],
             "bond": [
@@ -155,6 +158,7 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
         target_list=["NR-AR"],
         extra_dataset_info={},
         debug=True,
+        element_set=[],
         log_scale_features=log_scale_features,
         standard_scale_features=standard_scale_features,
     )
@@ -179,6 +183,7 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
         },
         target_list=["NR-AR", "SR-p53"],
         extra_dataset_info={},
+        element_set=[],
     )
     return dataset_single, dataset_multi
 
