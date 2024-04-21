@@ -1,9 +1,11 @@
+import os 
 import pytorch_lightning as pl
 from torch.utils.data import random_split
 from torch import Generator
 from qtaim_embed.data.dataloader import (
     DataLoaderMoleculeNodeTask,
     DataLoaderMoleculeGraphTask,
+    DataLoaderLMDB
 )
 from qtaim_embed.utils.data import (
     get_default_node_level_config,
@@ -13,9 +15,12 @@ from qtaim_embed.core.dataset import (
     HeteroGraphNodeLabelDataset,
     HeteroGraphGraphLabelDataset,
     HeteroGraphGraphLabelClassifierDataset,
+    LMDBMoleculeDataset
 )
 from qtaim_embed.utils.data import train_validation_test_split
 from qtaim_embed.data.transforms import DropBondHeterograph
+from qtaim_embed.data.lmdb import TransformMol
+
 
 class QTAIMNodeTaskDataModule(pl.LightningDataModule):
     def __init__(
@@ -38,7 +43,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0: 
                 print("... > using edge dropout on datamodule")
-                self.transforms = DropBondHeterograph(dropout=config["dataset"]["edge_dropout"])
+                self.transforms = DropBondHeterograph(p=config["dataset"]["edge_dropout"])
             else:
                 self.transforms = None
 
@@ -188,7 +193,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0: 
                 print("... > using edge dropout on datamodule")
-                self.transforms = DropBondHeterograph(dropout=config["dataset"]["edge_dropout"])
+                self.transforms = DropBondHeterograph(p=config["dataset"]["edge_dropout"])
             else:
                 self.transforms = None
 
@@ -376,6 +381,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
         if stage in ("test", "predict"):
             self.test_ds = self.test_dataset
 
+
     def prepare_data(self, stage=None):
         if self.prepare_tf == False:
             if stage == "fit" or stage is None:
@@ -476,6 +482,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     self.test_dataset.feature_size(),
                 )
 
+
     def train_dataloader(self):
         return DataLoaderMoleculeGraphTask(
             dataset=self.train_dataset,
@@ -484,6 +491,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms
         )
+
 
     def val_dataloader(self):
         return DataLoaderMoleculeGraphTask(
@@ -494,6 +502,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             transforms=self.transforms
         )
 
+
     def test_dataloader(self):
         return DataLoaderMoleculeGraphTask(
             dataset=self.test_dataset,
@@ -501,4 +510,104 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             shuffle=False,
             num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms
+        )
+
+
+class LMDBDataModule(pl.LightningDataModule):
+    def __init__(self, config):
+        super().__init__()
+        
+        self.config = config
+        self.train_lmdb_loc = config["dataset"]["train_lmdb"]
+        
+        if "val_lmdb" in self.config["dataset"]:
+            self.val_lmdb_loc = config["dataset"]["val_lmdb"]
+
+        if "test_lmdb" in self.config["dataset"]:
+            self.test_lmdb_loc = config["dataset"]["test_lmdb"]
+
+        self.prepare_tf = False
+        
+        
+        if "edge_dropout" not in self.config["dataset"].keys():
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        elif type(self.config["dataset"]["edge_dropout"]) != float:
+            print("... > no edge dropout on datamodule")
+            self.transforms = None
+        else:
+            if self.config["dataset"]["edge_dropout"] > 0.0: 
+                print("... > using edge dropout on datamodule")
+                self.transforms = DropBondHeterograph(p=config["dataset"]["edge_dropout"])
+            else:
+                self.transforms = None
+
+
+    def prepare_data(self):
+        if "test_lmdb" in self.config["dataset"]:
+
+            self.test_dataset = LMDBMoleculeDataset(
+                config={
+                    "src": os.path.join(self.test_lmdb_loc, "molecule.lmdb")
+                },
+                transform=TransformMol
+
+            )
+            
+        if "val_lmdb" in self.config["dataset"]:
+
+            self.val_dataset = LMDBMoleculeDataset(
+                config={
+                    "src": os.path.join(self.val_lmdb_loc, "molecule.lmdb")
+                },
+                transform=TransformMol
+            )
+
+
+        self.train_dataset = LMDBMoleculeDataset(
+            config = {
+                "src": os.path.join(self.train_lmdb_loc, "molecule.lmdb")
+            }, 
+            transform=TransformMol
+
+        )
+        
+        return self.train_dataset.feature_size(), self.train_dataset.feature_names()
+
+
+    def setup(self, stage):
+        if stage in (None, "fit", "validate"):
+            self.train_ds = self.train_dataset
+            self.val_ds = self.val_dataset
+
+        if stage in ("test", "predict"):
+            self.test_ds = self.test_dataset
+
+
+    def train_dataloader(self):
+        return DataLoaderLMDB(
+            dataset=self.train_ds,
+            batch_size=self.config["optim"]["batch_size"],
+            shuffle=True,
+            num_workers=self.config["optim"]["num_workers"],
+            pin_memory=self.config["optim"]["pin_memory"],
+            persistent_workers=self.config["optim"]["persistent_workers"],
+        )
+
+
+    def test_dataloader(self):
+        return DataLoaderLMDB(
+            dataset=self.test_ds,
+            batch_size=len(self.test_ds),
+            shuffle=False,
+            num_workers=self.config["optim"]["num_workers"],
+        )
+
+
+    def val_dataloader(self):
+        return DataLoaderLMDB(
+            dataset=self.val_ds,
+            batch_size=len(self.val_ds),
+            shuffle=False,
+            num_workers=self.config["optim"]["num_workers"],
         )

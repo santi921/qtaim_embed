@@ -2,7 +2,12 @@ import torch
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+import pickle
+import lmdb
 from copy import deepcopy
+from torch.utils.data import Dataset
+from pathlib import Path
+
 
 from qtaim_embed.utils.grapher import get_grapher
 from qtaim_embed.data.molwrapper import mol_wrappers_from_df
@@ -10,8 +15,6 @@ from qtaim_embed.data.processing import (
     HeteroGraphStandardScaler,
     HeteroGraphLogMagnitudeScaler,
 )
-
-# from qtaim_embed.utils.data import train_validation_test_split
 
 
 class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
@@ -97,8 +100,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             filter_self_bonds=filter_self_bonds
         )
         
-        if element_set == None:
-           self.element_set = element_set_ret
+        if element_set == [] or element_set == None:
+           self.element_set = sorted(element_set_ret)
         else: 
             self.element_set = element_set
 
@@ -128,11 +131,11 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.feature_scalers = []
         self.label_scalers = []
         self.data = mol_wrappers
-        self.element_set = element_set
         self.feature_names = names
         self.graphs = graph_list
         self.allowed_spins = allowed_spins
         self.allowed_charges = allowed_charges
+        self.allowed_ring_size = allowed_ring_size
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
 
@@ -418,8 +421,8 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
         )
 
-        if element_set == None:
-           self.element_set = element_set_ret
+        if element_set == [] or element_set == None:
+           self.element_set = sorted(element_set_ret)
         else: 
             self.element_set = element_set
 
@@ -449,10 +452,10 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self.feature_scalers = []
         self.label_scalers = []
         self.data = mol_wrappers
-        self.element_set = element_set
         self.feat_names = names
         self.allowed_spins = allowed_spins
-        self.allowed_spins = allowed_charges
+        self.allowed_charges = allowed_charges
+        self.allowed_ring_size = allowed_ring_size
         self.graphs = graph_list
         target_dict = {"global": target_list}
         self.target_dict = target_dict
@@ -734,8 +737,8 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             filter_self_bonds=filter_self_bonds
         )
 
-        if element_set == None:
-           self.element_set = element_set_ret
+        if element_set == [] or element_set == None:
+           self.element_set = sorted(element_set_ret)
         else: 
             self.element_set = element_set
 
@@ -761,11 +764,12 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.log_scale_features = log_scale_features
         self.feature_scalers = []
         self.data = mol_wrappers  # to be filtered
-        self.element_set = element_set
         self.feature_names = names
         self.graphs = graph_list  # to be filtered
         target_dict = {"global": target_list}
         self.allowed_spins = allowed_spins
+        self.allowed_charges = allowed_charges
+        self.allowed_ring_size = allowed_ring_size
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
         self.impute = impute
@@ -1121,8 +1125,8 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
         )
-        if element_set == None:
-           self.element_set = element_set_ret
+        if element_set == [] or element_set == None:
+           self.element_set = sorted(element_set_ret)
         else: 
             self.element_set = element_set
 
@@ -1148,6 +1152,7 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
         self.log_scale_features = log_scale_features
         self.log_scale_labels = log_scale_targets
         self.standard_scale_labels = standard_scale_targets
+        self.allowed_ring_size = allowed_ring_size
         self.feature_scalers = []
         self.label_scalers = []
         self.data = mol_wrappers
@@ -1361,10 +1366,188 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
         return graphs_ret
 
 
-class Subset(torch.utils.data.Dataset):
+class LMDBBaseDataset(Dataset):
+
+    """
+    Dataset class to
+    1. write Reaction networks objecs to lmdb
+    2. load lmdb files
+    """
+
+    def __init__(self, config, transform=None):
+        super(LMDBBaseDataset, self).__init__()
+
+        self.config = config
+        self.path = Path(self.config["src"])
+
+        if not self.path.is_file():
+            db_paths = sorted(self.path.glob("*.lmdb"))
+            assert len(db_paths) > 0, f"No LMDBs found in '{self.path}'"
+            #self.metadata_path = self.path / "metadata.npz"
+
+            self._keys = []
+            self.envs = []
+            for db_path in db_paths:
+                cur_env = self.connect_db(db_path)
+                self.envs.append(cur_env)
+
+                # If "length" encoded as ascii is present, use that
+                length_entry = cur_env.begin().get("length".encode("ascii"))
+                if length_entry is not None:
+                    num_entries = pickle.loads(length_entry)
+                else:
+                    # Get the number of stores data from the number of entries in the LMDB
+                    num_entries = cur_env.stat()["entries"]
+
+                # Append the keys (0->num_entries) as a list
+                self._keys.append(list(range(num_entries)))
+
+            keylens = [len(k) for k in self._keys]
+            self._keylen_cumulative = np.cumsum(keylens).tolist()
+            self.num_samples = sum(keylens)
+            
+        
+        else:
+            # Get metadata in case
+            # self.metadata_path = self.path.parent / "metadata.npz"
+            self.env = self.connect_db(self.path)
+
+            # If "length" encoded as ascii is present, use that
+            # If there are additional properties, there must be length.
+            length_entry = self.env.begin().get("length".encode("ascii"))
+            if length_entry is not None:
+                num_entries = pickle.loads(length_entry)
+            else:
+                # Get the number of stores data from the number of entries
+                # in the LMDB
+                num_entries = self.env.stat()["entries"]
+
+            self._keys = list(range(num_entries))
+            self.num_samples = num_entries
+
+        # Get portion of total dataset
+        self.sharded = False
+        if "shard" in self.config and "total_shards" in self.config:
+            self.sharded = True
+            self.indices = range(self.num_samples)
+            # split all available indices into 'total_shards' bins
+            self.shards = np.array_split(
+                self.indices, self.config.get("total_shards", 1)
+            )
+            # limit each process to see a subset of data based off defined shard
+            self.available_indices = self.shards[self.config.get("shard", 0)]
+            self.num_samples = len(self.available_indices)
+
+        
+        self.transform = transform
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, idx):
+        # if sharding, remap idx to appropriate idx of the sharded set
+        if self.sharded:
+            idx = self.available_indices[idx]
+        
+        if not self.path.is_file():
+            # Figure out which db this should be indexed from.
+            db_idx = bisect.bisect(self._keylen_cumulative, idx)
+            # Extract index of element within that db.
+            el_idx = idx
+            if db_idx != 0:
+                el_idx = idx - self._keylen_cumulative[db_idx - 1]
+            assert el_idx >= 0
+
+            # Return features.
+            datapoint_pickled = (
+                self.envs[db_idx]
+                .begin()
+                .get(f"{self._keys[db_idx][el_idx]}".encode("ascii"))
+            )
+            data_object = pickle.loads(datapoint_pickled)
+            #data_object.id = f"{db_idx}_{el_idx}"
+    
+        else:
+            #!CHECK, _keys should be less then total numbers of keys as there are more properties.
+            datapoint_pickled = self.env.begin().get(f"{self._keys[idx]}".encode("ascii"))
+
+            data_object = pickle.loads(datapoint_pickled)
+
+        if self.transform is not None:
+            data_object = self.transform(data_object)
+
+        return data_object
+
+    def connect_db(self, lmdb_path=None):
+        env = lmdb.open(
+            str(lmdb_path),
+            subdir=False,
+            readonly=False,
+            lock=False,
+            readahead=True,
+            meminit=False,
+            max_readers=1,
+        )
+        return env
+
+    def close_db(self):
+        if not self.path.is_file():
+            for env in self.envs:
+                env.close()
+        else:
+            self.env.close()
+
+    def get_metadata(self, num_samples=100):
+        pass
+
+
+class LMDBMoleculeDataset(LMDBBaseDataset):
+    def __init__(self, config, transform=None):
+        super(LMDBMoleculeDataset, self).__init__(config=config, transform=transform)
+        if not self.path.is_file():
+            self.env_ = self.envs[0]
+            raise("Not Implemented Yet")
+                
+        else:
+            self.env_ = self.env
+        
+    @property
+    def charges(self):
+        charges = self.env_.begin().get("charges".encode("ascii"))
+        return pickle.loads(charges)
+
+    @property
+    def ring_sizes(self):
+        ring_sizes = self.env_.begin().get("ring_sizes".encode("ascii"))
+        return pickle.loads(ring_sizes)
+
+    @property
+    def elements(self):
+        elements = self.env_.begin().get("elements".encode("ascii"))
+        return pickle.loads(elements)
+
+    @property
+    def feature_names(self):
+        feature_names = self.env_.begin().get("feature_names".encode("ascii"))
+        return pickle.loads(feature_names)
+
+    @property
+    def feature_size(self):
+        feature_size = self.env_.begin().get("feature_size".encode("ascii"))
+        return pickle.loads(feature_size)
+
+    @property
+    def feature_info(self):
+        feature_info = self.env_.begin().get("feature_info".encode("ascii"))
+        return pickle.loads(feature_info)
+
+
+
+class Subset(Dataset):
     def __init__(self, dataset, indices):
         self.dataset = dataset
         self.indices = indices
+        
 
     def __getitem__(self, idx):
         return self.dataset[self.indices[idx]]
@@ -1385,3 +1568,37 @@ class Subset(torch.utils.data.Dataset):
         return len_dict
 
 
+class SubsetLMDB(Dataset):
+
+    def __init__(self, dataset, indices):
+        self.dtype = dataset.dtype
+        self.dataset = dataset
+        self.indices = indices
+        
+        self.feature_size = dataset.feature_size()
+        self.feature_names = dataset.feature_names()
+
+        self.element_set = dataset.element_set
+        self.log_scale_features = dataset.log_scale_features
+        self.allowed_charges = dataset.allowed_charges
+        self.allowed_spins = dataset.allowed_spins
+        self.allowed_ring_size = dataset.allowed_ring_size
+        self.target_dict = dataset.target_dict
+        self.extra_dataset_info = dataset.extra_dataset_info
+
+        self.graphs = dataset.graphs
+        
+        
+    @property
+    def feature_size(self):
+        return self._feature_size
+
+    @property
+    def feature_name(self):
+        return self._feature_name
+
+    def __getitem__(self, idx):
+        return self.dataset[self.indices[idx]]
+
+    def __len__(self):
+        return len(self.indices)

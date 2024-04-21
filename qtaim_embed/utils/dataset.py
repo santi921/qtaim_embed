@@ -270,8 +270,6 @@ def get_bond_guess(atomic_elements, atomic_positions, charge=None):
     return bonds_as_inds
 
 
-
-
 def get_bond_guess_dataset(dataset, mee=False, check_charge=False): 
     """
     Takes a dataset and returns a list of bond guesses
@@ -363,3 +361,45 @@ def get_positions(dataset):
     return position_list
 
 
+def clean(input):
+    """
+    Clean the input string by removing all digit characters.
+    Takes:
+        input: str
+    Returns:
+        result: str
+    """
+
+    return "".join([i for i in input if not i.isdigit()])
+
+
+def clean_op(input):
+    """
+    Clean the input string by removing all non-digit characters.
+    Takes:
+        input: str
+    Returns:
+        result: str
+    """
+    return "".join([i for i in input if i.isdigit()])
+
+
+def divide_to_list(a, b):
+    """
+    Divide a to b parts, return a list of length b.
+    Takes:
+        a: int
+        b: int
+    Returns:
+        result: list of int
+    """
+    if b == 0:
+        b = 1
+    quotient = a // b
+    remainder = a % b
+
+    result = []
+    for i in range(b):
+        increment = 1 if i < remainder else 0
+        result.append(quotient + increment)
+    return result

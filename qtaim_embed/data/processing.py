@@ -38,6 +38,46 @@ def _transform(X, copy, with_mean=True, with_std=True, threshold=1.0e-3, eta=1.0
 
     return rst, mean, std
 
+def log_scale_from_dict(dict_params): 
+    """
+    Helper function to create a log scale from a dictionary of parameters
+    Takes:
+        dict_params: dictionary with the following keys:
+            copy: whether to copy the values as used by sklearn.preprocessing.StandardScaler
+            features_tf: whether the features are in the "feat" key of the node data
+            shift: shift to apply to the data before log scaling
+    Returns:
+        log_scale: HeteroGraphLogMagnitudeScaler object
+    """
+    return HeteroGraphLogMagnitudeScaler(
+        copy=dict_params["copy"],
+        features_tf=dict_params["features_tf"],
+        shift=dict_params["shift"],
+    )
+
+def standard_scale_from_dict(dict_params):
+    """
+    Helper function to create a standard scale from a dictionary of parameters
+    Takes:
+        dict_params: dictionary with the following keys:
+            copy: whether to copy the values as used by sklearn.preprocessing.StandardScaler
+            features_tf: whether the features are in the "feat" key of the node data
+            mean: with node type as key and the mean value as the value
+            std: with node type as key and the std value as the value
+    Returns:
+        standard_scale: HeteroGraphStandardScaler object
+    """
+    if type(dict_params["mean"]) != torch.Tensor:
+        dict_params["mean"] = torch.tensor(dict_params["mean"])
+    if type(dict_params["std"]) != torch.Tensor:
+        dict_params["std"] = torch.tensor(dict_params["std"])
+
+    return HeteroGraphStandardScaler(
+        copy=dict_params["copy"],
+        features_tf=dict_params["features_tf"],
+        mean=dict_params["mean"],
+        std=dict_params["std"],
+    )
 
 class HeteroGraphStandardScaler:
     """
