@@ -543,7 +543,7 @@ class LMDBDataModule(pl.LightningDataModule):
                 self.transforms = None
 
 
-    def prepare_data(self):
+    def prepare_data(self, stage=None):
         if "test_lmdb" in self.config["dataset"]:
 
             self.test_dataset = LMDBMoleculeDataset(
@@ -572,7 +572,7 @@ class LMDBDataModule(pl.LightningDataModule):
 
         )
         
-        return self.train_dataset.feature_size(), self.train_dataset.feature_names()
+        return self.train_dataset.feature_names(), self.train_dataset.feature_size()
 
 
     def setup(self, stage):
@@ -587,7 +587,7 @@ class LMDBDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         return DataLoaderLMDB(
             dataset=self.train_ds,
-            batch_size=self.config["optim"]["batch_size"],
+            batch_size=self.config["optim"]["train_batch_size"],
             shuffle=True,
             num_workers=self.config["optim"]["num_workers"],
             pin_memory=self.config["optim"]["pin_memory"],

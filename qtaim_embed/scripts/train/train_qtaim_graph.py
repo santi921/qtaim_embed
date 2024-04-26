@@ -10,7 +10,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from qtaim_embed.core.datamodule import QTAIMGraphTaskDataModule
+from qtaim_embed.core.datamodule import QTAIMGraphTaskDataModule, LMDBDataModule
 from qtaim_embed.models.utils import LogParameters, load_graph_level_model_from_config
 from qtaim_embed.utils.data import get_default_graph_level_config
 
@@ -29,11 +29,14 @@ if __name__ == "__main__":
     parser.add_argument("-log_save_dir", type=str, default="./test_logs/")
     parser.add_argument("-config", type=str, default=None)
     parser.add_argument("-wandb_entity", type=str, default="santi")
+    parser.add_argument("--use_lmdb", default=False, action="store_true")
+
 
     args = parser.parse_args()
 
     on_gpu = bool(args.on_gpu)
     debug = bool(args.debug)
+    use_lmdb = bool(args.use_lmdb)
     project_name = args.project_name
     dataset_loc = args.dataset_loc
     dataset_test_loc = args.dataset_test_loc
@@ -46,40 +49,48 @@ if __name__ == "__main__":
     else:
         config = json.load(open(config, "r"))
 
-    if config["optim"]["precision"] == "16" or config["optim"]["precision"] == "32":
-        config["optim"]["precision"] = int(config["optim"]["precision"])
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
-
-    # dataset
-    if dataset_loc is not None:
-        config["dataset"]["train_dataset_loc"] = dataset_loc
-    extra_keys = config["dataset"]["extra_keys"]
-
-    if debug:
-        config["dataset"]["debug"] = debug
 
     print(">" * 40 + "config_settings" + "<" * 40)
 
     # for k, v in config.items():
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
-    dm = QTAIMGraphTaskDataModule(config=config)
-    feature_names, feature_size = dm.prepare_data(stage="fit")    
-    
-    if dataset_test_loc is not None:
-        test_config = deepcopy(config)
-        test_config["dataset"]["test_dataset_loc"] = dataset_test_loc
-        dm_test = QTAIMGraphTaskDataModule(
-            config=test_config, 
-        )
-        dm_test.prepare_data(stage="test")
+    if use_lmdb:
+        print("using lmdbs!")
+        dm = LMDBDataModule(config=config)
+        config["model"]["target_dict"]["global"] = {"global": ["value"]}
 
-    
+    else:
+        # dataset
+        if dataset_loc is not None:
+            config["dataset"]["train_dataset_loc"] = dataset_loc
+        extra_keys = config["dataset"]["extra_keys"]
+
+        if debug:
+            config["dataset"]["debug"] = debug
+
+        if config["optim"]["precision"] == "16" or config["optim"]["precision"] == "32":
+            config["optim"]["precision"] = int(config["optim"]["precision"])
+
+        dm = QTAIMGraphTaskDataModule(config=config)
+        config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
+
+        
+        if dataset_test_loc is not None:
+            test_config = deepcopy(config)
+            test_config["dataset"]["test_dataset_loc"] = dataset_test_loc
+            dm_test = QTAIMGraphTaskDataModule(
+                config=test_config, 
+            )
+            dm_test.prepare_data(stage="test")
+
+    feature_names, feature_size = dm.prepare_data(stage="fit")  
+    print(feature_names, feature_size)  
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
-    config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
     # config["dataset"]["feature_names"] = feature_names
 
     print(">" * 40 + "config_settings" + "<" * 40)
@@ -135,8 +146,13 @@ if __name__ == "__main__":
 
         trainer.fit(model, dm)
         
-        if config["dataset"]["test_prop"] > 0.0:
-            trainer.test(model, dm)
+        if use_lmdb:
+            if "test_lmdb" in config["dataset"]:
+                trainer.test(model, dm)
+        
+        else:
+            if config["dataset"]["test_prop"] > 0.0:
+                trainer.test(model, dm)
         
         if dataset_test_loc is not None:
             

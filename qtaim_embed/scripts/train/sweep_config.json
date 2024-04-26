@@ -37,9 +37,29 @@
           "bond_length"
         ],
         "global": [
-          "extra_feat_global_E1_CAM"
+          "E1-CAM"
         ]
       }
+    ]
+  },
+  "element_set": {
+    "values": [
+      []
+    ]
+  },
+  "persistent_workers": {
+    "values": [
+      false
+    ]
+  },
+  "pin_memory": {
+    "values": [
+      false
+    ]
+  },
+  "per_atom": {
+    "values": [
+      false
     ]
   },
   "extra_dataset_info": {
@@ -105,7 +125,7 @@
   "target_list": {
     "values": [
       [
-        "extra_feat_global_E1_CAM"
+        "E1-CAM"
       ]
     ]
   },
@@ -353,6 +373,11 @@
       1.0,
       5.0,
       10.0
+    ]
+  },
+  "initializer": {
+    "values": [
+      "kaiming"
     ]
   },
   "strategy": {

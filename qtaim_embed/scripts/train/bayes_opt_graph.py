@@ -9,7 +9,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from qtaim_embed.core.datamodule import QTAIMGraphTaskDataModule
+from qtaim_embed.core.datamodule import QTAIMGraphTaskDataModule, LMDBDataModule
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 
 # from qtaim_embed.utils.data import get_default_graph_level_config
@@ -25,71 +25,114 @@ class TrainingObject:
         log_save_dir,
         project_name,
         dataset_loc,
+        wandb_entity="santi",
+        lmdbs=False
     ):
         self.sweep_config = sweep_config
         self.log_save_dir = log_save_dir
         self.wandb_name = project_name
-        self.wandb_entity = "santi"
+        self.wandb_entity = wandb_entity
         self.dataset_loc = dataset_loc
         self.extra_keys = self.sweep_config["parameters"]["extra_keys"]["values"][0]
+        self.lmdbs = lmdbs
 
         print("extra keys: ", self.extra_keys)
         print("debug value: ", self.sweep_config["parameters"]["debug"]["values"])
+        if self.lmdbs:
+            print("using lmdbs!")
+            dm_config = {
+                "dataset": {
+                    "train_lmdb": self.sweep_config["parameters"]["train_lmdb"]["values"][0],
 
-        dm_config = {
-            "dataset": {
-                "allowed_ring_size": self.sweep_config["parameters"][
-                    "allowed_ring_size"
-                ]["values"][0],
-                "allowed_charges": self.sweep_config["parameters"]["allowed_charges"][
-                    "values"
-                ][0],
-                "element_set": self.sweep_config["parameters"]["element_set"]["values"][0],
-                "per_atom": self.sweep_config["parameters"]["per_atom"][
-                    "values"
-                ][0],
-                "allowed_spins": self.sweep_config["parameters"]["allowed_spins"][
-                    "values"
-                ][0],
-                "self_loop": self.sweep_config["parameters"]["self_loop"]["values"][0],
-                "extra_keys": self.extra_keys,
-                "target_list": self.sweep_config["parameters"]["target_list"]["values"][
-                    0
-                ],
-                "extra_dataset_info": self.sweep_config["parameters"][
-                    "extra_dataset_info"
-                ]["values"][0],
-                "debug": self.sweep_config["parameters"]["debug"]["values"][0],
-                "log_scale_features": self.sweep_config["parameters"][
-                    "log_scale_features"
-                ]["values"][0],
-                "log_scale_targets": self.sweep_config["parameters"][
-                    "log_scale_targets"
-                ]["values"][0],
-                "standard_scale_features": self.sweep_config["parameters"][
-                    "standard_scale_features"
-                ]["values"][0],
-                "standard_scale_targets": self.sweep_config["parameters"][
-                    "standard_scale_targets"
-                ]["values"][0],
-                "val_prop": self.sweep_config["parameters"]["val_prop"]["values"][0],
-                "test_prop": self.sweep_config["parameters"]["test_prop"]["values"][0],
-                "seed": self.sweep_config["parameters"]["seed"]["values"][0],
-                "train_batch_size": self.sweep_config["parameters"]["train_batch_size"][
-                    "values"
-                ][0],
-                "train_dataset_loc": self.dataset_loc,
-                "num_workers": self.sweep_config["parameters"]["num_workers"]["values"][
-                    0
-                ],
-            },
-        }
-        print("config settings:")
-        for k, v in dm_config.items():
-            print("--> Level - {}".format(k))
-            for kk, vv in v.items():
-                print("{}\t\t{}".format(str(kk).ljust(20), str(vv).ljust(20)))
-        self.dm = QTAIMGraphTaskDataModule(config=dm_config)
+                },
+                "optim": {
+                    "num_workers": self.sweep_config["parameters"]["num_workers"]["values"][
+                        0
+                    ],
+                    "persistent_workers": self.sweep_config["parameters"][
+                        "persistent_workers"
+                    ]["values"][0],
+                    "pin_memory": self.sweep_config["parameters"]["pin_memory"]["values"][0],
+                    "train_batch_size": self.sweep_config["parameters"]["train_batch_size"][
+                        "values"
+                    ][0]
+                }
+            }
+
+            if "val_lmdb" in self.sweep_config["parameters"]:
+                dm_config["dataset"]["val_lmdb"] = self.sweep_config["parameters"][
+                    "val_lmdb"
+                ]["values"][0]
+
+            if "test_lmdb" in self.sweep_config["parameters"]:
+                dm_config["dataset"]["test_lmdb"] = self.sweep_config["parameters"][
+                    "test_lmdb"
+                ]["values"][0]
+
+
+            self.dm = LMDBDataModule(config=dm_config)
+
+        else:
+            dm_config = {
+                "dataset": {
+                    "allowed_ring_size": self.sweep_config["parameters"][
+                        "allowed_ring_size"
+                    ]["values"][0],
+                    "allowed_charges": self.sweep_config["parameters"]["allowed_charges"][
+                        "values"
+                    ][0],
+                    "element_set": self.sweep_config["parameters"]["element_set"]["values"][0],
+                    "per_atom": self.sweep_config["parameters"]["per_atom"][
+                        "values"
+                    ][0],
+                    "allowed_spins": self.sweep_config["parameters"]["allowed_spins"][
+                        "values"
+                    ][0],
+                    "self_loop": self.sweep_config["parameters"]["self_loop"]["values"][0],
+                    "extra_keys": self.extra_keys,
+                    "target_list": self.sweep_config["parameters"]["target_list"]["values"][
+                        0
+                    ],
+                    "extra_dataset_info": self.sweep_config["parameters"][
+                        "extra_dataset_info"
+                    ]["values"][0],
+                    "debug": self.sweep_config["parameters"]["debug"]["values"][0],
+                    "log_scale_features": self.sweep_config["parameters"][
+                        "log_scale_features"
+                    ]["values"][0],
+                    "log_scale_targets": self.sweep_config["parameters"][
+                        "log_scale_targets"
+                    ]["values"][0],
+                    "standard_scale_features": self.sweep_config["parameters"][
+                        "standard_scale_features"
+                    ]["values"][0],
+                    "standard_scale_targets": self.sweep_config["parameters"][
+                        "standard_scale_targets"
+                    ]["values"][0],
+                    "val_prop": self.sweep_config["parameters"]["val_prop"]["values"][0],
+                    "test_prop": self.sweep_config["parameters"]["test_prop"]["values"][0],
+                    "seed": self.sweep_config["parameters"]["seed"]["values"][0],
+                    "train_batch_size": self.sweep_config["parameters"]["train_batch_size"][
+                        "values"
+                    ][0],
+                    "train_dataset_loc": self.dataset_loc,
+                    "num_workers": self.sweep_config["parameters"]["num_workers"]["values"][
+                        0
+                    ],
+                    "persistent_workers": self.sweep_config["parameters"][
+                        "persistent_workers"
+                    ]["values"][0],
+                    "pin_memory": self.sweep_config["parameters"]["pin_memory"]["values"][0],
+
+                },
+            }
+            print("config settings:")
+            for k, v in dm_config.items():
+                print("--> Level - {}".format(k))
+                for kk, vv in v.items():
+                    print("{}\t\t{}".format(str(kk).ljust(20), str(vv).ljust(20)))
+            self.dm = QTAIMGraphTaskDataModule(config=dm_config)
+
         feature_names, feature_size = self.dm.prepare_data(stage="fit")
         self.feature_names = feature_names
         self.feature_size = feature_size
@@ -100,7 +143,10 @@ class TrainingObject:
         config["model"]["atom_feature_size"] = self.feature_size["atom"]
         config["model"]["bond_feature_size"] = self.feature_size["bond"]
         config["model"]["global_feature_size"] = self.feature_size["global"]
-        config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
+        if self.lmdbs:
+            config["model"]["target_dict"]["global"] = {"global": ["value"]}
+        else:
+            config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
         print("config settings:")
         print("atom_feature_size: {}".format(config["model"]["atom_feature_size"]))
         print("bond_feature_size: {}".format(config["model"]["bond_feature_size"]))
@@ -112,13 +158,11 @@ class TrainingObject:
     def train(self):
         with wandb.init(project=self.wandb_name, entity=self.wandb_entity) as run:
             init_config = wandb.config
-            # init_config["target_dict"]["global"] = init_config["target_list"]
-            target_dict = {"global": init_config["target_list"]}
             config = {
                 "model": {
                     "n_conv_layers": init_config["n_conv_layers"],
                     "resid_n_graph_convs": init_config["resid_n_graph_convs"],
-                    "target_dict": target_dict,  # check
+                    #"target_dict": target_dict,  # check
                     "conv_fn": init_config["conv_fn"],
                     "global_pooling_fn": init_config["global_pooling_fn"],
                     "dropout": init_config["dropout"],
@@ -157,36 +201,50 @@ class TrainingObject:
                     "max_epochs": init_config["max_epochs"],
                 },
                 "dataset": {
-                    "allowed_ring_size": init_config["allowed_ring_size"],  # check
-                    "allowed_charges": init_config["allowed_charges"],  # check
-                    "self_loop": init_config["self_loop"],
-                    "extra_keys": init_config["extra_keys"],  # check
-                    "extra_dataset_info": init_config["extra_dataset_info"],
-                    "debug": init_config["debug"],
-                    "target_list": init_config["target_list"],  # check
-                    "log_scale_features": init_config["log_scale_features"],
-                    "log_scale_targets": init_config["log_scale_targets"],
-                    "standard_scale_features": init_config["standard_scale_features"],
-                    "standard_scale_targets": init_config["standard_scale_targets"],
-                    "val_prop": init_config["val_prop"],
-                    "test_prop": init_config["test_prop"],
-                    "seed": init_config["seed"],
-                    "train_batch_size": init_config["train_batch_size"],
-                    "train_dataset_loc": self.dataset_loc,
-                    "log_save_dir": self.log_save_dir,
-                    "num_workers": init_config["num_workers"],
-                    "per_atom": init_config["per_atom"],
-                    "element_set": init_config["element_set"],
                 },
                 "optim": {
+                    "num_workers": init_config["num_workers"],
                     "num_devices": init_config["num_devices"],
                     "num_nodes": init_config["num_nodes"],
                     "accumulate_grad_batches": init_config["accumulate_grad_batches"],
                     "gradient_clip_val": init_config["gradient_clip_val"],
                     "precision": init_config["precision"],
                     "strategy": init_config["strategy"],
+                    "train_batch_size": init_config["train_batch_size"],
                 },
             }
+
+
+            if self.lmdbs:
+                config["dataset"]["train_lmdb"] = init_config["train_lmdb"]
+                if "val_lmdb" in init_config:
+                    config["dataset"]["val_lmdb"] = init_config["val_lmdb"]
+                if "test_lmdb" in init_config:
+                    config["dataset"]["test_lmdb"] = init_config["test_lmdb"]
+                config["model"]["target_dict"] = {"global": ["value"]}
+
+            else: 
+            
+                config["dataset"] = {
+                    "element_set": init_config["element_set"],
+                    "per_atom": init_config["per_atom"],
+                    "allowed_spins": init_config["allowed_spins"],
+                    "allowed_charges": init_config["allowed_charges"],
+                    "allowed_ring_size": init_config["allowed_ring_size"],
+                    "self_loop": init_config["self_loop"],
+                    "extra_keys": init_config["extra_keys"],
+                    "target_list": init_config["target_list"],
+                    "extra_dataset_info": init_config["extra_dataset_info"],
+                    "debug": init_config["debug"],
+                    "log_scale_features": init_config["log_scale_features"],
+                    "log_scale_targets": init_config["log_scale_targets"],
+                    "standard_scale_features": init_config["standard_scale_features"],
+                    "standard_scale_targets": init_config["standard_scale_targets"],
+                    "val_prop": init_config["val_prop"],
+                    "test_prop": init_config["test_prop"],
+                    "seed": init_config["seed"]
+                }
+                config["model"]["target_dict"] = {"global": init_config["target_list"]}
 
             # make helper to convert from old config to new config
 
@@ -234,8 +292,12 @@ class TrainingObject:
             )
 
             trainer.fit(model, self.dm)
-            if config["dataset"]["test_prop"] > 0.0:
-                trainer.test(model, self.dm)
+            if use_lmdb:
+                if "test_lmdb" in config["dataset"]:
+                    trainer.test(model, self.dm)
+            else:
+                if config["dataset"]["test_prop"] > 0.0:
+                    trainer.test(model, self.dm)
             
         run.finish()
 
@@ -244,7 +306,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-method", type=str, default="bayes")
     parser.add_argument("--debug", default=False, action="store_true")
-
+    parser.add_argument("--use_lmdb", default=False, action="store_true")
     parser.add_argument(
         "-dataset_loc", type=str, default="../../dataset/qm_9_merge_3_qtaim.json"
     )
@@ -261,10 +323,12 @@ if __name__ == "__main__":
     log_save_dir = args.log_save_dir
     wandb_project_name = args.project_name
     sweep_config_loc = args.sweep_config
+    use_lmdb = args.use_lmdb
     wandb_entity = args.wandb_entity
     sweep_config = {}
     sweep_params = json.load(open(sweep_config_loc, "r"))
     sweep_params["debug"] = {"values": [debug]}
+    sweep_params["lmdb"] = {"values": [use_lmdb]}
     sweep_config["parameters"] = sweep_params
     # sweep_config["log_save_dir"] = log_save_dir
     if method == "bayes":
@@ -278,6 +342,8 @@ if __name__ == "__main__":
         log_save_dir,
         dataset_loc=dataset_loc,
         project_name=wandb_project_name,
+        wandb_entity=wandb_entity,
+        lmdbs=use_lmdb
     )
 
     print("method: {}".format(method))
@@ -287,4 +353,5 @@ if __name__ == "__main__":
     print("log_save_dir: {}".format(log_save_dir))
     print("wandb_project_name: {}".format(wandb_project_name))
     print("sweep_config_loc: {}".format(sweep_config_loc))
+    print("use_lmdb: {}".format(use_lmdb))
     wandb.agent(sweep_id, function=training_obj.train, count=3000, entity="santi")
