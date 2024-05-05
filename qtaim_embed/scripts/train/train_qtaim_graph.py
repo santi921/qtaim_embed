@@ -144,6 +144,10 @@ if __name__ == "__main__":
             precision=config["optim"]["precision"],
         )
 
+        # log dataset and optim settings from config 
+        run.config.update(config["dataset"])
+        run.config.update(config["optim"])
+
         trainer.fit(model, dm)
         
         if use_lmdb:

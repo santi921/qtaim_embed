@@ -119,7 +119,7 @@ class GCNGraphPred(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightedMeanPoolingThenCat"
+            "WeightandMeanThenCat"
         ], (
             "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
             + f"but got {global_pooling}"
@@ -305,7 +305,7 @@ class GCNGraphPred(pl.LightningModule):
             readout_fn = Set2SetThenCat
         elif self.hparams.global_pooling == "MeanPoolingThenCat":
             readout_fn = MeanPoolingThenCat
-        elif self.hparams.global_pooling == "WeightedMeanPoolingThenCat":
+        elif self.hparams.global_pooling == "WeightandMeanThenCat":
             readout_fn = WeightAndMeanThenCat
 
         list_in_feats = []
@@ -355,10 +355,13 @@ class GCNGraphPred(pl.LightningModule):
         for i in range(self.hparams.n_fc_layers):
             out_size = self.hparams.fc_layer_size[i]
             self.fc_layers.append(nn.Linear(input_size, out_size))
+            
             if self.hparams.fc_batch_norm:
                 self.fc_layers.append(nn.BatchNorm1d(out_size))
+            
             if self.activation is not None:
                 self.fc_layers.append(self.activation)
+
             if self.hparams.fc_dropout > 0:
                 self.fc_layers.append(nn.Dropout(self.hparams.fc_dropout))
             input_size = out_size

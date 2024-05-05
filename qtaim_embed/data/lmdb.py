@@ -99,7 +99,7 @@ def write_molecule_lmdb(
     txn.commit()
 
     for key, value in global_values.items():
-        print("deez ", key, value)
+        #print("deez ", key, value)
         txn = db.begin(write=True)
         txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
         txn.commit()

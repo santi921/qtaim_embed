@@ -33,10 +33,8 @@ class TrainingObject:
         self.wandb_name = project_name
         self.wandb_entity = wandb_entity
         self.dataset_loc = dataset_loc
-        self.extra_keys = self.sweep_config["parameters"]["extra_keys"]["values"][0]
         self.lmdbs = lmdbs
 
-        print("extra keys: ", self.extra_keys)
         print("debug value: ", self.sweep_config["parameters"]["debug"]["values"])
         if self.lmdbs:
             print("using lmdbs!")
@@ -73,6 +71,8 @@ class TrainingObject:
             self.dm = LMDBDataModule(config=dm_config)
 
         else:
+            self.extra_keys = self.sweep_config["parameters"]["extra_keys"]["values"][0]
+
             dm_config = {
                 "dataset": {
                     "allowed_ring_size": self.sweep_config["parameters"][
