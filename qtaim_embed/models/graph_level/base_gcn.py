@@ -351,7 +351,7 @@ class GCNGraphPred(pl.LightningModule):
         self.fc_layers = nn.ModuleList()
 
         input_size = self.readout_out_size
-        print("readout in size", input_size)
+        #print("readout in size", input_size)
         for i in range(self.hparams.n_fc_layers):
             out_size = self.hparams.fc_layer_size[i]
             self.fc_layers.append(nn.Linear(input_size, out_size))

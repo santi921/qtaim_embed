@@ -140,7 +140,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.extra_dataset_info = extra_dataset_info
 
         self.load()
-        print("... > loaded dataset")
+        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+
 
     def __len__(self):
         return len(self.data)
@@ -209,9 +210,9 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
     def load(self):
         self.get_include_exclude_indices()
-        print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        print("include names: ", self.include_names.keys())
+        #print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        #print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        #print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
@@ -370,6 +371,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         },
         target_list=["extra_feat_global_E1_CAM"],
         extra_dataset_info={},
+        verbose=True
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -420,12 +422,13 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
         )
-
-        if element_set == [] or element_set == None:
-           self.element_set = sorted(element_set_ret)
+        # legacy used if element_set == None:      
+        # TODO CHANGE BACK TO THIS
+        if element_set == [] or element_set == None: 
+            self.element_set = sorted(element_set_ret)
         else: 
             self.element_set = element_set
-
+        print("element set: ", self.element_set)
 
         grapher = get_grapher(
             element_set=element_set,
@@ -460,9 +463,11 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         target_dict = {"global": target_list}
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
+        self.verbose = verbose
 
         self.load()
-        print("... > loaded dataset")
+        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+
 
     def __len__(self):
         return len(self.data)
@@ -522,18 +527,16 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self.exclude_locs = exclude_locs
         self.include_names = include_names
         self.exclude_names = exclude_names
-        print("included in labels")
-        # print(self.include_locs)
-        print(self.include_names)
-        print("included in graph features")
-        # print(self.exclude_locs)
-        print(self.exclude_names)
+        if self.verbose:
+            print("included in graph features")
+            # print(self.exclude_locs)
+            print(self.exclude_names)
 
     def load(self):
         self.get_include_exclude_indices()
-        print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        print("include names: ", self.include_names.keys())
+        #print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        #print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        #print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
@@ -557,8 +560,8 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                 graph.ndata["labels"] = labels
 
             # label_list.append(labels)
-        print("original loader node types:", graph.ndata["feat"].keys())
-        print("original loader label types:", graph.ndata["labels"].keys())
+        #print("original loader node types:", graph.ndata["feat"].keys())
+        #print("original loader label types:", graph.ndata["labels"].keys())
 
         if self.log_scale_features:
             print("... > Log scaling features")
@@ -574,9 +577,10 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             # self.scaler_feat_mean = scaler.mean
             # self.scaler_feat_std = scaler.std
             self.feature_scalers.append(scaler)
-            print("... > Scaling features complete")
-            print("... > feature mean(s): \n", scaler.mean)
-            print("... > feature std(s):  \n", scaler.std)
+            
+            if self.verbose:
+                print("... > feature mean(s): \n", scaler.mean)
+                print("... > feature std(s):  \n", scaler.std)
 
         if self.log_scale_labels:
             print("... > Log scaling targets")
@@ -594,9 +598,10 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             # self.scaler_label_std = scaler.std
             # self.standard_label_scaler = scaler
             self.label_scalers.append(scaler)
-            print("... > Scaling targets complete")
-            print("... > feature mean(s): \n", scaler.mean)
-            print("... > feature std(s):  \n", scaler.std)
+
+            if self.verbose:
+                print("... > feature mean(s): \n", scaler.mean)
+                print("... > feature std(s):  \n", scaler.std)
 
         # self.labels = label_list
 
@@ -741,7 +746,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
            self.element_set = sorted(element_set_ret)
         else: 
             self.element_set = element_set
-
+        print("element set: ", self.element_set)
         grapher = get_grapher(
             element_set=self.element_set,
             atom_keys=extra_keys["atom"],
@@ -775,7 +780,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.impute = impute
 
         self.load()
-        print("... > loaded dataset")
+        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
 
     def __len__(self):
         return len(self.data)
@@ -838,9 +843,9 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
 
     def load(self):
         self.get_include_exclude_indices()
-        print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        print("include names: ", self.include_names.keys())
+        #print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        #print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        #print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         filtered_graph_count = 0
         filter_ind = []
@@ -1003,9 +1008,10 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             # self.scaler_feat_std = scaler.std
             self.feature_scalers.append(scaler)
             print("... > Scaling features complete")
-            print("... > feature mean(s): \n", scaler.mean)
-            print("... > feature std(s):  \n", scaler.std)
-
+            if self.verbose:
+                print("... > feature mean(s): \n", scaler.mean)
+                print("... > feature std(s):  \n", scaler.std)
+            
         # self.labels = label_list
 
     def feature_names(self):
@@ -1129,7 +1135,7 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
            self.element_set = sorted(element_set_ret)
         else: 
             self.element_set = element_set
-
+        print("element set: ", self.element_set)
         grapher = get_grapher(
             element_set=self.element_set,
             atom_keys=extra_keys["atom"],
@@ -1164,7 +1170,8 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
         self.extra_dataset_info = extra_dataset_info
 
         self.load()
-        print("... > loaded dataset")
+        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+
 
     def __len__(self):
         return len(self.data)
@@ -1233,9 +1240,9 @@ class HeteroGraphHybridDataset(torch.utils.data.Dataset):
 
     def load(self):
         self.get_include_exclude_indices()
-        print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        print("include names: ", self.include_names.keys())
+        #print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        #print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        #print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
@@ -1523,7 +1530,7 @@ class LMDBMoleculeDataset(LMDBBaseDataset):
 
     @property
     def elements(self):
-        elements = self.env_.begin().get("elements".encode("ascii"))
+        elements = self.env_.begin().get("element_set".encode("ascii"))
         return pickle.loads(elements)
 
     @property

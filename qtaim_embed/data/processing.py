@@ -21,8 +21,8 @@ def _transform(X, copy, with_mean=True, with_std=True, threshold=1.0e-3, eta=1.0
     rst = scaler.fit(X)
     mean = scaler.mean_
     std = np.sqrt(scaler.var_)
-    print("mean", mean)
-    print("std", std)
+    #print("mean", mean)
+    #print("std", std)
     for i, v in enumerate(std):
         if v <= threshold:
             print(

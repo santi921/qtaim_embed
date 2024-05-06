@@ -36,8 +36,11 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
         free_energy = 0
         bonds = row[bond_key]
         # bonds = row.bonds
+        if "names" not in row.index:
+            id_combined = str(row.ids) + "_" + str(row.ids)
+        else:
+            id_combined = str(row.ids) + "_" + row.names
 
-        id_combined = str(row.ids) + "_" + row.names
         bonds = {tuple(sorted(b)): None for b in bonds}
 
         atom_feats, bond_feats, global_features = {}, {}, {}

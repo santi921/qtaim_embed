@@ -89,7 +89,48 @@ class HingeMetric(LinkPredMetric):
         
         return compute_loss_hinge(pos_score, neg_score)
 
+class AccuracyMetric(LinkPredMetric):
+    r"""Computes the Accuracy for link prediction.
 
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+    def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
+        return compute_accuracy(pos_score, neg_score)
+    
+class F1Metric(LinkPredMetric):
+    r"""Computes the F1 score for link prediction.
+
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+    def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
+        n_edges = pos_score.shape[0]
+        n_edges_neg = neg_score.shape[0]
+        y_true = torch.cat([torch.ones(n_edges), torch.zeros(n_edges_neg)])
+        y_pred = torch.cat([pos_score, neg_score])
+        return torchmetrics.functional.f1_score(y_pred, y_true, task="binary", average="macro")
+    
+    def update(
+        self,
+        pos_score: Tensor,
+        neg_score: Tensor,
+    ) -> None:
+        r"""Updates the state variables based on the current mini-batch
+        prediction.
+        Args:
+            pos_score (torch.Tensor): The predicted scores for the positive
+                examples in the mini-batch.
+            neg_score (torch.Tensor): The predicted scores for the negative
+                examples in the mini-batch.
+
+        """
+ 
+        metric = self._compute(pos_score, neg_score)
+        self.accum += metric.sum()
+        self.total += 1
 class MarginMetric(LinkPredMetric):
     r"""Computes the Margin loss for link prediction.
 
@@ -167,7 +208,6 @@ def compute_loss_margin(pos_score, neg_score):
     Return:
         loss: Tensor of shape (1,)
     """
-    n_edges = pos_score.shape[0]
 
     return (1 - pos_score + neg_score).clamp(min=0)#.sum()
 
@@ -207,6 +247,7 @@ def compute_auc(pos_score, neg_score):
 
 
 def compute_accuracy(pos_score, neg_score):
+
     """
     Accuracy.
     Args:
@@ -217,3 +258,5 @@ def compute_accuracy(pos_score, neg_score):
     """
     n_edges = pos_score.shape[0]
     return ((pos_score > neg_score).float().sum() / n_edges).reshape(-1)
+
+

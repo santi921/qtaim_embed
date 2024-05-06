@@ -1,7 +1,6 @@
 import os 
 import pytorch_lightning as pl
 from torch.utils.data import random_split
-from torch import Generator
 from qtaim_embed.data.dataloader import (
     DataLoaderMoleculeNodeTask,
     DataLoaderMoleculeGraphTask,
@@ -79,6 +78,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
+                    verbose=self.config["dataset"]["verbose"],
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -136,6 +136,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
+                    verbose=self.config["dataset"]["verbose"],
                 )
                 self.prepare_tf = True
                 return (
@@ -229,6 +230,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
+                    verbose=self.config["dataset"]["verbose"],
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -293,6 +295,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
+                    verbose=self.config["dataset"]["verbose"],
                 )
 
                 print("test set size: ", len(self.test_dataset))
@@ -401,6 +404,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                         "standard_scale_features"
                     ],
                     impute=self.config["dataset"]["impute"],
+                    verbose=self.config["dataset"]["verbose"],
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -461,6 +465,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     standard_scale_features=self.config["dataset"][
                         "standard_scale_features"
                     ],
+                    verbose=self.config["dataset"]["verbose"],
                 )
                 print("test set size: ", len(self.test_dataset))
 

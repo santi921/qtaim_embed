@@ -363,6 +363,7 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
+
     elif hparams.conv_fn == "GATConv":
         atom_out = hparams.hidden_size
         bond_out = hparams.hidden_size
@@ -503,6 +504,102 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "activation": activation,
         }
         
+
+    return layer_args
+
+
+def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=None):
+    """
+    Converts hparam dictionary to a dictionary of arguments for a layer.
+    """
+
+    assert hparams.conv_fn in [
+        "GraphConvDropoutBatch",
+        "ResidualBlock",
+        "GATConv",
+    ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
+
+    layer_args = {}
+    if hparams.conv_fn == "GraphConvDropoutBatch":
+
+        if embedding_in:
+            in_feats = hparams.embedding_size
+            out = hparams.embedding_size
+        else: 
+            in_feats = hparams.input_size
+            out = hparams.input_size
+        
+        if layer_ind == hparams.n_conv_layers - 1:
+            out = 1
+            
+        layer_args["conv"] = {
+            "in_feats": in_feats,
+            "out_feats": out,
+            "norm": hparams.norm,
+            "bias": hparams.bias,
+            "activation": activation,
+            "allow_zero_in_degree": True,
+            "dropout": hparams.dropout,
+            "batch_norm_tf": hparams.batch_norm_tf,
+        }
+
+
+
+    elif hparams.conv_fn == "ResidualBlock":
+
+        if embedding_in:
+            in_feats = hparams.embedding_size
+        else: 
+            in_feats = hparams.input_size
+
+        if layer_ind != -1:  # last residual layer has different args
+            out = 1
+
+
+        layer_args["conv"] = {
+            "in_feats": in_feats,
+            "out_feats": out,
+            "norm": hparams.norm,
+            "bias": hparams.bias,
+            "activation": activation,
+            "allow_zero_in_degree": True,
+            "dropout": hparams.dropout,
+            "batch_norm_tf": hparams.batch_norm_tf,
+        }
+
+
+    elif hparams.conv_fn == "GATConv":
+        in_feats = hparams.input_size
+        num_heads = hparams.num_heads
+
+        if layer_ind > 0: 
+            in_feats = hparams.hidden_size
+
+            if num_heads > 1: 
+                in_feats = hparams.hidden_size * num_heads
+
+        else: 
+            if embedding_in:
+                in_feats = hparams.embedding_size
+
+
+        if layer_ind == hparams.n_conv_layers - 1:
+            num_heads = 1
+            out = 1
+            
+
+        layer_args["conv"] = {
+            "in_feats": in_feats,
+            "out_feats": out,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
     return layer_args
 
 
