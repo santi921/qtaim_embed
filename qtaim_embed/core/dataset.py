@@ -107,7 +107,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
 
         grapher = get_grapher(
-            element_set=element_set,
+            element_set=self.element_set,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
@@ -423,7 +423,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
         )
         # legacy used if element_set == None:      
-        # TODO CHANGE BACK TO THIS
+        #if element_set == None:            
         if element_set == [] or element_set == None: 
             self.element_set = sorted(element_set_ret)
         else: 
@@ -431,7 +431,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         print("element set: ", self.element_set)
 
         grapher = get_grapher(
-            element_set=element_set,
+            element_set=self.element_set,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
