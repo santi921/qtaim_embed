@@ -577,7 +577,7 @@ class LMDBDataModule(pl.LightningDataModule):
 
         )
         
-        return self.train_dataset.feature_names(), self.train_dataset.feature_size()
+        return self.train_dataset.feature_names, self.train_dataset.feature_size
 
 
     def setup(self, stage):
