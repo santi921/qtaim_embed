@@ -10,7 +10,6 @@ from pytorch_lightning.callbacks import (
 )
 
 from qtaim_embed.models.utils import load_graph_level_model_from_config
-from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 
 
@@ -113,9 +112,9 @@ def main():
                 trainer = pl.Trainer(
                     max_epochs=1000,
                     accelerator="gpu",
-                    gradient_clip_val=2.0,
+                    gradient_clip_val=10.0,
                     devices=1,
-                    accumulate_grad_batches=1,
+                    accumulate_grad_batches=3,
                     enable_progress_bar=True,
                     callbacks=[
                         early_stopping_callback,

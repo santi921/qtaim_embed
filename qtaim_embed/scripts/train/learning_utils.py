@@ -826,15 +826,13 @@ def get_datasets_libe(loc_dict):
     return model_dict, dict_keys, dict_datasets
 
 
-
-
 def get_datasets_tmqm_low(loc_dict):
 
 
     qtaim_model_bl_dict ={
-        'atom_feature_size': 33,
-        'bond_feature_size': 27,
-        'global_feature_size': 9,
+        'atom_feature_size': 66,
+        'bond_feature_size': 23,
+        'global_feature_size': 6,
         'conv_fn': 'ResidualBlock',
         'target_dict': {'global': ['corrected_E']},
         'dropout': 0.2,
@@ -842,25 +840,26 @@ def get_datasets_tmqm_low(loc_dict):
         'activation': 'ReLU',
         'bias': True,
         'norm': 'both',
+        'edge_dropout': 0.1,
         'aggregate': 'sum',
-        'n_conv_layers': 6,
-        'lr': 0.044675426899321025,
-        'weight_decay': 5e-05,
+        'n_conv_layers': 10,
+        'lr': 0.006540917772941603,
+        'weight_decay': 0.00001,
         'lr_plateau_patience': 25,
-        'lr_scale_factor': 0.5,
+        'lr_scale_factor': 0.75,
         'scheduler_name': 'reduce_on_plateau',
-        'loss_fn': 'mse',
-        'resid_n_graph_convs': 2,
+        'loss_fn': 'mae',
+        'resid_n_graph_convs': 3,
         'embedding_size': 100,
         'fc_layer_size': [512, 512, 512],
-        'fc_dropout': 0.1,
+        'fc_dropout': 0.0,
         'fc_batch_norm': True,
-        'n_fc_layers': 3,
-        'global_pooling_fn': 'WeightAndSumThenCat',
+        'n_fc_layers': 2,
+        'global_pooling_fn': 'GlobalAttentionPoolingThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
-        'lstm_iters': 15,
-        'lstm_layers': 2,
+        'lstm_iters': 9,
+        'lstm_layers': 3,
         'num_heads': 2,
         'feat_drop': 0.1,
         'attn_drop': 0.1,
@@ -868,129 +867,88 @@ def get_datasets_tmqm_low(loc_dict):
         'hidden_size': 50,
         'ntasks': 1,
         'num_heads_gat': 2,
-        'dropout_feat_gat': 0.2,
+        'dropout_feat_gat': 0.1,
         'dropout_attn_gat': 0.1,
         'hidden_size_gat': 50,
         'residual_gat': True,
-        'shape_fc': 'flat',
+        'shape_fc': 'cone',
         'classifier': False,
-        'fc_num_layers': 3, 
+        'fc_num_layers': 2, 
         'batch_norm': True,
         'pooling_ntypes': ['atom', 'bond', 'global'],
         'pooling_ntypes_direct': ['global'],
         "fc_hidden_size_1": 512,
         "restore": False,
-        "initializer": "kaiming"
+        "initializer": "xavier"
     }
 
 
     non_qtaim_model_bl_dict ={
-        'atom_feature_size': 16,
-        'bond_feature_size': 8,
-        'global_feature_size': 9,
+        'atom_feature_size': 51,
+        'bond_feature_size': 7,
+        'global_feature_size': 6,
         'conv_fn': 'GraphConvDropoutBatch',
         'target_dict': {'global': ['shifted_rrho_ev_free_energy']},
-        'dropout': 0.2,
+        'dropout': 0.0,
+        'edge_dropout': 0.3,
         'batch_norm_tf': True,
         'activation': 'ReLU',
         'bias': True,
         'norm': 'both',
         'aggregate': 'sum',
-        'n_conv_layers': 5,
+        'n_conv_layers': 3,
         'lr': 0.01885852849843154,
-        'weight_decay': 1e-05,
+        'weight_decay': 0.00001,
         'lr_plateau_patience': 25,
         'lr_scale_factor': 0.5,
         'scheduler_name': 'reduce_on_plateau',
         'loss_fn': 'mse',
-        'resid_n_graph_convs': 2,
-        'embedding_size': 50,
+        'resid_n_graph_convs': 3,
+        'embedding_size': 100,
         'fc_layer_size': [1024, 512, 256],
         'fc_dropout': 0.1,
         'fc_batch_norm': True,
         'n_fc_layers': 3,
-        'global_pooling_fn': 'WeightAndSumThenCat',
+        'global_pooling_fn': 'GlobalAttentionPoolingThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
         'lstm_iters': 9,
         'lstm_layers': 2,
         'num_heads': 3,
-        'feat_drop': 0.1,
-        'attn_drop': 0.1,
+        'feat_drop': 0.2,
+        'attn_drop': 0.2,
         'residual': False,
         'hidden_size': 10,
         'ntasks': 1,
         'num_heads_gat': 3,
-        'dropout_feat_gat': 0.1,
-        'dropout_attn_gat': 0.1,
+        'dropout_feat_gat': 0.2,
+        'dropout_attn_gat': 0.2,
         'hidden_size_gat': 10,
         'residual_gat': False,
         'batch_norm': True,
         'shape_fc': 'cone',
         'classifier': False,
-        'fc_num_layers': 3, 
+        'fc_num_layers': 2, 
         'pooling_ntypes': ['atom', 'bond', 'global'],
         'pooling_ntypes_direct': ['global'],
-        "fc_hidden_size_1": 512,
+        "fc_hidden_size_1": 256,
         "restore": False,
-        "initializer": "kaiming"
+        "initializer": "None"
     }
 
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    qtaim_model_dict['atom_feature_size'] = 33
-    qtaim_model_dict['bond_feature_size'] = 26
-    qtaim_model_dict['global_feature_size'] = 9
+    qtaim_model_dict['atom_feature_size'] = 66
+    qtaim_model_dict['bond_feature_size'] = 22
+    qtaim_model_dict['global_feature_size'] = 6
 
     non_qtaim_model_dict = deepcopy(non_qtaim_model_bl_dict)
-    non_qtaim_model_dict['atom_feature_size'] = 66
-    non_qtaim_model_dict['bond_feature_size'] = 23
+    non_qtaim_model_dict['atom_feature_size'] = 51
+    non_qtaim_model_dict['bond_feature_size'] = 6
     non_qtaim_model_dict['global_feature_size'] = 6
 
+
     qtaim_keys = {
-        "atom": [
-                "extra_feat_atom_Lagrangian_K",
-                "extra_feat_atom_Hamiltonian_K",
-                "extra_feat_atom_lap_e_density",
-                "extra_feat_atom_e_loc_func",
-                "extra_feat_atom_ave_loc_ion_E",
-                "extra_feat_atom_delta_g_promolecular",
-                "extra_feat_atom_delta_g_hirsh",
-                "extra_feat_atom_esp_nuc",
-                "extra_feat_atom_esp_e",
-                "extra_feat_atom_esp_total",
-                "extra_feat_atom_grad_norm",
-                "extra_feat_atom_lap_norm",
-                "extra_feat_atom_ellip_e_dens",
-                "extra_feat_atom_eta",
-                "extra_feat_atom_eig_hess"
-
-        ],
-    "bond": [
-                "extra_feat_bond_Lagrangian_K",
-                "extra_feat_bond_Hamiltonian_K",
-                "extra_feat_bond_lap_e_density",
-                "extra_feat_bond_e_loc_func",
-                "extra_feat_bond_ave_loc_ion_E",
-                "extra_feat_bond_delta_g_promolecular",
-                "extra_feat_bond_delta_g_hirsh",
-                "extra_feat_bond_esp_nuc",
-                "extra_feat_bond_esp_e",
-                "extra_feat_bond_esp_total",
-                "extra_feat_bond_grad_norm",
-                "extra_feat_bond_lap_norm",
-                "extra_feat_bond_eig_hess",
-                "extra_feat_bond_det_hessian",
-                "extra_feat_bond_ellip_e_dens",
-                "extra_feat_bond_eta", 
-                "bond_length"
-
-
-        ],
-        "global":  ["corrected_E", "charge"]
-    }
-
-    qtaim_keys_bl = {
         "atom": [
                 "extra_feat_atom_Lagrangian_K",
                 "extra_feat_atom_Hamiltonian_K",
@@ -1032,6 +990,49 @@ def get_datasets_tmqm_low(loc_dict):
         "global":  ["corrected_E", "charge"]
     }
 
+    qtaim_keys_bl = {
+        "atom": [
+                "extra_feat_atom_Lagrangian_K",
+                "extra_feat_atom_Hamiltonian_K",
+                "extra_feat_atom_lap_e_density",
+                "extra_feat_atom_e_loc_func",
+                "extra_feat_atom_ave_loc_ion_E",
+                "extra_feat_atom_delta_g_promolecular",
+                "extra_feat_atom_delta_g_hirsh",
+                "extra_feat_atom_esp_nuc",
+                "extra_feat_atom_esp_e",
+                "extra_feat_atom_esp_total",
+                "extra_feat_atom_grad_norm",
+                "extra_feat_atom_lap_norm",
+                "extra_feat_atom_ellip_e_dens",
+                "extra_feat_atom_eta",
+                "extra_feat_atom_eig_hess"
+
+        ],
+    "bond": [
+                "extra_feat_bond_Lagrangian_K",
+                "extra_feat_bond_Hamiltonian_K",
+                "extra_feat_bond_lap_e_density",
+                "extra_feat_bond_e_loc_func",
+                "extra_feat_bond_ave_loc_ion_E",
+                "extra_feat_bond_delta_g_promolecular",
+                "extra_feat_bond_delta_g_hirsh",
+                "extra_feat_bond_esp_nuc",
+                "extra_feat_bond_esp_e",
+                "extra_feat_bond_esp_total",
+                "extra_feat_bond_grad_norm",
+                "extra_feat_bond_lap_norm",
+                "extra_feat_bond_eig_hess",
+                "extra_feat_bond_det_hessian",
+                "extra_feat_bond_ellip_e_dens",
+                "extra_feat_bond_eta",
+                "bond_length"
+
+
+        ],
+        "global":  ["corrected_E", "charge"]
+    }
+
     base_dict_bl = {
         "atom": [],
         "bond": ["bond_length"],
@@ -1043,6 +1044,7 @@ def get_datasets_tmqm_low(loc_dict):
         "bond": [],
         "global": ["corrected_E", "charge"],
     }
+
 
 
     dict_datasets={
@@ -1150,7 +1152,7 @@ def get_datasets_tmqm_low(loc_dict):
     return model_dict, dict_keys, dict_datasets
 
 
-def get_datasets_tmqm_high(loc_dict):
+def get_datasets_tmqm_mid(loc_dict):
 
 
     qtaim_model_bl_dict ={
@@ -1159,50 +1161,51 @@ def get_datasets_tmqm_high(loc_dict):
         'global_feature_size': 6,
         'conv_fn': 'ResidualBlock',
         'target_dict': {'global': ['corrected_E']},
-        'dropout': 0.2,
-        'batch_norm_tf': True,
+        'dropout': 0.1,
+        'batch_norm_tf': False,
         'activation': 'ReLU',
         'bias': True,
         'norm': 'both',
         'aggregate': 'sum',
         'n_conv_layers': 6,
-        'lr': 0.044675426899321025,
-        'weight_decay': 5e-05,
+        'lr': 0.0024218114655293267,
+        'weight_decay': 0.00001,
         'lr_plateau_patience': 25,
         'lr_scale_factor': 0.5,
         'scheduler_name': 'reduce_on_plateau',
         'loss_fn': 'mse',
         'resid_n_graph_convs': 2,
-        'embedding_size': 100,
+        'embedding_size': 50,
         'fc_layer_size': [512, 512, 512],
         'fc_dropout': 0.1,
         'fc_batch_norm': True,
         'n_fc_layers': 3,
-        'global_pooling_fn': 'WeightAndSumThenCat',
+        'global_pooling_fn': 'MeanPoolingThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
         'lstm_iters': 15,
         'lstm_layers': 2,
         'num_heads': 2,
-        'feat_drop': 0.1,
+        'feat_drop': 0.2,
         'attn_drop': 0.1,
         'residual': True,
-        'hidden_size': 50,
+        'hidden_size': 30,
         'ntasks': 1,
         'num_heads_gat': 2,
         'dropout_feat_gat': 0.2,
         'dropout_attn_gat': 0.1,
-        'hidden_size_gat': 50,
+        'hidden_size_gat': 30,
         'residual_gat': True,
-        'shape_fc': 'flat',
+        'shape_fc': 'cone',
         'classifier': False,
         'fc_num_layers': 3, 
-        'batch_norm': True,
+        'batch_norm': False,
         'pooling_ntypes': ['atom', 'bond', 'global'],
         'pooling_ntypes_direct': ['global'],
         "fc_hidden_size_1": 512,
         "restore": False,
-        "initializer": "kaiming"
+        "initializer": "xavier", 
+        "edge_dropout": 0.1
     }
 
 
@@ -1219,8 +1222,8 @@ def get_datasets_tmqm_high(loc_dict):
         'norm': 'both',
         'aggregate': 'sum',
         'n_conv_layers': 5,
-        'lr': 0.01885852849843154,
-        'weight_decay': 1e-05,
+        'lr': 0.003644049248109429,
+        'weight_decay': 0.00001,
         'lr_plateau_patience': 25,
         'lr_scale_factor': 0.5,
         'scheduler_name': 'reduce_on_plateau',
@@ -1228,34 +1231,35 @@ def get_datasets_tmqm_high(loc_dict):
         'resid_n_graph_convs': 2,
         'embedding_size': 50,
         'fc_layer_size': [1024, 512, 256],
-        'fc_dropout': 0.1,
+        'fc_dropout': 0.0,
         'fc_batch_norm': True,
-        'n_fc_layers': 3,
+        'n_fc_layers': 2,
         'global_pooling_fn': 'WeightAndSumThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
         'lstm_iters': 9,
         'lstm_layers': 2,
         'num_heads': 3,
-        'feat_drop': 0.1,
-        'attn_drop': 0.1,
+        'feat_drop': 0.0,
+        'attn_drop': 0.2,
         'residual': False,
-        'hidden_size': 10,
+        'hidden_size': 25,
         'ntasks': 1,
         'num_heads_gat': 3,
-        'dropout_feat_gat': 0.1,
-        'dropout_attn_gat': 0.1,
-        'hidden_size_gat': 10,
+        'dropout_feat_gat': 0.0,
+        'dropout_attn_gat': 0.2,
+        'hidden_size_gat': 25,
         'residual_gat': False,
         'batch_norm': True,
-        'shape_fc': 'cone',
+        'shape_fc': 'flat',
         'classifier': False,
-        'fc_num_layers': 3, 
+        'fc_num_layers': 2, 
         'pooling_ntypes': ['atom', 'bond', 'global'],
         'pooling_ntypes_direct': ['global'],
         "fc_hidden_size_1": 512,
         "restore": False,
-        "initializer": "kaiming"
+        "initializer": "xavier", 
+        "edge_dropout": 0.1
     }
 
 
@@ -1268,6 +1272,7 @@ def get_datasets_tmqm_high(loc_dict):
     non_qtaim_model_dict['atom_feature_size'] = 51
     non_qtaim_model_dict['bond_feature_size'] = 6
     non_qtaim_model_dict['global_feature_size'] = 6
+
 
     qtaim_keys = {
         "atom": [
@@ -1471,66 +1476,69 @@ def get_datasets_tmqm_high(loc_dict):
 
     return model_dict, dict_keys, dict_datasets
 
-def get_datasets_tmqm_mid(loc_dict):
+
+def get_datasets_tmqm_high(loc_dict):
 
 
     qtaim_model_bl_dict ={
-        'atom_feature_size': 33,
-        'bond_feature_size': 27,
-        'global_feature_size': 9,
+        'atom_feature_size': 66,
+        'bond_feature_size': 23,
+        'global_feature_size': 6,
         'conv_fn': 'ResidualBlock',
         'target_dict': {'global': ['corrected_E']},
-        'dropout': 0.2,
-        'batch_norm_tf': True,
+        'dropout': 0.1,
+        'batch_norm_tf': False,
         'activation': 'ReLU',
         'bias': True,
         'norm': 'both',
         'aggregate': 'sum',
         'n_conv_layers': 6,
-        'lr': 0.044675426899321025,
-        'weight_decay': 5e-05,
+        'lr': 0.0024218114655293267,
+        'weight_decay': 0.00001,
         'lr_plateau_patience': 25,
         'lr_scale_factor': 0.5,
         'scheduler_name': 'reduce_on_plateau',
         'loss_fn': 'mse',
         'resid_n_graph_convs': 2,
-        'embedding_size': 100,
+        'embedding_size': 50,
         'fc_layer_size': [512, 512, 512],
         'fc_dropout': 0.1,
         'fc_batch_norm': True,
         'n_fc_layers': 3,
-        'global_pooling_fn': 'WeightAndSumThenCat',
+        'global_pooling_fn': 'MeanPoolingThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
         'lstm_iters': 15,
         'lstm_layers': 2,
         'num_heads': 2,
-        'feat_drop': 0.1,
+        'feat_drop': 0.2,
         'attn_drop': 0.1,
         'residual': True,
-        'hidden_size': 50,
+        'hidden_size': 30,
         'ntasks': 1,
         'num_heads_gat': 2,
         'dropout_feat_gat': 0.2,
         'dropout_attn_gat': 0.1,
-        'hidden_size_gat': 50,
+        'hidden_size_gat': 30,
         'residual_gat': True,
-        'shape_fc': 'flat',
+        'shape_fc': 'cone',
         'classifier': False,
         'fc_num_layers': 3, 
-        'batch_norm': True,
+        'batch_norm': False,
         'pooling_ntypes': ['atom', 'bond', 'global'],
         'pooling_ntypes_direct': ['global'],
         "fc_hidden_size_1": 512,
         "restore": False,
+        "initializer": "xavier",
+
     }
 
 
     non_qtaim_model_bl_dict ={
-        'atom_feature_size': 16,
-        'bond_feature_size': 8,
-        'global_feature_size': 9,
-        'conv_fn': 'GraphConvDropoutBatch',
+        'atom_feature_size': 51,
+        'bond_feature_size': 7,
+        'global_feature_size': 6,
+        'conv_fn': 'ResidualBlock',
         'target_dict': {'global': ['shifted_rrho_ev_free_energy']},
         'dropout': 0.2,
         'batch_norm_tf': True,
@@ -1538,9 +1546,9 @@ def get_datasets_tmqm_mid(loc_dict):
         'bias': True,
         'norm': 'both',
         'aggregate': 'sum',
-        'n_conv_layers': 5,
-        'lr': 0.01885852849843154,
-        'weight_decay': 1e-05,
+        'n_conv_layers': 10,
+        'lr': 0.0373599079216563,
+        'weight_decay': 0.00005,
         'lr_plateau_patience': 25,
         'lr_scale_factor': 0.5,
         'scheduler_name': 'reduce_on_plateau',
@@ -1550,8 +1558,8 @@ def get_datasets_tmqm_mid(loc_dict):
         'fc_layer_size': [1024, 512, 256],
         'fc_dropout': 0.1,
         'fc_batch_norm': True,
-        'n_fc_layers': 3,
-        'global_pooling_fn': 'WeightAndSumThenCat',
+        'n_fc_layers': 2,
+        'global_pooling_fn': 'MeanPoolingThenCat',
         'ntypes_pool': ['atom', 'bond', 'global'],
         'ntypes_pool_direct_cat': ['global'],
         'lstm_iters': 9,
@@ -1568,24 +1576,25 @@ def get_datasets_tmqm_mid(loc_dict):
         'hidden_size_gat': 10,
         'residual_gat': False,
         'batch_norm': True,
-        'shape_fc': 'cone',
+        'shape_fc': 'flat',
         'classifier': False,
-        'fc_num_layers': 3, 
+        'fc_num_layers': 2, 
         'pooling_ntypes': ['atom', 'bond', 'global'],
         'pooling_ntypes_direct': ['global'],
-        "fc_hidden_size_1": 512,
+        "fc_hidden_size_1": 1024,
         "restore": False,
+        "initializer": "kaiming"
     }
 
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
-    qtaim_model_dict['atom_feature_size'] = 33
-    qtaim_model_dict['bond_feature_size'] = 26
-    qtaim_model_dict['global_feature_size'] = 9
+    qtaim_model_dict['atom_feature_size'] = 66
+    qtaim_model_dict['bond_feature_size'] = 22
+    qtaim_model_dict['global_feature_size'] = 6
 
     non_qtaim_model_dict = deepcopy(non_qtaim_model_bl_dict)
-    non_qtaim_model_dict['atom_feature_size'] = 66
-    non_qtaim_model_dict['bond_feature_size'] = 23
+    non_qtaim_model_dict['atom_feature_size'] = 51
+    non_qtaim_model_dict['bond_feature_size'] = 6
     non_qtaim_model_dict['global_feature_size'] = 6
 
     qtaim_keys = {
@@ -1623,8 +1632,7 @@ def get_datasets_tmqm_mid(loc_dict):
                 "extra_feat_bond_eig_hess",
                 "extra_feat_bond_det_hessian",
                 "extra_feat_bond_ellip_e_dens",
-                "extra_feat_bond_eta", 
-                "bond_length"
+                "extra_feat_bond_eta"
 
 
         ],
@@ -1666,7 +1674,8 @@ def get_datasets_tmqm_mid(loc_dict):
                 "extra_feat_bond_eig_hess",
                 "extra_feat_bond_det_hessian",
                 "extra_feat_bond_ellip_e_dens",
-                "extra_feat_bond_eta"
+                "extra_feat_bond_eta",
+                "bond_length"
 
 
         ],
