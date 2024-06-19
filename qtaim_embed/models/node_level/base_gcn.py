@@ -1,5 +1,7 @@
 # baseline GNN model for node-level regression
 from copy import deepcopy
+import numpy as np 
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -321,8 +323,7 @@ class GCNNodePred(pl.LightningModule):
             layer_idx += 1
 
         return bond_feats, atom_feats, global_feats
-
-    
+ 
     def shared_step(self, batch, mode):
         batch_graph, batch_label = batch
         logits_list = []
@@ -526,51 +527,62 @@ class GCNNodePred(pl.LightningModule):
 
         return scheduler
 
-    def evaluate_manually(self, batch_graph, batched_label, scaler_list):
+    def evaluate_manually(self, test_dataloader, scaler_list):
         """
         Evaluate a set of data manually
         Takes
             feats: dict, dictionary of batched features
             scaler_list: list, list of scalers
         """
-        
-
-        #batch_graph, batch_label = batch
-        preds = self.forward(batch_graph, batch_graph.ndata["feat"])
-        preds_unscaled = deepcopy(preds.detach())
-        labels_unscaled = deepcopy(batched_label)
-
-        for scaler in scaler_list:
-            labels_unscaled = scaler.inverse_feats(labels_unscaled)
-            preds_unscaled = scaler.inverse_feats(preds_unscaled)
-
-
-        #logits = self.forward(
-        #    batch_graph, batch_graph.ndata["feat"]
-        #)  # returns a dict of node types
         r2_dict = {}
         mae_dict = {}
-        #max_nodes = -1
+        r2_eval = {}
+        mae_eval = {}
+        pred_dict = {}
+        label_dict = {}
+
         for target_type, target_list in self.hparams.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
-                            
-                r2_eval = MultioutputWrapper(
+            
+                r2_eval[target_type] = MultioutputWrapper(
                     torchmetrics.R2Score(), num_outputs=len(self.hparams.target_dict[target_type])
                 )
-                mae_eval = MultioutputWrapper(
+                mae_eval[target_type] = MultioutputWrapper(
                     torchmetrics.MeanAbsoluteError(), num_outputs=len(self.hparams.target_dict[target_type])
                 )
-                logits = preds[target_type]
-                labels = batched_label[target_type]
+                pred_dict[target_type] = []
+                label_dict[target_type] = []
 
-                r2_eval.update(logits, labels)
-                mae_eval.update(logits, labels)
-                
-                r2_val = r2_eval.compute()
-                mae_val = mae_eval.compute()
+        #batch_graph, batch_label = batch
+        for batch_graph, batched_label in test_dataloader:
 
-                r2_dict[target_type] = r2_val
-                mae_dict[target_type] = mae_val
+            preds = self.forward(batch_graph, batch_graph.ndata["feat"])
+            # detach every tensor in dictionary 
+            preds_unscaled = {k: deepcopy(v.detach()) for k, v in preds.items()}
+            labels_unscaled = deepcopy(batched_label)
+
+            for scaler in scaler_list:
+                labels_unscaled = scaler.inverse_feats(labels_unscaled)
+                preds_unscaled = scaler.inverse_feats(preds_unscaled)
+
+            #max_nodes = -1
+            for target_type, target_list in self.hparams.target_dict.items():
+                if target_list != [None] and len(target_list) > 0:
+                                
+                    #logits = preds[target_type]
+                    #labels = batched_label[target_type]
+
+                    r2_eval[target_type].update(preds_unscaled[target_type], labels_unscaled[target_type])
+                    mae_eval[target_type].update(preds_unscaled[target_type], labels_unscaled[target_type])
+                    pred_dict[target_type].append(preds_unscaled[target_type].numpy())
+                    label_dict[target_type].append(labels_unscaled[target_type].numpy())
         
-        return r2_dict, mae_dict
-            
+        for target_type, target_list in self.hparams.target_dict.items():
+            if target_list != [None] and len(target_list) > 0:
+
+                r2_dict[target_type] = r2_eval[target_type].compute()
+                mae_dict[target_type] = mae_eval[target_type].compute()
+                pred_dict[target_type] = np.concatenate(pred_dict[target_type])
+                label_dict[target_type] = np.concatenate(label_dict[target_type])
+                    
+        return r2_dict, mae_dict, pred_dict, label_dict

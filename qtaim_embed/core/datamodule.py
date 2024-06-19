@@ -55,7 +55,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
         if stage in ("test", "predict"):
             self.test_ds = self.test_dataset
 
-    def prepare_data(self, stage):
+    def prepare_data(self, stage=None):
         if self.prepare_tf == False:
             if stage == "fit" or stage is None:
                 # Assign train/val datasets for use in dataloaders

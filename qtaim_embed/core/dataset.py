@@ -48,6 +48,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             "bond": ["extra_feat_bond_esp_total"],
         },
         extra_dataset_info={},
+        verbose=True
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -138,6 +139,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.allowed_ring_size = allowed_ring_size
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
+        self.verbose = verbose
 
         self.load()
         print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
@@ -201,12 +203,14 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.exclude_locs = exclude_locs
         self.include_names = include_names
         self.exclude_names = exclude_names
-        print("included in labels")
-        # print(self.include_locs)
-        print(self.include_names)
-        print("included in graph features")
-        # print(self.exclude_locs)
-        print(self.exclude_names)
+
+        if self.verbose:
+            print("included in labels")
+            # print(self.include_locs)
+            print(self.include_names)
+            print("included in graph features")
+            # print(self.exclude_locs)
+            print(self.exclude_names)
 
     def load(self):
         self.get_include_exclude_indices()
@@ -236,8 +240,9 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                 graph.ndata["labels"] = labels
 
             # label_list.append(labels)
-        print("original loader node types:", graph.ndata["feat"].keys())
-        print("original loader label types:", graph.ndata["labels"].keys())
+        if self.verbose:
+            print("original loader node types:", graph.ndata["feat"].keys())
+            print("original loader label types:", graph.ndata["labels"].keys())
 
         if self.log_scale_features:
             print("... > Log scaling features")
