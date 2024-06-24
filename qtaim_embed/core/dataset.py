@@ -695,6 +695,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         target_list=["NR-AR"],
         extra_dataset_info={},
         impute=False,
+        verbose = True
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -783,6 +784,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
         self.impute = impute
+        self.verbose = verbose
 
         self.load()
         print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")

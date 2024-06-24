@@ -2,9 +2,9 @@ import torch, dgl
 import pytorch_lightning as pl
 from torch.nn import functional as F
 from qtaim_embed.utils.tests import (
-    get_dataset_graph_level, 
+    get_dataset_graph_level,
     get_dataset_graph_level_multitask,
-    get_datasets_graph_level_classifier
+    get_datasets_graph_level_classifier,
 )
 from qtaim_embed.utils.data import get_default_graph_level_config
 from qtaim_embed.models.utils import load_graph_level_model_from_config
@@ -57,27 +57,25 @@ def test_save_load():
 
     reload_config = model_config
     reload_config["model"]["restore"] = True
-    reload_config["model"]["restore_path"] = "./test_save_load/lightning_logs/version_0/checkpoints/epoch=99-step=100.ckpt"
+    reload_config["model"][
+        "restore_path"
+    ] = "./test_save_load/lightning_logs/version_0/checkpoints/epoch=99-step=100.ckpt"
     model_reload = load_graph_level_model_from_config(reload_config["model"])
 
-#test_save_load()
+
+# test_save_load()
 def test_manual_eval_graph_level_classifier():
     dataset_single, dataset_multi = get_datasets_graph_level_classifier(
-        log_scale_features=True, 
-        standard_scale_features=True
+        log_scale_features=True, standard_scale_features=True
     )
-    
+
     data_loader = DataLoaderMoleculeGraphTask(
         dataset_single, batch_size=len(dataset_single.graphs), shuffle=False
     )
 
     model_config = get_default_graph_level_config()
-    model_config["model"]["atom_feature_size"] = dataset_single.feature_size()[
-        "atom"
-    ]
-    model_config["model"]["bond_feature_size"] = dataset_single.feature_size()[
-        "bond"
-    ]
+    model_config["model"]["atom_feature_size"] = dataset_single.feature_size()["atom"]
+    model_config["model"]["bond_feature_size"] = dataset_single.feature_size()["bond"]
     model_config["model"]["global_feature_size"] = dataset_single.feature_size()[
         "global"
     ]
@@ -92,9 +90,7 @@ def test_manual_eval_graph_level_classifier():
 
     batch_graph, batched_labels = next(iter(data_loader))
 
-    acc_pre, auroc_pre, f1_pre = model.evaluate_manually(
-        (batch_graph,batched_labels)
-    )
+    acc_pre, auroc_pre, f1_pre = model.evaluate_manually((batch_graph, batched_labels))
     print("-" * 50)
     print(
         "Prior to training:\t acc: {:.4f}\t auroc: {:.4f}\t f1: {:.4f}".format(
@@ -120,10 +116,7 @@ def test_manual_eval_graph_level_classifier():
             loss.backward()
             opt.step()
 
-    acc, auroc, f1 = model.evaluate_manually(
-        (batch_graph,
-        batched_labels)
-    )
+    acc, auroc, f1 = model.evaluate_manually((batch_graph, batched_labels))
     print(
         "After 10 Epochs \t acc: {:.4f}\t auroc: {:.4f}\t f1: {:.4f}".format(
             acc, auroc, f1
@@ -143,8 +136,8 @@ def test_manual_eval_graph_level():
     data_loader = DataLoaderMoleculeGraphTask(
         dataset_graph_level, batch_size=len(dataset_graph_level.graphs), shuffle=False
     )
-    #print(dataset_graph_level.feature_size())
-    #print(dataset_graph_level.target_dict)
+    # print(dataset_graph_level.feature_size())
+    # print(dataset_graph_level.target_dict)
 
     model_config = get_default_graph_level_config()
     model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size()[
@@ -171,8 +164,7 @@ def test_manual_eval_graph_level():
 
     batch_graph, batched_labels = next(iter(data_loader))
     r2_pre, mae, mse, _, _ = model.evaluate_manually(
-        batch_graph,
-        batched_labels,
+        data_loader,
         scaler_list=dataset_graph_level.label_scalers,
     )
     print("-" * 50)
@@ -196,10 +188,9 @@ def test_manual_eval_graph_level():
             opt.zero_grad()
             loss.backward()
             opt.step()
-
+ 
     r2_post, mae, mse, _, _ = model.evaluate_manually(
-        batch_graph,
-        batched_labels,
+        data_loader,
         scaler_list=dataset_graph_level.label_scalers,
     )
     print(
@@ -237,12 +228,12 @@ def test_multi_task():
         "global"
     ]
     model_config["model"]["initializer"] = None
-    #model_config["model"]["output_dims"] = 1
+    # model_config["model"]["output_dims"] = 1
 
     model = load_graph_level_model_from_config(model_config["model"])
 
     trainer = pl.Trainer(
-        max_epochs=100,
+        max_epochs=10,
         accelerator="gpu",
         enable_progress_bar=True,
         devices=1,
@@ -253,4 +244,5 @@ def test_multi_task():
     )
 
     trainer.fit(model, data_loader)
+
 

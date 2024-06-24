@@ -122,7 +122,8 @@ def get_default_graph_level_config():
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
             "num_workers": 1,
-            "impute": False
+            "impute": False, 
+            "verbose": False
         },
         "model": {
             "classifier": False,
@@ -170,6 +171,8 @@ def get_default_graph_level_config():
             "strategy": "auto",
             "precision": "bf16",
             "accumulate_grad_batches": 3,
+            "pin_memory": False,
+            "persistent_workers": False, 
         },
     }
 

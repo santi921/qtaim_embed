@@ -2,16 +2,8 @@ import os
 import dgl
 import lmdb
 import pickle
-import glob
 import tempfile
-import numpy as np 
-from copy import deepcopy
-from tqdm import tqdm
 
-from qtaim_embed.utils.dataset import (
-    clean,
-    clean_op
-)
 
 from qtaim_embed.core.dataset import Subset
 scalar = 1 / 1024
@@ -165,5 +157,4 @@ def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
         lmdb_name="molecule.lmdb",
         global_values=global_dict
     )
-    print("...> writing reactions to lmdb")
 

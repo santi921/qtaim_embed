@@ -42,4 +42,3 @@ class TestGrapher:
             num_bonds_mol_wrapper = list_bond_num[ind]
             num_bonds = graph_list[ind].num_nodes("bond")
             assert num_bonds_mol_wrapper == num_bonds
-

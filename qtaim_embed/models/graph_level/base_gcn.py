@@ -657,7 +657,7 @@ class GCNGraphPred(pl.LightningModule):
 
         return scheduler
 
-    def evaluate_manually(self, batch_graph, batch_label, scaler_list, per_atom=False):
+    def evaluate_manually(self, dataloader, scaler_list, per_atom=False):
         """
         Evaluate a set of data manually
         Takes
@@ -667,43 +667,59 @@ class GCNGraphPred(pl.LightningModule):
         # batch_graph, batch_label = batch
 
         # batch_label = batch_label["global"]
-        preds = self.forward(batch_graph, batch_graph.ndata["feat"])
-
-        preds_unscaled = deepcopy(preds.detach())
-        labels_unscaled = deepcopy(batch_label)
-        # print("preds unscaled", preds_unscaled)  # * this looks good
-        # print("labels unscaled", labels_unscaled)  # * this looks good
-        for scaler in scaler_list:
-            labels_unscaled = scaler.inverse_feats(labels_unscaled)
-            preds_unscaled = scaler.inverse_feats({"global": preds_unscaled})
-
-        preds_unscaled = preds_unscaled["global"].view(-1, self.hparams.ntasks)
-        labels_unscaled = labels_unscaled["global"].view(-1, self.hparams.ntasks)
+        preds_list_raw = []
+        labels_list_raw = []
+        n_atom_list = []
         
+        self.eval()
+
+        for batch_graph, batched_labels in dataloader:
+        
+            preds = self.forward(batch_graph, batch_graph.ndata["feat"])
+            preds_raw = deepcopy(preds.detach())
+            labels_raw = deepcopy(batched_labels)["global"]
+            
+            preds_list_raw.append(preds_raw)
+            labels_list_raw.append(labels_raw)
+
+            if per_atom:
+                n_atoms = batch_graph.batch_num_nodes("atom")
+                n_atom_list.append(n_atoms)
+
+        preds_raw = torch.cat(preds_list_raw, dim=0)
+        labels_raw = torch.cat(labels_list_raw, dim=0)
+        
+        if per_atom:
+            n_atom_list = torch.cat(n_atom_list, dim=0)
+
+        for scaler in scaler_list[::-1]:
+            labels_unscaled = scaler.inverse_feats({"global": labels_raw})["global"].view(-1, self.hparams.ntasks)
+            preds_unscaled = scaler.inverse_feats({"global": preds_raw})["global"].view(-1, self.hparams.ntasks)
+            
+            
         if per_atom: 
             abs_diff = torch.abs(preds_unscaled - labels_unscaled)
-            abs_diff = abs_diff.view(-1, self.hparams.ntasks)
-            n_atoms = batch_graph.batch_num_nodes("atom")
-            n_mols = batch_graph.batch_size
-            abs_diff = abs_diff.view(n_mols, -1)
-            # energies within tolerance
+
+            #n_atoms = batch_graph.batch_num_nodes("atom")
+            #n_mols = batch_graph.batch_size
+            abs_diff = torch.abs(preds_unscaled - labels_unscaled)
+            n_atoms = n_atom_list
+            y = labels_unscaled
+            y_pred = preds_unscaled
+            r2_manual = torchmetrics.functional.r2_score(y_pred, y)
+            print("r2 manual", r2_manual)
+            mae_per_atom = torch.mean(abs_diff / n_atom_list)
+            mae_per_molecule = torch.mean(abs_diff)
+            ewt_prop = torch.sum(abs_diff < 0.043) / len(abs_diff)
+            rmse_per_molecule = torch.mean(torch.sqrt(torch.mean(abs_diff**2)))
+            mse_per_atom = abs_diff**2 / n_atom_list
+            mean_rmse_per_atom = torch.sqrt(torch.mean(mse_per_atom))
             
-            # mae per atom
-            mae_per_atom = torch.sum(abs_diff, dim=1) / n_atoms
-            mae_per_molecule = torch.sum(abs_diff, dim=1)
-            ewt_prop = torch.sum(mae_per_molecule < 0.043) / len(mae_per_atom) # assumes eV
-            
-            #mse per atom
-            mse_per_atom = torch.sum(abs_diff**2, dim=1) / n_atoms
-            mean_mae = torch.mean(mae_per_atom)
-            mean_rmse = torch.sqrt(torch.mean(mse_per_atom))
-            return mean_mae, mean_rmse, ewt_prop, preds_unscaled, labels_unscaled
+
+            return mae_per_atom, mean_rmse_per_atom, ewt_prop, preds_unscaled, labels_unscaled
         
         else: 
-            # manually compute metrics
-            #r2_eval = torchmetrics.R2Score()
-            #mae_eval = torchmetrics.MeanAbsoluteError()
-            #mse_eval = torchmetrics.MeanSquaredError(squared=False)
+
             r2_eval = MultioutputWrapper(
                 torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
             )
@@ -723,5 +739,5 @@ class GCNGraphPred(pl.LightningModule):
             r2_val = r2_eval.compute()
             mae_val = mae_eval.compute()
             mse_val = mse_eval.compute()
-            
+
             return r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled

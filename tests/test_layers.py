@@ -15,7 +15,7 @@ from qtaim_embed.models.layers import (
     WeightAndSumThenCat,
     UnifySize,
     MeanPoolingThenCat,
-    WeightAndMeanThenCat
+    WeightAndMeanThenCat,
 )
 from qtaim_embed.utils.models import (
     get_layer_args,
@@ -116,7 +116,6 @@ class TestLayers:
         assert out.shape == (1, np.sum(self.in_feats))
         assert torch.allclose(out, torch.zeros_like(out))
 
-
     def test_mean(self):
         out = self.uni(self.feats)
         ntypes = ["atom", "bond", "global"]
@@ -149,7 +148,6 @@ class TestLayers:
         out = weight_sum_pool(self.graph, out)
         assert out.shape == (1, np.sum(self.in_feats))
         assert torch.allclose(out, torch.zeros_like(out))
-
 
     def test_set2set(self):
         out = self.uni(self.feats)
