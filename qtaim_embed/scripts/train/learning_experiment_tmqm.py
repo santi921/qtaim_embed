@@ -2,12 +2,14 @@ import json
 import torch 
 from sklearn.metrics import r2_score
 import argparse 
+import numpy as np 
 from copy import deepcopy
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
     EarlyStopping
 )
+import torchmetrics
 
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
@@ -22,27 +24,51 @@ from qtaim_embed.scripts.train.learning_utils import (
 torch.set_float32_matmul_precision('high')
 
 
-def manual_statistics(model, batch_graph,batched_labels,scaler_list):
-    preds = model.forward(batch_graph, batch_graph.ndata["feat"])
+def manual_statistics(model, dataset_test, scaler_list):
+    
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_test, batch_size=500, shuffle=False
+    )
+    preds_list_raw = []
+    labels_list_raw = []
+    n_atom_list = []
+    model.eval()
 
-    preds_unscaled = deepcopy(preds.detach())
-    labels_unscaled = deepcopy(batched_labels)
-    # print("preds unscaled", preds_unscaled)  # * this looks good
-    # print("labels unscaled", labels_unscaled)  # * this looks good
-    for scaler in scaler_list:
-        labels_unscaled = scaler.inverse_feats(labels_unscaled)
-        preds_unscaled = scaler.inverse_feats({"global": preds_unscaled})
 
-    preds_unscaled = preds_unscaled["global"].view(-1, model.hparams.ntasks)
-    labels_unscaled = labels_unscaled["global"].view(-1, model.hparams.ntasks)
-    # manually compute mae and r2
-    mae = torch.mean(torch.abs(preds_unscaled - labels_unscaled))
-    # convert to numpy 
-    preds_unscaled = preds_unscaled.cpu().numpy()
-    r2 = r2_score(labels_unscaled, preds_unscaled)
-    # convert to single float
-    mae = mae.cpu().numpy().tolist()
-    return mae, r2
+    for batch_graph, batched_labels in data_loader:
+        preds = model.forward(batch_graph, batch_graph.ndata["feat"])
+        preds_raw = deepcopy(preds.detach())
+        labels_raw = deepcopy(batched_labels)["global"]
+        n_atoms = batch_graph.batch_num_nodes("atom")
+        
+        n_atom_list.append(n_atoms)
+        preds_list_raw.append(preds_raw)
+        labels_list_raw.append(labels_raw)
+
+    
+
+    preds_raw = torch.cat(preds_list_raw, dim=0)
+    labels_raw = torch.cat(labels_list_raw, dim=0)
+    n_atom_list = torch.cat(n_atom_list, dim=0)
+
+    for scaler in scaler_list[::-1]:
+        labels_unscaled = scaler.inverse_feats({"global": labels_raw})["global"].view(-1, model.hparams.ntasks)
+        preds_unscaled = scaler.inverse_feats({"global": preds_raw})["global"].view(-1, model.hparams.ntasks)
+
+    
+    abs_diff = np.abs(preds_unscaled - labels_unscaled)
+    y = labels_unscaled
+    y_pred = preds_unscaled
+    
+    r2_manual = torchmetrics.functional.r2_score(y_pred, y)
+    mae_per_atom = torch.mean(abs_diff / n_atoms)
+    mae_per_molecule = torch.mean(abs_diff)
+    ewt_prop = torch.sum(abs_diff < 0.043) / len(abs_diff)
+    rmse_per_molecule = torch.mean(torch.sqrt(torch.mean(abs_diff**2)))
+    mse_per_atom = abs_diff**2 / n_atoms
+    mean_rmse_per_atom = torch.sqrt(torch.mean(mse_per_atom))
+    
+    return mae_per_atom.numpy(), mean_rmse_per_atom.numpy(), r2_manual.numpy(), ewt_prop.numpy()
 
 
 
@@ -59,35 +85,25 @@ def main():
 
     if level == "low":
         loc_dict = {
-            "50": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_low/low_train_50.pkl",
-            #"500": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_low/low_train_500.pkl",
+            "50": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/low/low_train_50.pkl",
+            #"500": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/low/low_train_500.pkl",
             #"5000": 
             #"10000": 
             #"all": 
-            #"test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_low/tmQM_wB97MV_TPSS_QTAIM_corrected_test.pkl"
-            "test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_low/low_train_50.pkl",
+            #"test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/low/new_parse_tmQM_wB97MV_TPSS_QTAIM_corrected_test.pkl"
+            "test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/low/low_train_50.pkl",
         }
         model_dict, dict_keys, dict_datasets = get_datasets_tmqm_low(loc_dict)
-    elif level == "mid":
-        loc_dict = {
-            "50": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_mid/mid_train_50.pkl",
-            #"500": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_mid/mid_train_500.pkl",
-            #"5000": 
-            #"10000": 
-            #"all": 
-            #"test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_mid/tmQMg_qtaim_corrected_test.pkl"
-            "test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_mid/mid_train_50.pkl",
-        }   
-        model_dict, dict_keys, dict_datasets = get_datasets_tmqm_mid(loc_dict)
+
     elif level == "high":
         loc_dict = {
-            "50": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_high/high_train_50.pkl",
-            #"500": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_high/high_train_500.pkl", 
+            "50": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/high/high_train_50.pkl",
+            #"500": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/high/high_train_500.pkl", 
             #"5000": 
             #"10000": 
             #"all": 
-            #"test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_high/test_tmQMg_qtaim_best_corrected.pkl"
-            "test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/stratified_high/high_train_50.pkl",
+            #"test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/high/new_parse_test_tmQMg_qtaim_best_corrected.pkl"
+            "test": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/high/high_train_50.pkl",
         }
         model_dict, dict_keys, dict_datasets = get_datasets_tmqm_high(loc_dict)
     else:
@@ -130,46 +146,15 @@ def main():
                 trainer.fit(model_temp, dataloader_train)
                 trainer.save_checkpoint(f"./libe_learning_test/{keys}_{name}.ckpt")
                 
-                batch_graph, batched_labels = next(iter(dataloader_test))
-                r2_metrics, mae_metrics, mse_metrics, _, _ = model_temp.evaluate_manually(
-                    batch_graph,
-                    batched_labels,
-                    scaler_list=test_dataset.label_scalers,
-                )
+                #batch_graph, batched_labels = next(iter(dataloader_test))
+                mae_per_atom, rmse_per_atom, r2_manual, ewt_prop  = manual_statistics(model_temp, test_dataset, dict_datasets[keys][name].label_scalers)
 
-                mean_mae, mean_mse, ewt, _, _ = model_temp.evaluate_manually(
-                       batch_graph, batched_labels, test_dataset.label_scalers, per_atom=True
-                )
-                # convert to numpy
-                r2_metrics = list(r2_metrics.cpu().numpy())[0]
-                mae_metrics = list(mae_metrics.cpu().numpy())[0]
-                mse_metrics = list(mse_metrics.cpu().numpy())[0]
-                mean_mae = float(mean_mae.cpu().numpy())
-                mean_mse = float(mean_mse.cpu().numpy())
-                ewt = float(ewt.cpu().numpy())
-
-
-                # convert to list 
-                r2_metrics = r2_metrics.tolist()
-                mae_metrics = mae_metrics.tolist()
-                mse_metrics = mse_metrics.tolist()
-
-                mae_man, r2_man = manual_statistics(
-                    model_temp, 
-                    batch_graph,
-                    batched_labels,
-                    scaler_list=test_dataset.label_scalers,
-                )
                 
                 results_dict[f"{keys}_{name}"] = {
-                    "r2_metrics": r2_metrics,
-                    "mae_metrics": mae_metrics,
-                    "mse_metrics": mse_metrics,
-                    "r2_manual": r2_man, 
-                    "mae_manual": mae_man,
-                    "mean_mae_per_atom": mean_mae,
-                    "mean_rmse_per_atom": mean_mse,
-                    "ewt": ewt,
+                    "mae_per_atom": float(mae_per_atom),
+                    "rmse_per_atom": float(rmse_per_atom),
+                    "r2_manual": float(r2_manual),
+                    "ewt_prop": float(ewt_prop)
                 }
 
 
