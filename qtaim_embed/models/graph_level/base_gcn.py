@@ -404,11 +404,11 @@ class GCNGraphPred(pl.LightningModule):
         )
 
 
-    def forward(self, graph, inputs):
+    def forward(self, graph, feat, eweight=None):
         """
         Forward pass
         """
-        feats = self.embedding(inputs)
+        feats = self.embedding(feat)
         for ind, conv in enumerate(self.conv_layers):
             feats = conv(graph, feats)
             

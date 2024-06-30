@@ -392,6 +392,10 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             target_list (list of strings): dictionary of global keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
         """
+        # check if file exists
+        if not Path(file).exists():
+            raise FileNotFoundError(f"File {file} not found")
+        
         # check if file ends in pkl
         if file[-3:] == "pkl":
             try:

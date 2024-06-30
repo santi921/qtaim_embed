@@ -131,3 +131,30 @@ def construct_homograph_blank(node_list, bond_list):
     g.add_edges(bond_list[:,0], bond_list[:,1])
     return g 
 
+
+def get_element_list_heterograph(g, dataset):
+    """
+    Get element list from heterograph
+    Takes:
+        g: heterograph
+        dataset: dataset object
+    Returns: 
+        element_list: list of elements
+    """
+
+    elem_name_ind = [i for i in range(len(dataset.feature_names()["atom"])) if "chemical_symbol" in dataset.feature_names()["atom"][i]]
+    elem_names = [i.split("_")[-1] for ind, i in enumerate(dataset.feature_names()["atom"]) if "chemical_symbol" in dataset.feature_names()["atom"][ind]]
+    element_info = g.ndata['feat']['atom']
+    element_info = element_info[:, elem_name_ind]
+    element_list = []
+    # iterate through vertical and add minimum of each column to element_info 
+    for i in range(element_info.shape[1]):
+        element_info[:, i] = element_info[:, i] - torch.min(element_info[:, i]) 
+        if torch.max(element_info[:, i]) != 0:
+            element_info[:, i] = element_info[:, i] / torch.max(element_info[:, i])
+
+    # convert from one hot to element names
+    for i in range(element_info.shape[0]):
+        element_list.append(elem_names[torch.argmax(element_info[i])])
+
+    return element_list
