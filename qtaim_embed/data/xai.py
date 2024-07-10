@@ -1,6 +1,68 @@
 from copy import deepcopy
 import numpy as np 
 import torch
+from qtaim_embed.utils.grapher import get_bond_list_from_heterograph, get_fts_from_het_graph, construct_homograph_blank, get_element_list_heterograph
+
+def get_networkx_explaination_graph(edge_mask, g, dataset, filter=False):
+    """
+    Utility to convert a heterograph to a networkx graph with edge weights.
+    Takes: 
+        - edge mask(dict)
+        - heterograph(dgl HeteroGraph)
+        - dataset (HeteroGraphGraphLabelDataset)
+        - filter (bool) - whether to filter out edges and nodes with low importance
+    Returns: 
+        - nxg (networkx graph)
+        - node_label_dict (dict)
+        - node_weights (np.array)
+    """
+
+    # get bonds
+    bonds, _ = get_bond_list_from_heterograph(g)
+    # nodes from bonds
+    nodes = list(set(bonds.flatten()))
+    # get edge mask, standardize and process
+    edge_mask_z = convert_edge_mask_to_z_scores(edge_mask)
+    # process to only consider the most important features
+    edge_mask_z_processed = process_edge_mask(edge_mask_z, scale=True)
+    # elements from heterographs
+    elems_in_graph = get_element_list_heterograph(g, dataset)
+    # get blank template
+    homo_graph_empty = construct_homograph_blank(nodes, bonds)
+    # add processed data
+    homo_graph_empty.ndata["feats"] = edge_mask_z_processed["atom"]
+    homo_graph_empty.edata["feats"] =  edge_mask_z_processed["bond"]
+    # convert to networkx 
+    nxg = homo_graph_empty.to_networkx(node_attrs=["feats"], edge_attrs=["feats"])
+
+    # add global feat node to nx 
+    node_label_dict = {
+        i : elems_in_graph[i] for i in range(len(nxg.nodes()))
+    }
+    nxg.add_node(len(nxg.nodes()), feats = edge_mask_z_processed["global"])
+    node_label_dict[len(nxg.nodes()) - 1] = "global"
+    # process weights for scaling/visualization 
+
+    node_weights = np.array([float(v["feats"]) for k, v in dict(nxg.nodes(data=True)).items()])
+
+    shift = 0.0001
+    if filter:
+        # filter 
+        filter_inds_bool = node_weights > node_weights.min() + 0.5
+        e_large_vals = [[source, dest] for ind, (source, dest, d) in enumerate(nxg.edges(data=True)) if d["feats"] > 0.0]
+        nodes_important_bonds = list(set([item for row in e_large_vals for item in row]))
+        nodes_important_bonds.append([])
+        
+        filter_inds = [i for i, tf in enumerate(filter_inds_bool) if tf == False and i not in nodes_important_bonds]
+        nxg.remove_nodes_from(filter_inds)
+        node_weights = np.array([i for ind, i in enumerate(node_weights) if int(ind) not in filter_inds]) 
+        node_label_dict = {k:v for k, v in node_label_dict.items() if int(k) not in filter_inds}
+        shift = 0.01
+    
+    
+    node_weights = node_weights - node_weights.min() + shift
+
+    return nxg, node_label_dict, node_weights
 
 def get_labelled_importance(feat_mask, dataset):
     """
@@ -29,18 +91,24 @@ def get_labelled_importance(feat_mask, dataset):
     return feature_imp
 
 
-def get_top_features(feature_importance, n=10):
+def get_top_features(feature_importance, n=10, filter_below_zero=False):
     """
     Get the top n features for each level of the model
     Takes:
     - feature_importance: dict of dicts with feature importance for each level
     - n: number of top features to return
+    - filter_below_zero: whether to filter out features with importance below zero
     Returns:
     - top_features: dict of dicts with top n features for each level
     """
     top_features = {}
     for key in feature_importance.keys():
+
         top_features[key] = {k: v for k, v in sorted(feature_importance[key].items(), key=lambda item: item[1], reverse=True)[:n]}
+    
+    if filter_below_zero:
+        top_features = {key: {k: v for k, v in top_features[key].items() if v > 0} for key in top_features}
+    
     return top_features
 
 

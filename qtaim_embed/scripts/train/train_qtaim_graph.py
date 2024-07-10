@@ -60,7 +60,8 @@ if __name__ == "__main__":
     if use_lmdb:
         print("using lmdbs!")
         dm = LMDBDataModule(config=config)
-        config["model"]["target_dict"]["global"] = {"global": ["value"]}
+        #config["model"]["target_dict"]["global"] = {"global": ["value"]}
+        config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
 
     else:
         # dataset
