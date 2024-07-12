@@ -75,6 +75,7 @@ class TrainingObject:
 
             dm_config = {
                 "dataset": {
+                    "verbose": self.sweep_config["parameters"]["verbose"]["values"][0],
                     "allowed_ring_size": self.sweep_config["parameters"][
                         "allowed_ring_size"
                     ]["values"][0],
@@ -90,7 +91,7 @@ class TrainingObject:
                     ][0],
                     "self_loop": self.sweep_config["parameters"]["self_loop"]["values"][0],
                     "extra_keys": self.extra_keys,
-                    "target_list": self.sweep_config["parameters"]["target_list"]["values"][
+                    "target_dict": self.sweep_config["parameters"]["target_dict"]["values"][
                         0
                     ],
                     "extra_dataset_info": self.sweep_config["parameters"][
@@ -123,7 +124,6 @@ class TrainingObject:
                         "persistent_workers"
                     ]["values"][0],
                     "pin_memory": self.sweep_config["parameters"]["pin_memory"]["values"][0],
-
                 },
             }
             print("config settings:")
@@ -143,10 +143,8 @@ class TrainingObject:
         config["model"]["atom_feature_size"] = self.feature_size["atom"]
         config["model"]["bond_feature_size"] = self.feature_size["bond"]
         config["model"]["global_feature_size"] = self.feature_size["global"]
-        if self.lmdbs:
-            config["model"]["target_dict"]["global"] = {"global": ["value"]}
-        else:
-            config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
+        config["model"]["target_dict"] = config["dataset"]["target_dict"]
+        
         print("config settings:")
         print("atom_feature_size: {}".format(config["model"]["atom_feature_size"]))
         print("bond_feature_size: {}".format(config["model"]["bond_feature_size"]))
@@ -164,7 +162,6 @@ class TrainingObject:
                     "resid_n_graph_convs": init_config["resid_n_graph_convs"],
                     #"target_dict": target_dict,  # check
                     "conv_fn": init_config["conv_fn"],
-                    "global_pooling_fn": init_config["global_pooling_fn"],
                     "dropout": init_config["dropout"],
                     "batch_norm": init_config["batch_norm"],
                     "activation": init_config["activation"],
@@ -180,18 +177,9 @@ class TrainingObject:
                     "lr_scale_factor": init_config["lr_scale_factor"],
                     "loss_fn": init_config["loss_fn"],
                     "embedding_size": init_config["embedding_size"],
-                    "fc_hidden_size_1": init_config["fc_hidden_size_1"],
-                    "fc_dropout": init_config["fc_dropout"],
-                    "shape_fc": init_config["shape_fc"],
-                    "fc_num_layers": init_config["fc_num_layers"],
-                    "fc_batch_norm": init_config["fc_batch_norm"],
                     "lstm_iters": init_config["lstm_iters"],
                     "lstm_layers": init_config["lstm_layers"],
-                    "output_dims": init_config["output_dims"],  # check
-                    "pooling_ntypes": init_config["pooling_ntypes"],  # check
-                    "pooling_ntypes_direct": init_config[
-                        "pooling_ntypes_direct"
-                    ],  # check
+                    #"output_dims": init_config["output_dims"],  # check
                     "num_heads_gat": init_config["num_heads_gat"],
                     "dropout_feat_gat": init_config["dropout_feat_gat"],
                     "dropout_attn_gat": init_config["dropout_attn_gat"],
@@ -221,7 +209,7 @@ class TrainingObject:
                     config["dataset"]["val_lmdb"] = init_config["val_lmdb"]
                 if "test_lmdb" in init_config:
                     config["dataset"]["test_lmdb"] = init_config["test_lmdb"]
-                config["model"]["target_dict"] = {"global": ["value"]}
+                #config["model"]["target_dict"] = {"global": ["value"]}
 
             else: 
             
@@ -233,7 +221,7 @@ class TrainingObject:
                     "allowed_ring_size": init_config["allowed_ring_size"],
                     "self_loop": init_config["self_loop"],
                     "extra_keys": init_config["extra_keys"],
-                    "target_list": init_config["target_list"],
+                    "target_dict": init_config["target_dict"],
                     "extra_dataset_info": init_config["extra_dataset_info"],
                     "debug": init_config["debug"],
                     "log_scale_features": init_config["log_scale_features"],
@@ -242,9 +230,11 @@ class TrainingObject:
                     "standard_scale_targets": init_config["standard_scale_targets"],
                     "val_prop": init_config["val_prop"],
                     "test_prop": init_config["test_prop"],
-                    "seed": init_config["seed"]
+                    "seed": init_config["seed"],
+                    "verbose": init_config["verbose"],
+                    "train_batch_size": init_config["train_batch_size"],
                 }
-                config["model"]["target_dict"] = {"global": init_config["target_list"]}
+                config["model"]["target_dict"] = init_config["target_dict"]
 
             # make helper to convert from old config to new config
 
