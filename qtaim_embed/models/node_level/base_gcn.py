@@ -75,9 +75,7 @@ class GCNNodePred(pl.LightningModule):
         super().__init__()
         self.learning_rate = lr
 
-        output_dims = 0
-        for k, v in target_dict.items():
-            output_dims += len(v)
+
         
         if "atom" not in target_dict or target_dict["atom"] == []:
             target_dict["atom"] = [None]
@@ -85,6 +83,13 @@ class GCNNodePred(pl.LightningModule):
             target_dict["bond"] = [None]
         if "global" not in target_dict or target_dict["global"] == []:
             target_dict["global"] = [None]
+
+        output_dims = 0
+        #print("target dict", target_dict)
+        for k, v in target_dict.items():
+            if v != [None]:
+                output_dims += len(v)
+
 
         assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
             "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
@@ -331,7 +336,7 @@ class GCNNodePred(pl.LightningModule):
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
-        
+        #print("lmdb batch", batch_graph, batch_label)
         max_nodes = -1
         for target_type, target_list in self.hparams.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
