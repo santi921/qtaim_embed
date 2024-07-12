@@ -79,11 +79,11 @@ class GCNNodePred(pl.LightningModule):
         for k, v in target_dict.items():
             output_dims += len(v)
         
-        if "atom" not in target_dict:
+        if "atom" not in target_dict or target_dict["atom"] == []:
             target_dict["atom"] = [None]
-        if "bond" not in target_dict:
+        if "bond" not in target_dict or target_dict["bond"] == []:
             target_dict["bond"] = [None]
-        if "global" not in target_dict:
+        if "global" not in target_dict or target_dict["global"] == []:
             target_dict["global"] = [None]
 
         assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
@@ -421,7 +421,7 @@ class GCNNodePred(pl.LightningModule):
         r2, mae, mse = self.compute_metrics(mode="train")
         # get epoch number
         if self.trainer.current_epoch == 0:
-            self.log("val_mae", 10**10, prog_bar=False)
+            self.log("val_mae", 10000000.0, prog_bar=False, sync_dist=True)
         self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=True)
