@@ -26,13 +26,13 @@ def test_save_load():
 
     model_config = get_default_graph_level_config()
     model_config["model"]["max_epochs"] = 50
-    model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size[
         "atom"
     ]
-    model_config["model"]["bond_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["bond_feature_size"] = dataset_graph_level.feature_size[
         "bond"
     ]
-    model_config["model"]["global_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["global_feature_size"] = dataset_graph_level.feature_size[
         "global"
     ]
     model_config["model"]["target_dict"]["global"] = dataset_graph_level.target_dict[
@@ -63,7 +63,8 @@ def test_save_load():
     model_reload = load_graph_level_model_from_config(reload_config["model"])
 
 
-# test_save_load()
+
+
 def test_manual_eval_graph_level_classifier():
     dataset_single, dataset_multi = get_datasets_graph_level_classifier(
         log_scale_features=True, standard_scale_features=True
@@ -74,9 +75,9 @@ def test_manual_eval_graph_level_classifier():
     )
 
     model_config = get_default_graph_level_config()
-    model_config["model"]["atom_feature_size"] = dataset_single.feature_size()["atom"]
-    model_config["model"]["bond_feature_size"] = dataset_single.feature_size()["bond"]
-    model_config["model"]["global_feature_size"] = dataset_single.feature_size()[
+    model_config["model"]["atom_feature_size"] = dataset_single.feature_size["atom"]
+    model_config["model"]["bond_feature_size"] = dataset_single.feature_size["bond"]
+    model_config["model"]["global_feature_size"] = dataset_single.feature_size[
         "global"
     ]
     model_config["model"]["target_dict"]["global"] = dataset_single.target_dict[
@@ -136,17 +137,16 @@ def test_manual_eval_graph_level():
     data_loader = DataLoaderMoleculeGraphTask(
         dataset_graph_level, batch_size=len(dataset_graph_level.graphs), shuffle=False
     )
-    # print(dataset_graph_level.feature_size())
-    # print(dataset_graph_level.target_dict)
+    
 
     model_config = get_default_graph_level_config()
-    model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size[
         "atom"
     ]
-    model_config["model"]["bond_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["bond_feature_size"] = dataset_graph_level.feature_size[
         "bond"
     ]
-    model_config["model"]["global_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["global_feature_size"] = dataset_graph_level.feature_size[
         "global"
     ]
     model_config["model"]["target_dict"]["global"] = dataset_graph_level.target_dict[
@@ -215,13 +215,13 @@ def test_multi_task():
 
     model_config = get_default_graph_level_config()
     model_config["model"]["max_epochs"] = 50
-    model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size[
         "atom"
     ]
-    model_config["model"]["bond_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["bond_feature_size"] = dataset_graph_level.feature_size[
         "bond"
     ]
-    model_config["model"]["global_feature_size"] = dataset_graph_level.feature_size()[
+    model_config["model"]["global_feature_size"] = dataset_graph_level.feature_size[
         "global"
     ]
     model_config["model"]["target_dict"]["global"] = dataset_graph_level.target_dict[

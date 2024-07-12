@@ -107,6 +107,7 @@ def test_node_datamodule():
     assert "charge one hot" in global_feats, "Charge not in global feats"
     assert "spin one hot" in global_feats, "Spin not in global feats"
 
+test_node_datamodule()
 
 def test_graph_classifier_datamodule():
     dm = QTAIMGraphTaskDataModule()

@@ -10,11 +10,8 @@ from copy import deepcopy
 
 from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset
 from qtaim_embed.utils.data import train_validation_test_split
-from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
-#from bondnet.data.dataset import ReactionDatasetGraphs
-#from bondnet.utils import seed_torch
-#from bondnet.model.training_utils import get_grapher
-#from bondnet.data.dataset import train_validation_test_split
+from qtaim_embed.core.dataset import HeteroGraphNodeLabelDataset
+
 
 
 
@@ -72,7 +69,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    dataset =  HeteroGraphGraphLabelDataset(
+    dataset =  HeteroGraphNodeLabelDataset(
         file=dataset_loc,
         allowed_ring_size=config["dataset"]["allowed_ring_size"],
         allowed_charges=config["dataset"]["allowed_charges"],
@@ -80,7 +77,7 @@ if __name__ == "__main__":
         self_loop=config["dataset"]["self_loop"],
         extra_keys=config["dataset"]["extra_keys"],
         element_set=config["dataset"]["element_set"],
-        target_list=config["dataset"]["target_list"],
+        target_dict=config["dataset"]["target_dict"],
         extra_dataset_info=config["dataset"]["extra_dataset_info"],
         debug=debug,
         log_scale_features=config["dataset"]["log_scale_features"],
@@ -105,7 +102,7 @@ if __name__ == "__main__":
             print("training set size: ", len(train_dataset))
             print("validation set size: ", len(val_dataset))
             print("test set size: ", len(test_dataset))
-
+            print(dataset.feature_names)
             construct_lmdb_and_save_dataset(dataset, lmdb_dir)
             construct_lmdb_and_save_dataset(val_dataset, lmdb_dir+"/val/")
             construct_lmdb_and_save_dataset(train_dataset, lmdb_dir+"/train/")

@@ -109,8 +109,8 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
 
                 self.prepare_tf = True
                 return (
-                    self.train_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.train_dataset.feature_names,
+                    self.train_dataset.feature_size,
                 )
 
             if stage == "test" or stage == "predict":
@@ -140,20 +140,20 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                 )
                 self.prepare_tf = True
                 return (
-                    self.test_dataset.feature_names(),
-                    self.test_dataset.feature_size(),
+                    self.test_dataset.feature_names,
+                    self.test_dataset.feature_size,
                 )
 
         else:
             if stage == "fit" or stage is None:
                 return (
-                    self.train_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.train_dataset.feature_names,
+                    self.train_dataset.feature_size,
                 )
             else:
                 return (
-                    self.test_dataset.feature_names(),
-                    self.test_dataset.feature_size(),
+                    self.test_dataset.feature_names,
+                    self.test_dataset.feature_size,
                 )
 
     def train_dataloader(self):
@@ -267,8 +267,8 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     
                 self.prepare_tf = True
                 return (
-                    self.train_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.train_dataset.feature_names,
+                    self.train_dataset.feature_size,
                 )
 
             if stage == "test" or stage == "predict":
@@ -299,25 +299,25 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                 )
 
                 print("test set size: ", len(self.test_dataset))
-                self.test_dataset.feature_size()
-                self.test_dataset.feature_names()
+                self.test_dataset.feature_size
+                self.test_dataset.feature_names
                 
                 self.prepare_tf = True
                 return (
-                    self.test_dataset.feature_names(),
-                    self.test_dataset.feature_size(),
+                    self.test_dataset.feature_names,
+                    self.test_dataset.feature_size,
                 )
 
         else:
             if stage == "fit" or stage is None:
                 return (
-                    self.train_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.train_dataset.feature_names,
+                    self.train_dataset.feature_size,
                 )
             else:
                 return (
-                    self.test_dataset.feature_names(),
-                    self.test_dataset.feature_size(),
+                    self.test_dataset.feature_names,
+                    self.test_dataset.feature_size,
                 )
 
     def train_dataloader(self):
@@ -442,8 +442,8 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                 self.prepare_tf = True
                 
                 return (
-                    self.train_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.train_dataset.feature_names,
+                    self.train_dataset.feature_size,
                 )
 
             if stage == "test" or stage == "predict":
@@ -471,20 +471,20 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
 
                 self.prepare_tf = True
                 return (
-                    self.test_dataset.feature_names(),
-                    self.test_dataset.feature_size(),
+                    self.test_dataset.feature_names,
+                    self.test_dataset.feature_size,
                 )
 
         else:
             if stage == "fit" or stage is None:
                 return (
-                    self.train_dataset.feature_names(),
-                    self.train_dataset.feature_size(),
+                    self.train_dataset.feature_names,
+                    self.train_dataset.feature_size,
                 )
             else:
                 return (
-                    self.test_dataset.feature_names(),
-                    self.test_dataset.feature_size(),
+                    self.test_dataset.feature_names,
+                    self.test_dataset.feature_size,
                 )
 
 

@@ -110,8 +110,8 @@ def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
     """
     
     if type(dataset) == Subset:
-        feature_size = dataset.dataset.feature_size()
-        feature_name = dataset.dataset.feature_names()
+        feature_size = dataset.dataset.feature_size
+        feature_name = dataset.dataset.feature_names
         element_set = dataset.dataset.element_set
         log_scale_features = dataset.dataset.log_scale_features
         allowed_charges = dataset.dataset.allowed_charges
@@ -124,8 +124,8 @@ def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
 
 
     else:
-        feature_size = dataset.feature_size()
-        feature_name = dataset.feature_names()
+        feature_size = dataset.feature_size
+        feature_name = dataset.feature_names
         element_set = dataset.element_set
         log_scale_features = dataset.log_scale_features
         allowed_charges = dataset.allowed_charges
