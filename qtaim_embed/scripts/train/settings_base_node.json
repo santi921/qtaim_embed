@@ -1,0 +1,96 @@
+{
+    "dataset": {
+        "allowed_ring_size": [
+            3,
+            4,
+            5,
+            6
+        ],
+        "train_batch_size": 128,
+        "allowed_charges": null,
+        "allowed_spins": null,
+        "self_loop": true,
+        "per_atom": false,
+        "element_set": [],
+        "val_prop": 0.1,
+        "test_prop": 0.1,
+        "debug": false,
+        "seed": 42,
+        "num_workers": 4,
+        "extra_dataset_info": null,
+        "log_scale_features": false,
+        "log_scale_targets": false,
+        "standard_scale_features": true,
+        "standard_scale_targets": true,
+        "extra_keys": {
+            "atom": [
+                "extra_feat_atom_esp_total"
+            ],
+            "bond": [
+                "bond_length",
+                "extra_feat_bond_esp_total",
+                "extra_feat_bond_ellip_e_dens",
+                "extra_feat_bond_eta"
+            ]
+        },
+        "target_dict": {
+            "atom": [
+                "extra_feat_atom_esp_total"
+            ],
+            "bond": [
+                "extra_feat_bond_esp_total",
+                "extra_feat_bond_ellip_e_dens",
+                "extra_feat_bond_eta"
+            ],
+            "global": []
+        },
+        "verbose": false
+    },
+    "model": {
+        "conv_fn": "ResidualBlock",
+        "dropout": 0.2,
+        "initializer": "kaiming",
+        "batch_norm_tf": true,
+        "activation": "ReLU",
+        "bias": true,
+        "norm": "both",
+        "aggregate": "sum",
+        "n_conv_layers": 6,
+        "lr": 0.01,
+        "weight_decay": 5e-05,
+        "lr_plateau_patience": 25,
+        "lr_scale_factor": 0.5,
+        "scheduler_name": "reduce_on_plateau",
+        "loss_fn": "mse",
+        "resid_n_graph_convs": 3,
+        "embedding_size": 25,
+        "lstm_iters": 15,
+        "lstm_layers": 2,
+        "num_heads": 2,
+        "feat_drop": 0.1,
+        "attn_drop": 0.1,
+        "residual": false,
+        "num_heads_gat": 2,
+        "dropout_feat_gat": 0.1,
+        "dropout_attn_gat": 0.1,
+        "hidden_size_gat": 64,
+        "residual_gat": true,
+        "batch_norm": true,
+        "fc_hidden_size_1": 1024,
+        "fc_num_layers": 2,
+        "restore": false,
+        "max_epochs": 1000,
+        "extra_stop_patience": 10
+    },
+    "optim": {
+        "num_devices": 1,
+        "num_nodes": 1,
+        "gradient_clip_val": 10.0,
+        "precision": 32,
+        "strategy": "auto",
+        "accumulate_grad_batches": 1,
+        "num_workers": 4,
+        "pin_memory": true,
+        "persistent_workers": true
+    }
+}
