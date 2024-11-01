@@ -114,9 +114,9 @@ def get_default_graph_level_config():
             "log_scale_targets": False,
             "standard_scale_features": True,
             "standard_scale_targets": True,
-            "val_prop": 0.15,
+            "val_prop": 0.25,
             "edge_dropout": 0.0,  
-            "test_prop": 0.1,
+            "test_prop": 0.25,
             "seed": 42,
             "train_batch_size": 128,
             "test_dataset_loc": None,
@@ -163,16 +163,19 @@ def get_default_graph_level_config():
             "pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
+            'initializer': 'kaiming'
         },
         "optim": {
             "num_devices": 1,
             "num_nodes": 1,
+            "num_workers": 0,
             "gradient_clip_val": 5.0,
             "strategy": "auto",
             "precision": "bf16",
-            "accumulate_grad_batches": 3,
+            "accumulate_grad_batches": 1,
             "pin_memory": False,
             "persistent_workers": False, 
+            'train_batch_size': 2,
         },
     }
 

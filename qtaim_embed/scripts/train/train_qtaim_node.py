@@ -21,21 +21,21 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 if __name__ == "__main__":
+    #print("here")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--on_gpu", default=False, action="store_true")
-    parser.add_argument("--debug", default=False, action="store_true")
-    parser.add_argument("-project_name", type=str, default="qtaim_embed_test")
-    parser.add_argument("-dataset_loc", type=str, default=None)
-    parser.add_argument("-dataset_test_loc", type=str, default=None)
-    parser.add_argument("-log_save_dir", type=str, default="./test_logs/")
     parser.add_argument("-config", type=str, default=None)
-    parser.add_argument("-wandb_entity", type=str, default="santi")
+    
+    parser.add_argument("--debug", action="store_true")
     parser.add_argument("--use_lmdb", default=False, action="store_true")
-
+    parser.add_argument("--log_save_dir", type=str, default="./test_logs/")
+    parser.add_argument("--wandb_entity", type=str, default="santi")
+    parser.add_argument("--project_name", type=str, default="qtaim_embed_test")
+    parser.add_argument("--dataset_loc", type=str, default=None)
+    parser.add_argument("--dataset_test_loc", type=str, default=None)
+    
 
     args = parser.parse_args()
 
-    on_gpu = bool(args.on_gpu)
     debug = bool(args.debug)
     use_lmdb = bool(args.use_lmdb)
     project_name = args.project_name
@@ -69,9 +69,9 @@ if __name__ == "__main__":
         dm = LMDBDataModule(config=config)
         
     else:
+        assert dataset_loc is not None, "dataset_loc must be provided if not using lmdb"
         # dataset
-        if dataset_loc is not None:
-            config["dataset"]["train_dataset_loc"] = dataset_loc
+        config["dataset"]["train_dataset_loc"] = dataset_loc
         extra_keys = config["dataset"]["extra_keys"]
 
         if debug:
@@ -98,14 +98,12 @@ if __name__ == "__main__":
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
-    # config["dataset"]["feature_names"] = feature_names
 
     print(">" * 40 + "config_settings" + "<" * 40)
     for k, v in config.items():
         print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
 
     print(">" * 40 + "config_settings" + "<" * 40)
-
     model = load_node_level_model_from_config(config["model"])
     print("model constructed!")
 
