@@ -63,8 +63,6 @@ def test_save_load():
     model_reload = load_graph_level_model_from_config(reload_config["model"])
 
 
-
-
 def test_manual_eval_graph_level_classifier():
     dataset_single, dataset_multi = get_datasets_graph_level_classifier(
         log_scale_features=True, standard_scale_features=True
@@ -204,7 +202,7 @@ def test_manual_eval_graph_level():
 
 def test_multi_task():
     dataset_graph_level = get_dataset_graph_level_multitask(
-        log_scale_features=True,
+        log_scale_features=True, 
         log_scale_targets=False,
         standard_scale_features=True,
         standard_scale_targets=True,
@@ -246,3 +244,11 @@ def test_multi_task():
     trainer.fit(model, data_loader)
 
 
+def test_manual_eval_node_pred():
+    # TODO: implement
+    pass
+
+
+def test_manual_eval_link_pred():
+    # TODO: implement
+    pass

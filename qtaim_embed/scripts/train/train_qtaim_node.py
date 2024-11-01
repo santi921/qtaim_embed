@@ -67,8 +67,7 @@ if __name__ == "__main__":
     if use_lmdb:
         print("using lmdbs!")
         dm = LMDBDataModule(config=config)
-        config["model"]["target_dict"]["global"] = {"global": ["value"]}
-
+        
     else:
         # dataset
         if dataset_loc is not None:

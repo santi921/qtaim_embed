@@ -230,6 +230,7 @@ class GCNNodePred(pl.LightningModule):
                 )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
+        self.target_dict = target_dict
 
         self.loss = self.loss_function()
 
@@ -348,10 +349,11 @@ class GCNNodePred(pl.LightningModule):
                 labels_list.append(labels)
         logits_list = [
             F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in logits_list
-        ]  # this does the unify node size
+        ]  # unify node size
         labels_list = [
             F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in labels_list
-        ]  # this does the unify node size
+        ]  # unify node size
+
         logits = torch.cat(logits_list, dim=1)
         labels = torch.cat(labels_list, dim=1)
 
@@ -427,9 +429,26 @@ class GCNNodePred(pl.LightningModule):
         # get epoch number
         if self.trainer.current_epoch == 0:
             self.log("val_mae", 10000000.0, prog_bar=False, sync_dist=True)
+
         self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        
+        for target_type, target_list in self.target_dict.items():
+            if target_list != [None] and len(target_list) > 0:
+                for i, target in enumerate(target_list):
+                    self.log(
+                        f"train_r2_{target_type}_{target}",
+                        r2[i],
+                        prog_bar=False,
+                        sync_dist=True,
+                    )
+                    self.log(
+                        f"train_mae_{target_type}_{target}",
+                        mae[i],
+                        prog_bar=False,
+                        sync_dist=True,
+                    )
 
     def on_validation_epoch_end(self):
         """
@@ -441,6 +460,24 @@ class GCNNodePred(pl.LightningModule):
         self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=True)
 
+        # log each target r2 and mae
+        for target_type, target_list in self.target_dict.items():
+            if target_list != [None] and len(target_list) > 0:
+                for i, target in enumerate(target_list):
+                    self.log(
+                        f"val_r2_{target_type}_{target}",
+                        r2[i],
+                        prog_bar=False,
+                        sync_dist=True,
+                    )
+                    self.log(
+                        f"val_mae_{target_type}_{target}",
+                        mae[i],
+                        prog_bar=False,
+                        sync_dist=True,
+                    )
+                
+
     def on_test_epoch_end(self):
         """
         Test epoch end
@@ -449,6 +486,22 @@ class GCNNodePred(pl.LightningModule):
         self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
+
+        for target_type, target_list in self.target_dict.items():
+            if target_list != [None] and len(target_list) > 0:
+                for i, target in enumerate(target_list):
+                    self.log(
+                        f"test_r2_{target_type}_{target}",
+                        r2[i],
+                        prog_bar=False,
+                        sync_dist=True,
+                    )
+                    self.log(
+                        f"test_mae_{target_type}_{target}",
+                        mae[i],
+                        prog_bar=False,
+                        sync_dist=True,
+                    )
 
     def update_metrics(self, pred, target, mode):
         """
@@ -546,21 +599,21 @@ class GCNNodePred(pl.LightningModule):
         pred_dict = {}
         label_dict = {}
 
-        for target_type, target_list in self.hparams.target_dict.items():
+
+        for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
             
                 r2_eval[target_type] = MultioutputWrapper(
-                    torchmetrics.R2Score(), num_outputs=len(self.hparams.target_dict[target_type])
+                    torchmetrics.R2Score(), num_outputs=len(self.target_dict[target_type])
                 )
                 mae_eval[target_type] = MultioutputWrapper(
-                    torchmetrics.MeanAbsoluteError(), num_outputs=len(self.hparams.target_dict[target_type])
+                    torchmetrics.MeanAbsoluteError(), num_outputs=len(self.target_dict[target_type])
                 )
                 pred_dict[target_type] = []
                 label_dict[target_type] = []
 
         #batch_graph, batch_label = batch
         for batch_graph, batched_label in test_dataloader:
-
             preds = self.forward(batch_graph, batch_graph.ndata["feat"])
             # detach every tensor in dictionary 
             preds_unscaled = {k: deepcopy(v.detach()) for k, v in preds.items()}
@@ -571,23 +624,20 @@ class GCNNodePred(pl.LightningModule):
                 preds_unscaled = scaler.inverse_feats(preds_unscaled)
 
             #max_nodes = -1
-            for target_type, target_list in self.hparams.target_dict.items():
+            for target_type, target_list in self.target_dict.items():
                 if target_list != [None] and len(target_list) > 0:
-                                
-                    #logits = preds[target_type]
-                    #labels = batched_label[target_type]
-
                     r2_eval[target_type].update(preds_unscaled[target_type], labels_unscaled[target_type])
                     mae_eval[target_type].update(preds_unscaled[target_type], labels_unscaled[target_type])
                     pred_dict[target_type].append(preds_unscaled[target_type].numpy())
                     label_dict[target_type].append(labels_unscaled[target_type].numpy())
         
-        for target_type, target_list in self.hparams.target_dict.items():
+        for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
-
                 r2_dict[target_type] = r2_eval[target_type].compute()
                 mae_dict[target_type] = mae_eval[target_type].compute()
                 pred_dict[target_type] = np.concatenate(pred_dict[target_type])
                 label_dict[target_type] = np.concatenate(label_dict[target_type])
                     
         return r2_dict, mae_dict, pred_dict, label_dict
+
+

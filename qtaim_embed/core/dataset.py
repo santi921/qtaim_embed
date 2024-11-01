@@ -31,7 +31,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         allowed_spins=None,
         self_loop=True,
         size=None,
-        filter_self_bonds=True,
+        filter_self_bonds=False,
         debug=False,
         extra_keys={
             "atom": [
@@ -140,6 +140,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.target_dict = target_dict
         self.extra_dataset_info = extra_dataset_info
         self.verbose = verbose
+        self.self_loop = self_loop
+        
 
         self.load()
         print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
@@ -433,7 +435,11 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
+            filter_self_bonds=filter_self_bonds
+
         )
+
+
         # legacy used if element_set == None:      
         #if element_set == None:            
         if element_set == [] or element_set == None: 

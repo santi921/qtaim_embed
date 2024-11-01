@@ -24,6 +24,7 @@ class HeteroCompleteGraphFromMolWrapper:
         a2b = []
         b2a = []
         if num_bonds == 0:
+            print("num bonds 1 examples!!!!!")
             num_bonds = 1
             a2b = [(0, 0)]
             b2a = [(0, 0)]
@@ -36,7 +37,7 @@ class HeteroCompleteGraphFromMolWrapper:
                 v = bonds[b][1]
                 b2a.extend([[b, u], [b, v]])
                 a2b.extend([[u, b], [v, b]])
-
+        
         a2g = [(a, 0) for a in range(num_atoms)]
         g2a = [(0, a) for a in range(num_atoms)]
         b2g = [(b, 0) for b in range(num_bonds)]
@@ -63,6 +64,7 @@ class HeteroCompleteGraphFromMolWrapper:
             )
 
         g = dgl.heterograph(edges_dict)
+        #g = dgl.add_self_loop(g)
         # add name
         g.mol_name = mol.id
 

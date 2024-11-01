@@ -142,8 +142,8 @@ def get_element_list_heterograph(g, dataset):
         element_list: list of elements
     """
 
-    elem_name_ind = [i for i in range(len(dataset.feature_names()["atom"])) if "chemical_symbol" in dataset.feature_names()["atom"][i]]
-    elem_names = [i.split("_")[-1] for ind, i in enumerate(dataset.feature_names()["atom"]) if "chemical_symbol" in dataset.feature_names()["atom"][ind]]
+    elem_name_ind = [i for i in range(len(dataset.feature_names["atom"])) if "chemical_symbol" in dataset.feature_names["atom"][i]]
+    elem_names = [i.split("_")[-1] for ind, i in enumerate(dataset.feature_names["atom"]) if "chemical_symbol" in dataset.feature_names["atom"][ind]]
     element_info = g.ndata['feat']['atom']
     element_info = element_info[:, elem_name_ind]
     element_list = []
