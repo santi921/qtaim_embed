@@ -45,7 +45,18 @@ if __name__ == "__main__":
     wandb_entity = args.wandb_entity
     config = args.config
 
+    # print options 
+    print("debug: ", debug)
+    print("use_lmdb: ", use_lmdb)
+    print("project_name: ", project_name)
+    print("dataset_loc: ", dataset_loc)
+    print("dataset_test_loc: ", dataset_test_loc)
+    print("log_save_dir: ", log_save_dir)
+    print("wandb_entity: ", wandb_entity)
+    print("config: ", config)
+    
     if config is None:
+        print("...using default config!")
         config = get_default_node_level_config()
     else:
         config = json.load(open(config, "r"))
@@ -65,7 +76,7 @@ if __name__ == "__main__":
 
 
     if use_lmdb:
-        print("using lmdbs!")
+        print("...using lmdbs!")
         dm = LMDBDataModule(config=config)
         
     else:
@@ -128,6 +139,10 @@ if __name__ == "__main__":
             monitor="val_loss", min_delta=0.00, patience=config["model"]["extra_stop_patience"], verbose=False, mode="min"
         )
 
+        dm.setup(stage='fit')
+        val_dl = dm.train_dataloader()
+        _, _ = next(iter(val_dl))
+
         trainer = pl.Trainer(
             max_epochs=config["model"]["max_epochs"],
             accelerator="gpu",
@@ -152,9 +167,12 @@ if __name__ == "__main__":
         # log dataset and optim settings from config 
         run.config.update(config["dataset"])
         run.config.update(config["optim"])
-
+        
+        print("dataset and optim settings logged!")
+        print("fitting model!")
         trainer.fit(model, dm)
         
+        print("model fitted, testing!")
         if use_lmdb:
             if "test_lmdb" in config["dataset"]:
                 trainer.test(model, dm)
