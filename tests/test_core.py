@@ -98,7 +98,6 @@ def test_node_datamodule():
     config["dataset"]["edge_dropout"] = None
     config["dataset"]["element_set"] = []
 
-    print(config)
     dm = QTAIMNodeTaskDataModule(config=config)
     # print(dm.config)
     feat_name, feature_size = dm.prepare_data("fit")
@@ -106,7 +105,6 @@ def test_node_datamodule():
     assert "charge one hot" in global_feats, "Charge not in global feats"
     assert "spin one hot" in global_feats, "Spin not in global feats"
 
-test_node_datamodule()
 
 def test_graph_classifier_datamodule():
     dm = QTAIMGraphTaskDataModule()
@@ -147,4 +145,3 @@ def test_graph_datamodule():
     assert val_dl_2_size == 25, "Val size mismatch"
 
 
-test_graph_datamodule()
