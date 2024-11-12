@@ -136,7 +136,6 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
-
     elif hparams.conv_fn == "ResidualBlock":
         atom_out = hparams.atom_input_size
         bond_out = hparams.bond_input_size
@@ -363,7 +362,6 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
-
     elif hparams.conv_fn == "GATConv":
         atom_out = hparams.hidden_size
         bond_out = hparams.hidden_size
@@ -373,16 +371,16 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
         global_in = hparams.global_input_size
         num_heads = hparams.num_heads
 
-        if layer_ind > 0: 
-            atom_in = hparams.hidden_size 
+        if layer_ind > 0:
+            atom_in = hparams.hidden_size
             bond_in = hparams.hidden_size
-            global_in = hparams.hidden_size 
+            global_in = hparams.hidden_size
 
-            if num_heads > 1: 
+            if num_heads > 1:
                 atom_in = hparams.hidden_size * num_heads
-                bond_in = hparams.hidden_size * num_heads 
-                global_in = hparams.hidden_size * num_heads 
-        else: 
+                bond_in = hparams.hidden_size * num_heads
+                global_in = hparams.hidden_size * num_heads
+        else:
             if embedding_in:
                 atom_in = hparams.embedding_size
                 bond_in = hparams.embedding_size
@@ -390,11 +388,10 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
 
         if layer_ind == hparams.n_conv_layers - 1:
             num_heads = 1
-            
 
-            #atom_out = hparams.embedding_size
-            #bond_out = hparams.embedding_size
-            #global_out = hparams.embedding_size
+            # atom_out = hparams.embedding_size
+            # bond_out = hparams.embedding_size
+            # global_out = hparams.embedding_size
 
         layer_args["a2b"] = {
             "in_feats": atom_in,
@@ -503,7 +500,6 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "bias": hparams.bias,
             "activation": activation,
         }
-        
 
     return layer_args
 
@@ -520,18 +516,19 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
     ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
 
     layer_args = {}
+
     if hparams.conv_fn == "GraphConvDropoutBatch":
 
         if embedding_in:
             in_feats = hparams.embedding_size
             out = hparams.embedding_size
-        else: 
+        else:
             in_feats = hparams.input_size
             out = hparams.input_size
-        
+
         if layer_ind == hparams.n_conv_layers - 1:
             out = 1
-            
+
         layer_args["conv"] = {
             "in_feats": in_feats,
             "out_feats": out,
@@ -542,19 +539,16 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
             "dropout": hparams.dropout,
             "batch_norm_tf": hparams.batch_norm_tf,
         }
-
-
 
     elif hparams.conv_fn == "ResidualBlock":
 
         if embedding_in:
             in_feats = hparams.embedding_size
-        else: 
+        else:
             in_feats = hparams.input_size
 
         if layer_ind != -1:  # last residual layer has different args
             out = 1
-
 
         layer_args["conv"] = {
             "in_feats": in_feats,
@@ -567,26 +561,23 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
-
     elif hparams.conv_fn == "GATConv":
         in_feats = hparams.input_size
         num_heads = hparams.num_heads
 
-        if layer_ind > 0: 
+        if layer_ind > 0:
             in_feats = hparams.hidden_size
 
-            if num_heads > 1: 
+            if num_heads > 1:
                 in_feats = hparams.hidden_size * num_heads
 
-        else: 
+        else:
             if embedding_in:
                 in_feats = hparams.embedding_size
-
 
         if layer_ind == hparams.n_conv_layers - 1:
             num_heads = 1
             out = 1
-            
 
         layer_args["conv"] = {
             "in_feats": in_feats,
@@ -601,6 +592,104 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
         }
 
     return layer_args
+
+
+def get_link_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None):
+    assert hparams.conv_fn in [
+        "GraphConvDropoutBatch",
+        "ResidualBlock",
+        "GATConv",
+        "GraphSAGE",
+    ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
+
+    layer_args = {}
+
+    if hparams.conv_fn == "GraphConvDropoutBatch":
+
+        if embedding_in:
+            in_feats = hparams.embedding_size
+            out = hparams.embedding_size
+        else:
+            in_feats = hparams.input_size
+
+        if layer_ind == hparams.n_conv_layers - 1:
+            out = 1
+
+        layer_args["conv"] = {
+            "in_feats": in_feats,
+            "out_feats": hparams.output_size,
+            "norm": hparams.norm,
+            "bias": hparams.bias,
+            "activation": activation,
+            "allow_zero_in_degree": True,
+            "dropout": hparams.dropout,
+            "batch_norm_tf": hparams.batch_norm_tf,
+        }
+
+    elif hparams.conv_fn == "ResidualBlock":
+
+        if embedding_in:
+            in_feats = hparams.embedding_size
+        else:
+            in_feats = hparams.input_size
+
+        layer_args["conv"] = {
+            "in_feats": in_feats,
+            "out_feats": hparams.output_size,
+            "norm": hparams.norm,
+            "bias": hparams.bias,
+            "activation": activation,
+            "allow_zero_in_degree": True,
+            "dropout": hparams.dropout,
+            "batch_norm_tf": hparams.batch_norm_tf,
+        }
+
+    elif hparams.conv_fn == "GATConv":
+        in_feats = hparams.input_size
+        num_heads = hparams.num_heads
+
+        if layer_ind > 0:
+            in_feats = hparams.hidden_size
+
+            if num_heads > 1:
+                in_feats = hparams.hidden_size * num_heads
+
+        else:
+            if embedding_in:
+                in_feats = hparams.embedding_size
+
+        if layer_ind == hparams.n_conv_layers - 1:
+            num_heads = 1
+
+        layer_args["conv"] = {
+            "in_feats": in_feats,
+            "out_feats": hparams.output_size,
+            "num_heads": num_heads,
+            "feat_drop": hparams.feat_drop,
+            "attn_drop": hparams.attn_drop,
+            "residual": hparams.residual,
+            "allow_zero_in_degree": True,
+            "bias": hparams.bias,
+            "activation": activation,
+        }
+
+    elif hparams.conv_fn == "GraphSAGE":
+        in_feats = hparams.input_size
+        out_feats = hparams.input_size
+
+        if embedding_in:
+            in_feats = hparams.embedding_size
+            out_feats = hparams.embedding_size
+
+        layer_args["conv"] = {
+            "in_feats": in_feats,
+            "out_feats": out_feats,
+            "aggregator_type": hparams.aggregator_type,
+            "bias": hparams.bias,
+            "activation": activation,
+            "feat_drop": hparams.dropout,
+            "norm": hparams.batch_norm_tf,
+        }
 
 
 def link_fmt_to_node_fmt(dict_feats):

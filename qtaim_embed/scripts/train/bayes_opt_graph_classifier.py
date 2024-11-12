@@ -33,7 +33,9 @@ class TrainingObject:
 
         dm_config = {
             "dataset": {
-                "element_set": self.sweep_config["parameters"]["element_set"]["values"][0],
+                "element_set": self.sweep_config["parameters"]["element_set"]["values"][
+                    0
+                ],
                 "allowed_ring_size": self.sweep_config["parameters"][
                     "allowed_ring_size"
                 ]["values"][0],

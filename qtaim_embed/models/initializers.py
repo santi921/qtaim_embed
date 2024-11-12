@@ -1,7 +1,6 @@
 from torch import nn
 
 
-
 def xavier_init(model):
     for name, param in model.named_parameters():
         # print(name)

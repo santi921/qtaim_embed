@@ -18,7 +18,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dataset_loc", type=str, default="./qm9_test.json")
     parser.add_argument("-out_loc", type=str, default="./qm9_test_qtaim.json")
-    parser.add_argument("-out_loc_qtaim", type=str, default="./qm9_test_qtaim_feats.json")
+    parser.add_argument(
+        "-out_loc_qtaim", type=str, default="./qm9_test_qtaim_feats.json"
+    )
     parser.add_argument("-dataset_type", type=str, default="qm9")
 
     args = parser.parse_args()
@@ -43,10 +45,10 @@ def main():
     elif dataset_loc.split(".")[-1] == "json":
         df = pd.read_json(dataset_loc)
 
-    if dataset_type == "qm8": 
+    if dataset_type == "qm8":
         translate_qm8(df, out_loc, out_loc_qtaim, atom_qtaim_keys)
-    else: 
+    else:
         translate_qm9(df, out_loc, out_loc_qtaim, atom_qtaim_keys)
-        
+
 
 main()

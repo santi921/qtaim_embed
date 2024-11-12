@@ -1,4 +1,4 @@
-import torch 
+import torch
 from torch.distributions import Bernoulli
 from dgl.transforms import BaseTransform
 import dgl
@@ -6,7 +6,7 @@ import dgl
 from qtaim_embed.utils.grapher import (
     get_bond_list_from_heterograph,
     get_fts_from_het_graph,
-    construct_homograph_blank
+    construct_homograph_blank,
 )
 
 
@@ -27,7 +27,12 @@ class DropBondHeterograph(BaseTransform):
 
     """
 
-    def __init__(self, p=0.5, drop_node_type=["bond"], drop_edge_types=["a2b", "b2a", "g2b", "b2g", "b2b"]):
+    def __init__(
+        self,
+        p=0.5,
+        drop_node_type=["bond"],
+        drop_edge_types=["a2b", "b2a", "g2b", "b2g", "b2b"],
+    ):
         self.p = p
         self.dist = Bernoulli(p)
         self.drop_node_type = drop_node_type
@@ -38,7 +43,7 @@ class DropBondHeterograph(BaseTransform):
         # Fast path
         if self.p == 0:
             return g
-        
+
         for c_etype in self.drop_node_type:
             samples = self.dist.sample(torch.Size([g.num_nodes(c_etype)]))
             node_ids_to_remove = g.nodes(ntype=c_etype)[samples.bool()]
@@ -49,7 +54,7 @@ class DropBondHeterograph(BaseTransform):
 
 class hetero_to_homo(BaseTransform):
     def __init__(self, concat_global=False):
-        self.concat_global = concat_global 
+        self.concat_global = concat_global
         self.global_feat_len = None
 
     def __call__(self, graph):
@@ -59,13 +64,13 @@ class hetero_to_homo(BaseTransform):
 
         # if concat_global, add global_ft to atom_ft and bond_ft at each node
         if self.concat_global:
-            if self.global_feat_len is None: 
+            if self.global_feat_len is None:
                 self.global_feat_len = global_ft.shape[1]
             global_ft_atom = global_ft.repeat(atom_ft.shape[0], 1)
             atom_ft = torch.cat([atom_ft, global_ft_atom], dim=1)
             global_ft_bond = global_ft.repeat(bond_ft.shape[0], 1)
             bond_ft = torch.cat([bond_ft, global_ft_bond], dim=1)
-            
+
         homo = construct_homograph_blank(graph.nodes["atom"].data["feat"], edge_list)
 
         homo.ndata["ft"] = atom_ft
@@ -73,8 +78,9 @@ class hetero_to_homo(BaseTransform):
 
         return homo
 
-class homo_to_hetero(BaseTransform): 
-    def __init__(self, global_feat_len, self_loop=True): 
+
+class homo_to_hetero(BaseTransform):
+    def __init__(self, global_feat_len, self_loop=True):
         self.global_feat_len = global_feat_len
         self.self_loop = self_loop
 
@@ -82,17 +88,17 @@ class homo_to_hetero(BaseTransform):
 
         graph = graph.clone()
         atom_ft = graph.ndata["ft"]
-        bond_ft = graph.edata["ft"]     
-        atom_ft_base = atom_ft[:, 0:-self.global_feat_len]
-        bond_ft_base = bond_ft[:, 0:-self.global_feat_len]
-        global_ft = atom_ft[0, -self.global_feat_len:].reshape(1, -1)
+        bond_ft = graph.edata["ft"]
+        atom_ft_base = atom_ft[:, 0 : -self.global_feat_len]
+        bond_ft_base = bond_ft[:, 0 : -self.global_feat_len]
+        global_ft = atom_ft[0, -self.global_feat_len :].reshape(1, -1)
         node_list = graph.nodes()
         edges_raw_u, edges_raw_v = graph.edges()
         bond_list = [[edges_raw_u[i], edges_raw_v[i]] for i in range(len(edges_raw_u))]
 
         num_atoms = len(node_list)
         num_bonds = len(bond_list)
-        
+
         a2b = []
         b2a = []
 

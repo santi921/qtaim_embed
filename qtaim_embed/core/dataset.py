@@ -48,7 +48,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             "bond": ["extra_feat_bond_esp_total"],
         },
         extra_dataset_info={},
-        verbose=True
+        verbose=True,
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -83,8 +83,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         if debug:
             print("... > running in debug mode")
             df = df.head(100)
-        else: 
-            if size != None: 
+        else:
+            if size != None:
                 # randomly sample size number of rows
                 df = df.sample(size)
 
@@ -98,14 +98,13 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
-            filter_self_bonds=filter_self_bonds
+            filter_self_bonds=filter_self_bonds,
         )
-        
-        if element_set == [] or element_set == None:
-           self.element_set = sorted(element_set_ret)
-        else: 
-            self.element_set = element_set
 
+        if element_set == [] or element_set == None:
+            self.element_set = sorted(element_set_ret)
+        else:
+            self.element_set = element_set
 
         grapher = get_grapher(
             element_set=self.element_set,
@@ -141,11 +140,11 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.extra_dataset_info = extra_dataset_info
         self.verbose = verbose
         self.self_loop = self_loop
-        
 
         self.load()
-        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-
+        print(
+            "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+        )
 
     def __len__(self):
         return len(self.data)
@@ -162,9 +161,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                 target_locs[node_type] = []
 
             for value in value_list:
-                target_locs[node_type].append(
-                    self.feat_names[node_type].index(value)
-                )
+                target_locs[node_type].append(self.feat_names[node_type].index(value))
 
         # now partition features into feats in target_locs and feats not in target_locs
         include_locs = {}
@@ -216,9 +213,9 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
     def load(self):
         self.get_include_exclude_indices()
-        #print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        #print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        #print("include names: ", self.include_names.keys())
+        # print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        # print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        # print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
@@ -368,7 +365,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self_loop=True,
         debug=False,
         filter_self_bonds=True,
-        size = None,
+        size=None,
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -381,7 +378,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         },
         target_list=["extra_feat_global_E1_CAM"],
         extra_dataset_info={},
-        verbose=True
+        verbose=True,
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -400,7 +397,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         # check if file exists
         if not Path(file).exists():
             raise FileNotFoundError(f"File {file} not found")
-        
+
         # check if file ends in pkl
         if file[-3:] == "pkl":
             try:
@@ -419,15 +416,14 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         if debug:
             print("... > running in debug mode")
             df = df.head(100)
-        else: 
-            if size != None: 
+        else:
+            if size != None:
                 # randomly sample size number of rows
                 df = df.sample(size)
-        
+
         for key_check in ["atom", "bond", "global"]:
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
-
 
         mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
@@ -435,16 +431,14 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
-            filter_self_bonds=filter_self_bonds
-
+            filter_self_bonds=filter_self_bonds,
         )
 
-
-        # legacy used if element_set == None:      
-        #if element_set == None:            
-        if element_set == [] or element_set == None: 
+        # legacy used if element_set == None:
+        # if element_set == None:
+        if element_set == [] or element_set == None:
             self.element_set = sorted(element_set_ret)
-        else: 
+        else:
             self.element_set = element_set
         print("element set: ", self.element_set)
 
@@ -456,7 +450,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             allowed_ring_size=allowed_ring_size,
             allowed_charges=allowed_charges,
             allowed_spins=allowed_spins,
-            self_loop=self_loop
+            self_loop=self_loop,
         )
 
         graph_list = []
@@ -484,8 +478,9 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self.verbose = verbose
 
         self.load()
-        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
-
+        print(
+            "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+        )
 
     def __len__(self):
         return len(self.data)
@@ -502,9 +497,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                 target_locs[node_type] = []
 
             for value in value_list:
-                target_locs[node_type].append(
-                    self.feat_names[node_type].index(value)
-                )
+                target_locs[node_type].append(self.feat_names[node_type].index(value))
 
         # now partition features into feats in target_locs and feats not in target_locs
         include_locs = {}
@@ -552,9 +545,9 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
 
     def load(self):
         self.get_include_exclude_indices()
-        #print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        #print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        #print("include names: ", self.include_names.keys())
+        # print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        # print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        # print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
@@ -578,8 +571,8 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                 graph.ndata["labels"] = labels
 
             # label_list.append(labels)
-        #print("original loader node types:", graph.ndata["feat"].keys())
-        #print("original loader label types:", graph.ndata["labels"].keys())
+        # print("original loader node types:", graph.ndata["feat"].keys())
+        # print("original loader label types:", graph.ndata["labels"].keys())
 
         if self.log_scale_features:
             print("... > Log scaling features")
@@ -595,7 +588,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             # self.scaler_feat_mean = scaler.mean
             # self.scaler_feat_std = scaler.std
             self.feature_scalers.append(scaler)
-            
+
             if self.verbose:
                 print("... > feature mean(s): \n", scaler.mean)
                 print("... > feature std(s):  \n", scaler.std)
@@ -627,9 +620,10 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
     def feature_names(self):
         return self.exclude_names
 
-    @property    
+    @property
     def label_names(self):
         return self.include_names
+
     @property
     def feature_size(self):
         len_dict = {}
@@ -695,7 +689,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         allowed_spins=None,
         self_loop=True,
         debug=False,
-        size = None,
+        size=None,
         filter_self_bonds=True,
         extra_keys={
             "atom": [
@@ -710,7 +704,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         target_list=["NR-AR"],
         extra_dataset_info={},
         impute=False,
-        verbose = True
+        verbose=True,
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -745,8 +739,8 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         if debug:
             print("... > running in debug mode")
             df = df.head(100)
-        else: 
-            if size != None: 
+        else:
+            if size != None:
                 # randomly sample size number of rows
                 df = df.sample(size)
 
@@ -760,12 +754,12 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
-            filter_self_bonds=filter_self_bonds
+            filter_self_bonds=filter_self_bonds,
         )
 
         if element_set == [] or element_set == None:
-           self.element_set = sorted(element_set_ret)
-        else: 
+            self.element_set = sorted(element_set_ret)
+        else:
             self.element_set = element_set
         print("element set: ", self.element_set)
         grapher = get_grapher(
@@ -802,7 +796,9 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.verbose = verbose
 
         self.load()
-        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+        print(
+            "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
+        )
 
     def __len__(self):
         return len(self.data)
@@ -819,9 +815,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                 target_locs[node_type] = []
 
             for value in value_list:
-                target_locs[node_type].append(
-                    self.feat_names[node_type].index(value)
-                )
+                target_locs[node_type].append(self.feat_names[node_type].index(value))
 
         # now partition features into feats in target_locs and feats not in target_locs
         include_locs = {}
@@ -865,9 +859,9 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
 
     def load(self):
         self.get_include_exclude_indices()
-        #print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        #print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        #print("include names: ", self.include_names.keys())
+        # print("original loader node types:", self.graphs[0].ndata["feat"].keys())
+        # print("original loader label types:", self.graphs[0].ndata["labels"].keys())
+        # print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         filtered_graph_count = 0
         filter_ind = []
@@ -1033,13 +1027,13 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             if self.verbose:
                 print("... > feature mean(s): \n", scaler.mean)
                 print("... > feature std(s):  \n", scaler.std)
-            
+
         # self.labels = label_list
 
     @property
     def feature_names(self):
         return self.exclude_names
-    
+
     @property
     def label_names(self):
         return self.include_names
@@ -1092,7 +1086,7 @@ class LMDBBaseDataset(Dataset):
         if not self.path.is_file():
             db_paths = sorted(self.path.glob("*.lmdb"))
             assert len(db_paths) > 0, f"No LMDBs found in '{self.path}'"
-            #self.metadata_path = self.path / "metadata.npz"
+            # self.metadata_path = self.path / "metadata.npz"
 
             self._keys = []
             self.envs = []
@@ -1114,8 +1108,7 @@ class LMDBBaseDataset(Dataset):
             keylens = [len(k) for k in self._keys]
             self._keylen_cumulative = np.cumsum(keylens).tolist()
             self.num_samples = sum(keylens)
-            
-        
+
         else:
             # Get metadata in case
             # self.metadata_path = self.path.parent / "metadata.npz"
@@ -1147,7 +1140,6 @@ class LMDBBaseDataset(Dataset):
             self.available_indices = self.shards[self.config.get("shard", 0)]
             self.num_samples = len(self.available_indices)
 
-        
         self.transform = transform
 
     def __len__(self):
@@ -1157,7 +1149,7 @@ class LMDBBaseDataset(Dataset):
         # if sharding, remap idx to appropriate idx of the sharded set
         if self.sharded:
             idx = self.available_indices[idx]
-        
+
         if not self.path.is_file():
             # Figure out which db this should be indexed from.
             db_idx = bisect.bisect(self._keylen_cumulative, idx)
@@ -1174,11 +1166,13 @@ class LMDBBaseDataset(Dataset):
                 .get(f"{self._keys[db_idx][el_idx]}".encode("ascii"))
             )
             data_object = pickle.loads(datapoint_pickled)
-            #data_object.id = f"{db_idx}_{el_idx}"
-    
+            # data_object.id = f"{db_idx}_{el_idx}"
+
         else:
             #!CHECK, _keys should be less then total numbers of keys as there are more properties.
-            datapoint_pickled = self.env.begin().get(f"{self._keys[idx]}".encode("ascii"))
+            datapoint_pickled = self.env.begin().get(
+                f"{self._keys[idx]}".encode("ascii")
+            )
 
             data_object = pickle.loads(datapoint_pickled)
 
@@ -1215,11 +1209,11 @@ class LMDBMoleculeDataset(LMDBBaseDataset):
         super(LMDBMoleculeDataset, self).__init__(config=config, transform=transform)
         if not self.path.is_file():
             self.env_ = self.envs[0]
-            raise("Not Implemented Yet")
-                
+            raise ("Not Implemented Yet")
+
         else:
             self.env_ = self.env
-        
+
     @property
     def charges(self):
         charges = self.env_.begin().get("charges".encode("ascii"))
@@ -1251,12 +1245,10 @@ class LMDBMoleculeDataset(LMDBBaseDataset):
         return pickle.loads(feature_info)
 
 
-
 class Subset(Dataset):
     def __init__(self, dataset, indices):
         self.dataset = dataset
         self.indices = indices
-        
 
     def __getitem__(self, idx):
         return self.dataset[self.indices[idx]]
@@ -1271,7 +1263,7 @@ class Subset(Dataset):
     @property
     def label_names(self):
         return self.dataset.include_names
-    
+
     @property
     def feature_size(self):
         len_dict = {}
@@ -1281,12 +1273,11 @@ class Subset(Dataset):
 
 
 class SubsetLMDB(Dataset):
-
     def __init__(self, dataset, indices):
         self.dtype = dataset.dtype
         self.dataset = dataset
         self.indices = indices
-        
+
         self.feature_size = dataset.feature_size
         self.feature_names = dataset.feature_names
 
@@ -1299,8 +1290,7 @@ class SubsetLMDB(Dataset):
         self.extra_dataset_info = dataset.extra_dataset_info
 
         self.graphs = dataset.graphs
-        
-        
+
     @property
     def feature_size(self):
         return self._feature_size

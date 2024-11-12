@@ -26,7 +26,7 @@ from qtaim_embed.models.layers import (
     WeightAndSumThenCat,
     GlobalAttentionPoolingThenCat,
     MeanPoolingThenCat,
-    WeightAndMeanThenCat
+    WeightAndMeanThenCat,
 )
 
 
@@ -69,8 +69,8 @@ class GCNGraphPred(pl.LightningModule):
         conv_fn="GraphConvDropoutBatch",
         global_pooling="WeightAndSumThenCat",
         resid_n_graph_convs=None,
-        num_heads_gat=2, 
-        dropout_feat_gat=0.2, 
+        num_heads_gat=2,
+        dropout_feat_gat=0.2,
         dropout_attn_gat=0.2,
         hidden_size_gat=128,
         residual_gat=True,
@@ -102,7 +102,11 @@ class GCNGraphPred(pl.LightningModule):
         # for k, v in target_dict.items():
         #    output_dims += len(v)
 
-        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
+        assert (
+            conv_fn == "GraphConvDropoutBatch"
+            or conv_fn == "ResidualBlock"
+            or conv_fn == "GATConv"
+        ), (
             "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
             + f"but got {conv_fn}"
         )
@@ -119,7 +123,7 @@ class GCNGraphPred(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightandMeanThenCat"
+            "WeightandMeanThenCat",
         ], (
             "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
             + f"but got {global_pooling}"
@@ -169,7 +173,7 @@ class GCNGraphPred(pl.LightningModule):
         # convert string activation to function
         if self.hparams.activation is not None:
             self.activation = getattr(torch.nn, self.hparams.activation)()
-        else: 
+        else:
             self.activation = None
 
         input_size = {
@@ -192,7 +196,9 @@ class GCNGraphPred(pl.LightningModule):
                 # if i == 0:
                 # embedding_in = True
 
-                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)
+                layer_args = get_layer_args(
+                    self.hparams, i, activation=self.activation, embedding_in=True
+                )
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
@@ -214,7 +220,7 @@ class GCNGraphPred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "ResidualBlock":
             layer_tracker = 0
-            #embedding_in = True
+            # embedding_in = True
 
             while layer_tracker < self.hparams.n_conv_layers:
                 if (
@@ -227,7 +233,10 @@ class GCNGraphPred(pl.LightningModule):
                     layer_ind = -1
 
                 layer_args = get_layer_args(
-                    self.hparams, layer_ind, embedding_in=True, activation=self.activation
+                    self.hparams,
+                    layer_ind,
+                    embedding_in=True,
+                    activation=self.activation,
                 )
 
                 output_block = False
@@ -250,7 +259,9 @@ class GCNGraphPred(pl.LightningModule):
 
                 embedding_in = True
 
-                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)
+                layer_args = get_layer_args(
+                    self.hparams, i, activation=self.activation, embedding_in=True
+                )
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
@@ -270,7 +281,6 @@ class GCNGraphPred(pl.LightningModule):
                     )
                 )
 
-
         self.conv_layers = nn.ModuleList(self.conv_layers)
         # print("conv layer out modes", self.conv_layers[-1].mods)
 
@@ -284,15 +294,13 @@ class GCNGraphPred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "ResidualBlock":
             conv_out_size = self.conv_layers[-1].out_feats
-        
+
         elif self.hparams.conv_fn == "GATConv":
             conv_out_size = {}
             for k, v in self.conv_layers[-1].mods.items():
                 conv_out_size[k] = v._out_feats
-        
-        
-        self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
 
+        self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
 
         ####################### readout starts here ######################
         if self.hparams.global_pooling == "WeightAndSumThenCat":
@@ -342,8 +350,8 @@ class GCNGraphPred(pl.LightningModule):
                     self.readout_out_size += self.conv_out_size[i]
                 else:
                     self.readout_out_size += self.conv_out_size[i]
-        #if self.hparams.conv_fn == "GATConv":
-        #self.readout_out_size = self.hparams.hidden_size * self.hparams.num_heads
+        # if self.hparams.conv_fn == "GATConv":
+        # self.readout_out_size = self.hparams.hidden_size * self.hparams.num_heads
         # print("readout out size", self.readout_out_size)
         # self.readout_out_size = readout_out_size
         self.loss = self.loss_function()
@@ -351,14 +359,14 @@ class GCNGraphPred(pl.LightningModule):
         self.fc_layers = nn.ModuleList()
 
         input_size = self.readout_out_size
-        #print("readout in size", input_size)
+        # print("readout in size", input_size)
         for i in range(self.hparams.n_fc_layers):
             out_size = self.hparams.fc_layer_size[i]
             self.fc_layers.append(nn.Linear(input_size, out_size))
-            
+
             if self.hparams.fc_batch_norm:
                 self.fc_layers.append(nn.BatchNorm1d(out_size))
-            
+
             if self.activation is not None:
                 self.fc_layers.append(self.activation)
 
@@ -403,7 +411,6 @@ class GCNGraphPred(pl.LightningModule):
             num_outputs=self.hparams.ntasks,
         )
 
-
     def forward(self, graph, feat, eweight=None):
         """
         Forward pass
@@ -411,12 +418,14 @@ class GCNGraphPred(pl.LightningModule):
         feats = self.embedding(feat)
         for ind, conv in enumerate(self.conv_layers):
             feats = conv(graph, feats)
-            
+
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
                     for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.num_heads * self.hparams.hidden_size)
-                else:         
+                        feats[k] = v.reshape(
+                            -1, self.hparams.num_heads * self.hparams.hidden_size
+                        )
+                else:
                     for k, v in feats.items():
                         feats[k] = v.reshape(-1, self.hparams.hidden_size)
 
@@ -424,7 +433,7 @@ class GCNGraphPred(pl.LightningModule):
         for ind, layer in enumerate(self.fc_layers):
             readout_feats = layer(readout_feats)
 
-        #print("preds shape:", readout_feats.shape)
+        # print("preds shape:", readout_feats.shape)
         return readout_feats
 
     def loss_function(self):
@@ -443,10 +452,10 @@ class GCNGraphPred(pl.LightningModule):
                 else:
                     loss_fn.append(torchmetrics.MeanSquaredError())
 
-        else: 
+        else:
             if self.hparams.loss_fn == "mse":
                 loss_fn = torchmetrics.MeanSquaredError()
-                
+
             elif self.hparams.loss_fn == "smape":
                 loss_fn = torchmetrics.SymmetricMeanAbsolutePercentageError()
             elif self.hparams.loss_fn == "mae":
@@ -462,7 +471,7 @@ class GCNGraphPred(pl.LightningModule):
         """
         if self.hparams.ntasks > 1:
             loss = 0
-            #print("target shape", target.shape)
+            # print("target shape", target.shape)
             for i in range(self.hparams.ntasks):
                 loss += self.loss[i](target[:, i], pred[:, i])
             return loss
@@ -549,7 +558,7 @@ class GCNGraphPred(pl.LightningModule):
         """
         r2, mae, mse = self.compute_metrics(mode="train")
         # get epoch number
-        
+
         if self.trainer.current_epoch < 2:
             self.log("val_mae", 10**10, prog_bar=False)
         self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
@@ -670,15 +679,15 @@ class GCNGraphPred(pl.LightningModule):
         preds_list_raw = []
         labels_list_raw = []
         n_atom_list = []
-        
+
         self.eval()
 
         for batch_graph, batched_labels in dataloader:
-        
+
             preds = self.forward(batch_graph, batch_graph.ndata["feat"])
             preds_raw = deepcopy(preds.detach())
             labels_raw = deepcopy(batched_labels)["global"]
-            
+
             preds_list_raw.append(preds_raw)
             labels_list_raw.append(labels_raw)
 
@@ -688,20 +697,23 @@ class GCNGraphPred(pl.LightningModule):
 
         preds_raw = torch.cat(preds_list_raw, dim=0)
         labels_raw = torch.cat(labels_list_raw, dim=0)
-        
+
         if per_atom:
             n_atom_list = torch.cat(n_atom_list, dim=0)
 
         for scaler in scaler_list[::-1]:
-            labels_unscaled = scaler.inverse_feats({"global": labels_raw})["global"].view(-1, self.hparams.ntasks)
-            preds_unscaled = scaler.inverse_feats({"global": preds_raw})["global"].view(-1, self.hparams.ntasks)
-            
-            
-        if per_atom: 
+            labels_unscaled = scaler.inverse_feats({"global": labels_raw})[
+                "global"
+            ].view(-1, self.hparams.ntasks)
+            preds_unscaled = scaler.inverse_feats({"global": preds_raw})["global"].view(
+                -1, self.hparams.ntasks
+            )
+
+        if per_atom:
             abs_diff = torch.abs(preds_unscaled - labels_unscaled)
 
-            #n_atoms = batch_graph.batch_num_nodes("atom")
-            #n_mols = batch_graph.batch_size
+            # n_atoms = batch_graph.batch_num_nodes("atom")
+            # n_mols = batch_graph.batch_size
             abs_diff = torch.abs(preds_unscaled - labels_unscaled)
             n_atoms = n_atom_list
             y = labels_unscaled
@@ -714,11 +726,16 @@ class GCNGraphPred(pl.LightningModule):
             rmse_per_molecule = torch.mean(torch.sqrt(torch.mean(abs_diff**2)))
             mse_per_atom = abs_diff**2 / n_atom_list
             mean_rmse_per_atom = torch.sqrt(torch.mean(mse_per_atom))
-            
 
-            return mae_per_atom, mean_rmse_per_atom, ewt_prop, preds_unscaled, labels_unscaled
-        
-        else: 
+            return (
+                mae_per_atom,
+                mean_rmse_per_atom,
+                ewt_prop,
+                preds_unscaled,
+                labels_unscaled,
+            )
+
+        else:
 
             r2_eval = MultioutputWrapper(
                 torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
@@ -730,7 +747,6 @@ class GCNGraphPred(pl.LightningModule):
                 torchmetrics.MeanSquaredError(squared=False),
                 num_outputs=self.hparams.ntasks,
             )
-            
 
             r2_eval.update(preds_unscaled, labels_unscaled)
             mae_eval.update(preds_unscaled, labels_unscaled)

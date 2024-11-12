@@ -39,6 +39,37 @@
       }
     ]
   },
+  "target_dict": {
+    "values": [
+      {
+        "atom": [
+          "extra_feat_atom_Hamiltonian_K",
+          "extra_feat_atom_lap_e_density",
+          "extra_feat_atom_e_loc_func",
+          "extra_feat_atom_esp_nuc",
+          "extra_feat_atom_esp_e",
+          "extra_feat_atom_esp_total",
+          "extra_feat_atom_grad_norm",
+          "extra_feat_atom_lap_norm",
+          "extra_feat_atom_ellip_e_dens",
+          "extra_feat_atom_eta"
+        ],
+        "bond": [
+          "extra_feat_bond_Lagrangian_K",
+          "extra_feat_bond_Hamiltonian_K",
+          "extra_feat_bond_lap_e_density",
+          "extra_feat_bond_e_loc_func",
+          "extra_feat_bond_esp_nuc",
+          "extra_feat_bond_esp_e",
+          "extra_feat_bond_esp_total",
+          "extra_feat_bond_grad_norm",
+          "extra_feat_bond_lap_norm",
+          "extra_feat_bond_ellip_e_dens",
+          "extra_feat_bond_eta"
+        ]
+      }
+    ]
+  },
   "element_set": {
     "values": [
       []
@@ -101,37 +132,21 @@
   },
   "train_batch_size": {
     "values": [
-      512
+      256
     ]
   },
   "n_conv_layers": {
     "values": [
+      2,
       3,
-      4,
-      5,
       6,
-      10
+      9
     ]
   },
   "resid_n_graph_convs": {
     "values": [
       2,
       3
-    ]
-  },
-  "target_dict": {
-    "values": [
-      {
-        "atom": [
-          "extra_feat_atom_esp_total"
-        ],
-        "bond": [
-          "extra_feat_bond_esp_total",
-          "extra_feat_bond_ellip_e_dens",
-          "extra_feat_bond_eta"
-        ],
-        "global": []
-      }
     ]
   },
   "conv_fn": {
@@ -144,8 +159,7 @@
   "dropout": {
     "values": [
       0.0,
-      0.1,
-      0.2
+      0.1
     ]
   },
   "batch_norm": {
@@ -181,7 +195,7 @@
   },
   "lr": {
     "max": 0.1,
-    "min": 0.0001,
+    "min": 0.005,
     "distribution": "log_uniform_values"
   },
   "scheduler_name": {
@@ -191,20 +205,19 @@
   },
   "weight_decay": {
     "values": [
-      0.00001,
+      0.000001,
       0.0
     ]
   },
   "lr_plateau_patience": {
     "values": [
-      25,
-      50
+      30
     ]
   },
   "lr_scale_factor": {
     "values": [
       0.5,
-      0.75
+      0.25
     ]
   },
   "loss_fn": {
@@ -224,9 +237,7 @@
   "lstm_iters": {
     "values": [
       3,
-      5,
-      9,
-      15
+      9
     ]
   },
   "lstm_layers": {
@@ -246,21 +257,18 @@
   "dropout_feat_gat": {
     "values": [
       0.0,
-      0.1,
-      0.2
+      0.1
     ]
   },
   "dropout_attn_gat": {
     "values": [
       0.0,
-      0.1,
-      0.2
+      0.1
     ]
   },
   "hidden_size_gat": {
     "values": [
       10,
-      16,
       25,
       50
     ]
@@ -278,19 +286,17 @@
   },
   "max_epochs": {
     "values": [
-      10
+      150
     ]
   },
   "precision": {
     "values": [
-      16,
-      "bf16",
-      32
+      "bf16"
     ]
   },
   "num_workers": {
     "values": [
-      1
+      4
     ]
   },
   "num_devices": {
@@ -312,7 +318,6 @@
   },
   "gradient_clip_val": {
     "values": [
-      0.5,
       1.0,
       5.0,
       10.0
@@ -333,6 +338,21 @@
   "verbose": {
     "values": [
       false
+    ]
+  },
+  "train_lmdb": {
+    "values": [
+      "/home/santiagovargas/dev/qtaim_embed/qtaim_embed/scripts/train/node_qm9/train/"
+    ]
+  },
+  "val_lmdb": {
+    "values": [
+      "/home/santiagovargas/dev/qtaim_embed/qtaim_embed/scripts/train/node_qm9/val/"
+    ]
+  },
+  "test_lmdb": {
+    "values": [
+      "/home/santiagovargas/dev/qtaim_embed/qtaim_embed/scripts/train/node_qm9/test/"
     ]
   }
 }

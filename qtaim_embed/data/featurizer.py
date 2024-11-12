@@ -144,7 +144,6 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                             )
                         )
                     )
-                    #print("bond length: {}".format(bond_len))
                     ft.append(bond_len)
 
                 if self.selected_keys != None:

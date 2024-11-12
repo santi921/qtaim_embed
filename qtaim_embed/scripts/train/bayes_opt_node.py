@@ -26,7 +26,7 @@ class TrainingObject:
         project_name,
         dataset_loc,
         wandb_entity="santi",
-        lmdbs=False
+        lmdbs=False,
     ):
         self.sweep_config = sweep_config
         self.log_save_dir = log_save_dir
@@ -40,21 +40,33 @@ class TrainingObject:
             print("using lmdbs!")
             dm_config = {
                 "dataset": {
-                    "train_lmdb": self.sweep_config["parameters"]["train_lmdb"]["values"][0],
-
-                },
-                "optim": {
-                    "num_workers": self.sweep_config["parameters"]["num_workers"]["values"][
+                    "train_lmdb": self.sweep_config["parameters"]["train_lmdb"][
+                        "values"
+                    ][0],
+                    "val_lmdb": self.sweep_config["parameters"]["val_lmdb"]["values"][
                         0
                     ],
+                    "test_lmdb": self.sweep_config["parameters"]["test_lmdb"]["values"][
+                        0
+                    ],
+                    "target_dict": self.sweep_config["parameters"]["target_dict"][
+                        "values"
+                    ][0],
+                },
+                "optim": {
+                    "num_workers": self.sweep_config["parameters"]["num_workers"][
+                        "values"
+                    ][0],
                     "persistent_workers": self.sweep_config["parameters"][
                         "persistent_workers"
                     ]["values"][0],
-                    "pin_memory": self.sweep_config["parameters"]["pin_memory"]["values"][0],
-                    "train_batch_size": self.sweep_config["parameters"]["train_batch_size"][
+                    "pin_memory": self.sweep_config["parameters"]["pin_memory"][
                         "values"
-                    ][0]
-                }
+                    ][0],
+                    "train_batch_size": self.sweep_config["parameters"][
+                        "train_batch_size"
+                    ]["values"][0],
+                },
             }
 
             if "val_lmdb" in self.sweep_config["parameters"]:
@@ -67,7 +79,6 @@ class TrainingObject:
                     "test_lmdb"
                 ]["values"][0]
 
-
             self.dm = LMDBDataModule(config=dm_config)
 
         else:
@@ -79,21 +90,25 @@ class TrainingObject:
                     "allowed_ring_size": self.sweep_config["parameters"][
                         "allowed_ring_size"
                     ]["values"][0],
-                    "allowed_charges": self.sweep_config["parameters"]["allowed_charges"][
+                    "allowed_charges": self.sweep_config["parameters"][
+                        "allowed_charges"
+                    ]["values"][0],
+                    "element_set": self.sweep_config["parameters"]["element_set"][
                         "values"
                     ][0],
-                    "element_set": self.sweep_config["parameters"]["element_set"]["values"][0],
-                    "per_atom": self.sweep_config["parameters"]["per_atom"][
-                        "values"
-                    ][0],
+                    "per_atom": self.sweep_config["parameters"]["per_atom"]["values"][
+                        0
+                    ],
                     "allowed_spins": self.sweep_config["parameters"]["allowed_spins"][
                         "values"
                     ][0],
-                    "self_loop": self.sweep_config["parameters"]["self_loop"]["values"][0],
-                    "extra_keys": self.extra_keys,
-                    "target_dict": self.sweep_config["parameters"]["target_dict"]["values"][
+                    "self_loop": self.sweep_config["parameters"]["self_loop"]["values"][
                         0
                     ],
+                    "extra_keys": self.extra_keys,
+                    "target_dict": self.sweep_config["parameters"]["target_dict"][
+                        "values"
+                    ][0],
                     "extra_dataset_info": self.sweep_config["parameters"][
                         "extra_dataset_info"
                     ]["values"][0],
@@ -110,20 +125,26 @@ class TrainingObject:
                     "standard_scale_targets": self.sweep_config["parameters"][
                         "standard_scale_targets"
                     ]["values"][0],
-                    "val_prop": self.sweep_config["parameters"]["val_prop"]["values"][0],
-                    "test_prop": self.sweep_config["parameters"]["test_prop"]["values"][0],
-                    "seed": self.sweep_config["parameters"]["seed"]["values"][0],
-                    "train_batch_size": self.sweep_config["parameters"]["train_batch_size"][
-                        "values"
-                    ][0],
-                    "train_dataset_loc": self.dataset_loc,
-                    "num_workers": self.sweep_config["parameters"]["num_workers"]["values"][
+                    "val_prop": self.sweep_config["parameters"]["val_prop"]["values"][
                         0
                     ],
+                    "test_prop": self.sweep_config["parameters"]["test_prop"]["values"][
+                        0
+                    ],
+                    "seed": self.sweep_config["parameters"]["seed"]["values"][0],
+                    "train_batch_size": self.sweep_config["parameters"][
+                        "train_batch_size"
+                    ]["values"][0],
+                    "train_dataset_loc": self.dataset_loc,
+                    "num_workers": self.sweep_config["parameters"]["num_workers"][
+                        "values"
+                    ][0],
                     "persistent_workers": self.sweep_config["parameters"][
                         "persistent_workers"
                     ]["values"][0],
-                    "pin_memory": self.sweep_config["parameters"]["pin_memory"]["values"][0],
+                    "pin_memory": self.sweep_config["parameters"]["pin_memory"][
+                        "values"
+                    ][0],
                 },
             }
             print("config settings:")
@@ -136,15 +157,17 @@ class TrainingObject:
         feature_names, feature_size = self.dm.prepare_data(stage="fit")
         self.feature_names = feature_names
         self.feature_size = feature_size
-        
+        self.config = dm_config
 
     def make_model(self, config):
         # config["model"]["in_feats"] = self.in_feats
         config["model"]["atom_feature_size"] = self.feature_size["atom"]
         config["model"]["bond_feature_size"] = self.feature_size["bond"]
         config["model"]["global_feature_size"] = self.feature_size["global"]
-        config["model"]["target_dict"] = config["dataset"]["target_dict"]
-        
+
+        if "target_dict" not in config["model"]:
+            config["model"]["target_dict"] = self.config["dataset"]["target_dict"]
+
         print("config settings:")
         print("atom_feature_size: {}".format(config["model"]["atom_feature_size"]))
         print("bond_feature_size: {}".format(config["model"]["bond_feature_size"]))
@@ -160,7 +183,7 @@ class TrainingObject:
                 "model": {
                     "n_conv_layers": init_config["n_conv_layers"],
                     "resid_n_graph_convs": init_config["resid_n_graph_convs"],
-                    #"target_dict": target_dict,  # check
+                    # "target_dict": target_dict,  # check
                     "conv_fn": init_config["conv_fn"],
                     "dropout": init_config["dropout"],
                     "batch_norm": init_config["batch_norm"],
@@ -179,7 +202,7 @@ class TrainingObject:
                     "embedding_size": init_config["embedding_size"],
                     "lstm_iters": init_config["lstm_iters"],
                     "lstm_layers": init_config["lstm_layers"],
-                    #"output_dims": init_config["output_dims"],  # check
+                    # "output_dims": init_config["output_dims"],  # check
                     "num_heads_gat": init_config["num_heads_gat"],
                     "dropout_feat_gat": init_config["dropout_feat_gat"],
                     "dropout_attn_gat": init_config["dropout_attn_gat"],
@@ -188,8 +211,7 @@ class TrainingObject:
                     "restore": init_config["restore"],
                     "max_epochs": init_config["max_epochs"],
                 },
-                "dataset": {
-                },
+                "dataset": {},
                 "optim": {
                     "num_workers": init_config["num_workers"],
                     "num_devices": init_config["num_devices"],
@@ -202,17 +224,16 @@ class TrainingObject:
                 },
             }
 
-
             if self.lmdbs:
                 config["dataset"]["train_lmdb"] = init_config["train_lmdb"]
                 if "val_lmdb" in init_config:
                     config["dataset"]["val_lmdb"] = init_config["val_lmdb"]
                 if "test_lmdb" in init_config:
                     config["dataset"]["test_lmdb"] = init_config["test_lmdb"]
-                #config["model"]["target_dict"] = {"global": ["value"]}
+                # config["model"]["target_dict"] = {"global": ["value"]}
 
-            else: 
-            
+            else:
+
                 config["dataset"] = {
                     "element_set": init_config["element_set"],
                     "per_atom": init_config["per_atom"],
@@ -261,6 +282,10 @@ class TrainingObject:
             lr_monitor = LearningRateMonitor(logging_interval="step")
             logger_wb = WandbLogger(name="test_logs")
 
+            self.dm.setup(stage="fit")
+            train_dl = self.dm.train_dataloader()
+            _, _ = next(iter(train_dl))
+
             trainer = pl.Trainer(
                 max_epochs=config["model"]["max_epochs"],
                 accelerator="gpu",
@@ -288,7 +313,7 @@ class TrainingObject:
             else:
                 if config["dataset"]["test_prop"] > 0.0:
                     trainer.test(model, self.dm)
-            
+
         run.finish()
 
 
@@ -326,14 +351,16 @@ if __name__ == "__main__":
         sweep_config["metric"] = {"name": "val_loss", "goal": "minimize"}
 
     # wandb loop
-    sweep_id = wandb.sweep(sweep_config, project=wandb_project_name, entity=wandb_entity)
+    sweep_id = wandb.sweep(
+        sweep_config, project=wandb_project_name, entity=wandb_entity
+    )
     training_obj = TrainingObject(
         sweep_config,
         log_save_dir,
         dataset_loc=dataset_loc,
         project_name=wandb_project_name,
         wandb_entity=wandb_entity,
-        lmdbs=use_lmdb
+        lmdbs=use_lmdb,
     )
 
     print("method: {}".format(method))

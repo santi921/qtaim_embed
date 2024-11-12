@@ -13,12 +13,10 @@ from qtaim_embed.utils.data import train_validation_test_split
 from qtaim_embed.core.dataset import HeteroGraphNodeLabelDataset
 
 
-
-
 torch.set_float32_matmul_precision("high")  # might have to disable on older GPUs
-#seed_torch()
-#import torch.multiprocessing
-#torch.multiprocessing.set_sharing_strategy("file_system")
+# seed_torch()
+# import torch.multiprocessing
+# torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 if __name__ == "__main__":
@@ -69,7 +67,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    dataset =  HeteroGraphNodeLabelDataset(
+    dataset = HeteroGraphNodeLabelDataset(
         file=dataset_loc,
         allowed_ring_size=config["dataset"]["allowed_ring_size"],
         allowed_charges=config["dataset"]["allowed_charges"],
@@ -82,16 +80,12 @@ if __name__ == "__main__":
         debug=debug,
         log_scale_features=config["dataset"]["log_scale_features"],
         log_scale_targets=config["dataset"]["log_scale_targets"],
-        standard_scale_features=config["dataset"][
-            "standard_scale_features"
-        ],
-        standard_scale_targets=config["dataset"][
-            "standard_scale_targets"
-        ],
+        standard_scale_features=config["dataset"]["standard_scale_features"],
+        standard_scale_targets=config["dataset"]["standard_scale_targets"],
     )
 
     if split == True:
-        if config["dataset"]["test_prop"]>0.0:
+        if config["dataset"]["test_prop"] > 0.0:
             train_dataset, val_dataset, test_dataset = train_validation_test_split(
                 dataset,
                 test=config["dataset"]["test_prop"],
@@ -104,11 +98,11 @@ if __name__ == "__main__":
             print("test set size: ", len(test_dataset))
             print(dataset.feature_names)
             construct_lmdb_and_save_dataset(dataset, lmdb_dir)
-            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir+"/val/")
-            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir+"/train/")
-            construct_lmdb_and_save_dataset(test_dataset, lmdb_dir+"/test/")
+            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
+            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
+            construct_lmdb_and_save_dataset(test_dataset, lmdb_dir + "/test/")
 
-        else: 
+        else:
 
             train_dataset, val_dataset = train_validation_test_split(
                 dataset,
@@ -118,11 +112,10 @@ if __name__ == "__main__":
             )
             print("training set size: ", len(train_dataset))
             print("validation set size: ", len(val_dataset))
-            
+
             construct_lmdb_and_save_dataset(dataset, lmdb_dir)
-            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir+"/val/")
-            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir+"/train/")
+            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
+            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
 
-
-    else: 
+    else:
         construct_lmdb_and_save_dataset(dataset, lmdb_dir)

@@ -1,4 +1,4 @@
-import torch, dgl
+import torch
 import pytorch_lightning as pl
 from torch.nn import functional as F
 from qtaim_embed.utils.tests import (
@@ -243,12 +243,3 @@ def test_multi_task():
 
     trainer.fit(model, data_loader)
 
-
-def test_manual_eval_node_pred():
-    # TODO: implement
-    pass
-
-
-def test_manual_eval_link_pred():
-    # TODO: implement
-    pass

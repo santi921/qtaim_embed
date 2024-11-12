@@ -2,33 +2,36 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.optim import lr_scheduler
 import pytorch_lightning as pl
 
-import dgl.nn.pytorch as dglnn
 from dgl.nn.pytorch import GATConv
-from torchmetrics.wrappers import MultioutputWrapper
-import torchmetrics
 
 from qtaim_embed.utils.models import (
-    get_layer_args,
+    get_layer_args_homo,
     link_fmt_to_node_fmt,
     _split_batched_output,
 )
 
-from qtaim_embed.models.layers import (
-    GraphConvDropoutBatch,
-    ResidualBlock,
-    UnifySize
+from qtaim_embed.models.layers_homo import (
+    ResidualBlockHomo,
+    UnifySize,
+    MLPPredictor,
+    DotPredictor,
+    AttentionPredictor,
 )
 
+from qtaim_embed.models.layers import GraphConvDropoutBatch
+
 from qtaim_embed.models.link_pred.losses import (
-    HingeMetric, 
-    CrossEntropyMetric, 
-    AUCMetric, 
-    MarginMetric
+    HingeMetric,
+    CrossEntropyMetric,
+    AUCMetric,
+    MarginMetric,
+    F1Metric,
+    AccuracyMetric,
 )
+
 
 class GCNLinkPred(pl.LightningModule):
     """
@@ -45,7 +48,6 @@ class GCNLinkPred(pl.LightningModule):
         activation: str, activation function
         bias: bool, whether to use bias
         norm: str, normalization type
-        aggregate: str, aggregation type
         lr: float, learning rate
         scheduler_name: str, scheduler type
         weight_decay: float, weight decay
@@ -59,16 +61,14 @@ class GCNLinkPred(pl.LightningModule):
 
     def __init__(
         self,
-        atom_input_size=12,
-        bond_input_size=8,
-        global_input_size=3,
+        input_size=12,
         n_conv_layers=3,
         target_dict={"atom": "E"},
         conv_fn="GraphConvDropoutBatch",
-        #global_pooling="WeightAndSumThenCat",
+        # global_pooling="WeightAndSumThenCat",
         resid_n_graph_convs=None,
-        num_heads_gat=2, 
-        dropout_feat_gat=0.2, 
+        num_heads_gat=2,
+        dropout_feat_gat=0.2,
         dropout_attn_gat=0.2,
         hidden_size_gat=128,
         residual_gat=True,
@@ -77,7 +77,7 @@ class GCNLinkPred(pl.LightningModule):
         activation="ReLU",
         bias=True,
         norm="both",
-        aggregate="sum",
+        # aggregate="sum",
         lr=1e-3,
         scheduler_name="reduce_on_plateau",
         weight_decay=0.0,
@@ -85,13 +85,8 @@ class GCNLinkPred(pl.LightningModule):
         lr_scale_factor=0.5,
         loss_fn="mse",
         embedding_size=128,
-        fc_layer_size=[128, 64],
-        fc_dropout=0.0,
-        fc_batch_norm=True,
-        #lstm_iters=3,
-        #lstm_layers=1,
-        #pooling_ntypes=["atom", "bond"],
-        #pooling_ntypes_direct=["global"],
+        predictor="MLP",
+        predictor_param_dict={},
     ):
         super().__init__()
         self.learning_rate = lr
@@ -100,9 +95,14 @@ class GCNLinkPred(pl.LightningModule):
         # for k, v in target_dict.items():
         #    output_dims += len(v)
 
-        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
-            "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
-            + f"but got {conv_fn}"
+        assert conv_fn in [
+            "GraphSAGE",
+            "GATConv",
+            "ResidualBlock",
+            "GraphConvDropoutBatch",
+        ], (
+            "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock",
+            "GraphSAGE" + f"but got {conv_fn}",
         )
 
         if conv_fn == "ResidualBlock":
@@ -111,11 +111,8 @@ class GCNLinkPred(pl.LightningModule):
                 + f"but got {resid_n_graph_convs}"
             )
 
-
         params = {
-            "atom_input_size": atom_input_size,
-            "bond_input_size": bond_input_size,
-            "global_input_size": global_input_size,
+            "input_size": input_size,
             "conv_fn": conv_fn,
             "target_dict": target_dict,
             "dropout": dropout,
@@ -123,7 +120,6 @@ class GCNLinkPred(pl.LightningModule):
             "activation": activation,
             "bias": bias,
             "norm": norm,
-            "aggregate": aggregate,
             "n_conv_layers": n_conv_layers,
             "lr": lr,
             "weight_decay": weight_decay,
@@ -133,21 +129,13 @@ class GCNLinkPred(pl.LightningModule):
             "loss_fn": loss_fn,
             "resid_n_graph_convs": resid_n_graph_convs,
             "embedding_size": embedding_size,
-            "fc_layer_size": fc_layer_size,
-            "fc_dropout": fc_dropout,
-            "fc_batch_norm": fc_batch_norm,
-            "n_fc_layers": len(fc_layer_size),
-            #"global_pooling": global_pooling,
-            #"ntypes_pool": pooling_ntypes,
-            #"ntypes_pool_direct_cat": pooling_ntypes_direct,
-            #"lstm_iters": lstm_iters,
-            #"lstm_layers": lstm_layers,
             "num_heads": num_heads_gat,
             "feat_drop": dropout_feat_gat,
             "attn_drop": dropout_attn_gat,
             "residual": residual_gat,
             "hidden_size": hidden_size_gat,
-            "ntasks": len(target_dict["global"]),
+            "predictor": predictor,
+            "predictor_param_dict": predictor_param_dict,
         }
 
         self.hparams.update(params)
@@ -156,20 +144,14 @@ class GCNLinkPred(pl.LightningModule):
         # convert string activation to function
         if self.hparams.activation is not None:
             self.activation = getattr(torch.nn, self.hparams.activation)()
-        else: 
+        else:
             self.activation = None
 
-        input_size = {
-            "atom": self.hparams.atom_input_size,
-            "bond": self.hparams.bond_input_size,
-            "global": self.hparams.global_input_size,
-        }
         # print("input size", input_size)
         self.embedding = UnifySize(
-            input_dim=input_size,
+            input_dim=self.hparams.input_size,
             output_dim=self.hparams.embedding_size,
         )
-        # self.embedding_output_size = self.hparams.embedding_size
 
         self.conv_layers = nn.ModuleList()
 
@@ -179,29 +161,16 @@ class GCNLinkPred(pl.LightningModule):
                 # if i == 0:
                 # embedding_in = True
 
-                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)
+                layer_args = get_layer_args_homo(
+                    self.hparams, i, activation=self.activation, embedding_in=True
+                )
                 # print("resid layer args", layer_args)
 
-                self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
-                        {
-                            "a2b": GraphConvDropoutBatch(**layer_args["a2b"]),
-                            "b2a": GraphConvDropoutBatch(**layer_args["b2a"]),
-                            "a2g": GraphConvDropoutBatch(**layer_args["a2g"]),
-                            "g2a": GraphConvDropoutBatch(**layer_args["g2a"]),
-                            "b2g": GraphConvDropoutBatch(**layer_args["b2g"]),
-                            "g2b": GraphConvDropoutBatch(**layer_args["g2b"]),
-                            "a2a": GraphConvDropoutBatch(**layer_args["a2a"]),
-                            "b2b": GraphConvDropoutBatch(**layer_args["b2b"]),
-                            "g2g": GraphConvDropoutBatch(**layer_args["g2g"]),
-                        },
-                        aggregate=self.hparams.aggregate,
-                    )
-                )
+                self.conv_layers.append(GraphConvDropoutBatch(**layer_args["conv"]))
 
         elif self.hparams.conv_fn == "ResidualBlock":
             layer_tracker = 0
-            #embedding_in = True
+            # embedding_in = True
 
             while layer_tracker < self.hparams.n_conv_layers:
                 if (
@@ -213,8 +182,11 @@ class GCNLinkPred(pl.LightningModule):
                 else:
                     layer_ind = -1
 
-                layer_args = get_layer_args(
-                    self.hparams, layer_ind, embedding_in=True, activation=self.activation
+                layer_args = get_layer_args_homo(
+                    self.hparams,
+                    layer_ind,
+                    embedding_in=True,
+                    activation=self.activation,
                 )
 
                 output_block = False
@@ -222,10 +194,9 @@ class GCNLinkPred(pl.LightningModule):
                     output_block = True
 
                 self.conv_layers.append(
-                    ResidualBlock(
+                    ResidualBlockHomo(
                         layer_args,
                         resid_n_graph_convs=self.hparams.resid_n_graph_convs,
-                        aggregate=self.hparams.aggregate,
                         output_block=output_block,
                     )
                 )
@@ -234,77 +205,100 @@ class GCNLinkPred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "GATConv":
             for i in range(self.hparams.n_conv_layers):
-
                 embedding_in = True
-
-                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)
+                layer_args = get_layer_args_homo(
+                    self.hparams, i, activation=self.activation, embedding_in=True
+                )
                 # print("resid layer args", layer_args)
 
-                self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
-                        {
-                            "a2b": GATConv(**layer_args["a2b"]),
-                            "b2a": GATConv(**layer_args["b2a"]),
-                            "a2g": GATConv(**layer_args["a2g"]),
-                            "g2a": GATConv(**layer_args["g2a"]),
-                            "b2g": GATConv(**layer_args["b2g"]),
-                            "g2b": GATConv(**layer_args["g2b"]),
-                            "a2a": GATConv(**layer_args["a2a"]),
-                            "b2b": GATConv(**layer_args["b2b"]),
-                            "g2g": GATConv(**layer_args["g2g"]),
-                        },
-                        aggregate=self.hparams.aggregate,
-                    )
+                self.conv_layers.append(GATConv(**layer_args["conv"]))
+
+        elif self.hparams.conv_fn == "GraphSAGE":
+            for i in range(self.n_conv_layers):
+
+                layer_args = get_layer_args_homo(
+                    self.hparams, i, activation=self.activation, embedding_in=True
                 )
 
+                self.conv_layers.append(GATConv(**layer_args["conv"]))
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
-        # print("conv layer out modes", self.conv_layers[-1].mods)
 
-        # print("conv layer out feats", self.conv_layers[-1].out_feats)
         # conv_out_size = self.conv_layers[-1].out_feats
+        # if self.hparams.conv_fn == "GraphConvDropoutBatch":
+        #    conv_out_size = {}
+        #    for k, v in self.conv_layers[-1].mods.items():
+        #        conv_out_size[k] = v.out_feats
+        # elif self.hparams.conv_fn == "ResidualBlock":
+        # conv_out_size = self.conv_layers[-1].out_feats
+        # elif self.hparams.conv_fn == "GATConv":
+        #    conv_out_size = {}
+        #    for k, v in self.conv_layers[-1].mods.items():
+        #        conv_out_size[k] = v._out_feats
 
-        if self.hparams.conv_fn == "GraphConvDropoutBatch":
-            conv_out_size = {}
-            for k, v in self.conv_layers[-1].mods.items():
-                conv_out_size[k] = v.out_feats
+        # self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
+        self.conv_out_size = self.conv_layers[-1].out_feats
 
-        elif self.hparams.conv_fn == "ResidualBlock":
-            conv_out_size = self.conv_layers[-1].out_feats
-        
-        elif self.hparams.conv_fn == "GATConv":
-            conv_out_size = {}
-            for k, v in self.conv_layers[-1].mods.items():
-                conv_out_size[k] = v._out_feats
-        
-        
-        self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
+        ####################### predictor ######################
+        if self.hparams.predictor == "MLP":
+            self.predictor = MLPPredictor(
+                h_feats=self.conv_out_size,
+                h_dims=self.hparams.predictor_param_dict["fc_layer_size"],
+                dropout=self.hparams.predictor_param_dict["fc_dropout"],
+                batch_norm=self.hparams.predictor_param_dict["batch_norm"],
+                activation=self.hparams.predictor_param_dict["activation"],
+            )
+        elif self.hparams.predictor == "Dot":
+            self.predictor = DotPredictor()
 
-        ####################### fc starts here ######################
+        elif self.hparams.predictor == "Attention":
+            self.predictor = AttentionPredictor(in_feats=self.conv_out_size)
 
+        # print("creating statistics")
+        ###################### statistics ######################
+        self.train_hinge = HingeMetric()
+        self.val_hinge = HingeMetric()
+        self.test_hinge = HingeMetric()
 
-    def forward(self, graph, inputs):
+        self.train_auc = AUCMetric()
+        self.val_auc = AUCMetric()
+        self.test_auc = AUCMetric()
+
+        self.train_accuracy = AccuracyMetric()
+        self.val_accuracy = AccuracyMetric()
+        self.test_accuracy = AccuracyMetric()
+
+        self.train_f1 = F1Metric()
+        self.val_f1 = F1Metric()
+        self.test_f1 = F1Metric()
+
+    def forward(self, pos_graph, neg_graph, inputs):
         """
         Forward pass
         """
-        feats = self.embedding(inputs)
+        feats_embed = self.embedding(inputs)
         for ind, conv in enumerate(self.conv_layers):
-            feats = conv(graph, feats)
-            
+            feats_pos = conv(pos_graph, feats_embed)
+            feats_neg = conv(neg_graph, feats_embed)
+
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.num_heads * self.hparams.hidden_size)
-                else:         
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.hidden_size)
+                    # for k, v in feats.items():
+                    feats_pos = feats_pos.reshape(
+                        -1, self.hparams.num_heads * self.hparams.hidden_size
+                    )
+                    feats_neg = feats_neg.reshape(
+                        -1, self.hparams.num_heads * self.hparams.hidden_size
+                    )
+                else:
+                    # for k, v in feats.items():
+                    feats_pos = feats_pos.reshape(-1, self.hparams.hidden_size)
+                    feats_neg = feats_neg.reshape(-1, self.hparams.hidden_size)
 
-        readout_feats = self.readout(graph, feats)
-        for ind, layer in enumerate(self.fc_layers):
-            readout_feats = layer(readout_feats)
+        pos_pred = self.predictor(pos_graph, feats_pos)
+        neg_pred = self.predictor(neg_graph, feats_neg)
 
-        #print("preds shape:", readout_feats.shape)
-        return readout_feats
+        return pos_pred, neg_pred
 
     def loss_function(self):
         """
@@ -313,11 +307,17 @@ class GCNLinkPred(pl.LightningModule):
 
         if self.hparams.loss_fn == "auroc":
             loss_fn = AUCMetric()
-            
+
         elif self.hparams.loss_fn == "margin":
             loss_fn = MarginMetric()
         elif self.hparams.loss_fn == "hinge":
             loss_fn = HingeMetric()
+        elif self.hparams.loss_fn == "cross_entropy":
+            loss_fn = CrossEntropyMetric()
+        elif self.hparams.loss_fn == "accuracy":
+            loss_fn = AccuracyMetric()
+        elif self.hparams.loss_fn == "f1":
+            loss_fn = F1Metric()
         else:
             loss_fn = CrossEntropyMetric()
 
@@ -327,12 +327,6 @@ class GCNLinkPred(pl.LightningModule):
         """
         Compute loss
         """
-        if self.hparams.ntasks > 1:
-            loss = 0
-            #print("target shape", target.shape)
-            for i in range(self.hparams.ntasks):
-                loss += self.loss[i](target[:, i], pred[:, i])
-            return loss
         return self.loss(target, pred)
 
     def feature_at_each_layer(model, graph, feats):
@@ -370,18 +364,18 @@ class GCNLinkPred(pl.LightningModule):
             )
             layer_idx += 1
 
-    def shared_step(self, batch, mode, scalers=None):
-        positive_graph, negative_graph, feat = batch
-        
-        logits = self.forward(
+    def shared_step(self, batch, mode):
+
+        if mode == "train":
+            positive_graph, negative_graph, feat = batch
+        else:
+            positive_graph, negative_graph, negative_graph_explicit, feat = batch
+
+        pred_pos, pred_neg = self.forward(
             positive_graph, negative_graph, feat
         )  # returns a dict of node types
-        
-        labels = batch_label["global"]
-        
-        all_loss = self.compute_loss(positive_graph, negative_graph)
-        logits = logits.view(-1, self.hparams.ntasks)
-        labels = labels.view(-1, self.hparams.ntasks)
+
+        all_loss = self.compute_loss(pred_pos, pred_neg)
         # log loss
         self.log(
             f"{mode}_loss",
@@ -389,10 +383,14 @@ class GCNLinkPred(pl.LightningModule):
             on_step=False,
             on_epoch=True,
             prog_bar=True,
-            batch_size=len(labels),
             sync_dist=True,
         )
-        self.update_metrics(logits, labels, mode)
+        if mode == "train":
+            self.update_metrics(pred_pos, pred_neg, mode)
+        else:
+            self.update_metrics(
+                pred_pos, pred_neg, mode, target_neg=negative_graph_explicit
+            )
 
         return all_loss
 
@@ -411,58 +409,57 @@ class GCNLinkPred(pl.LightningModule):
 
     def test_step(self, batch, batch_idx, scalers=None):
         # Todo
-        return {"test_loss": self.shared_step(batch, mode="test", scalers=scalers)}
+        return {"test_loss": self.shared_step(batch, mode="test")}
 
     def on_train_epoch_end(self):
         """
         Training epoch end
         """
-        r2, mae, mse = self.compute_metrics(mode="train")
-        # get epoch number
-        
-        #if self.trainer.current_epoch < 2:
-        #    self.log("val_mae", 10**10, prog_bar=False)
-        #self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
-        #self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        #self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        acc, f1, auc = self.compute_metrics(mode="train")
+
+        if self.trainer.current_epoch < 2:
+            self.log("val_f1", 0.0, prog_bar=False)
+        self.log("train_f1", f1, prog_bar=True, sync_dist=True)
+        self.log("train_auc", auc, prog_bar=False, sync_dist=True)
+        self.log("train_accuracy", acc, prog_bar=False, sync_dist=True)
 
     def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
-        r2, mae, mse = self.compute_metrics(mode="val")
-        #r2_median = r2.median().type(torch.float32)
-        #self.log("val_r2", r2_median, prog_bar=True, sync_dist=True)
-        #self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        #self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        acc, f1, auc = self.compute_metrics(mode="val")
+        self.log("val_f1", f1, prog_bar=True, sync_dist=True)
+        self.log("val_auc", auc, prog_bar=False, sync_dist=True)
+        self.log("val_accuracy", acc, prog_bar=False, sync_dist=True)
 
     def on_test_epoch_end(self):
         """
         Test epoch end
         """
-        r2, mae, mse = self.compute_metrics(mode="test")
-        #self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
-        #self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        #self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
+        acc, f1, auc = self.compute_metrics(mode="test")
+        self.log("test_f1", f1, prog_bar=True, sync_dist=True)
+        self.log("test_auc", auc, prog_bar=False, sync_dist=True)
+        self.log("test_accuracy", acc, prog_bar=False, sync_dist=True)
 
-    def update_metrics(self, pred, target, mode):
+    def update_metrics(self, pred, target, mode, target_neg=None):
         """
         Update metrics using torchmetrics interfaces
         """
 
         if mode == "train":
-            self.train_r2.update(pred, target)
-            self.train_torch_l1.update(pred, target)
-            self.train_torch_mse.update(pred, target)
+            self.train_accuracy.update(pred, target)
+            self.train_f1.update(pred, target)
+            self.train_auc.update(pred, target)
+
         elif mode == "val":
-            self.val_r2.update(pred, target)
-            self.val_torch_l1.update(pred, target)
-            self.val_torch_mse.update(pred, target)
+            self.val_accuracy.update(pred, target_neg)
+            self.val_f1.update(pred, target_neg)
+            self.val_auc.update(pred, target_neg)
 
         elif mode == "test":
-            self.test_r2.update(pred, target)
-            self.test_torch_l1.update(pred, target)
-            self.test_torch_mse.update(pred, target)
+            self.test_accuracy(pred, target_neg)
+            self.test_f1(pred, target_neg)
+            self.test_auc(pred, target_neg)
 
     def compute_metrics(self, mode):
         """
@@ -470,30 +467,30 @@ class GCNLinkPred(pl.LightningModule):
         """
 
         if mode == "train":
-            r2 = self.train_r2.compute()
-            torch_l1 = self.train_torch_l1.compute()
-            torch_mse = self.train_torch_mse.compute()
-            self.train_r2.reset()
-            self.train_torch_l1.reset()
-            self.train_torch_mse.reset()
+            acc = self.train_accuracy.compute()
+            f1 = self.train_f1.compute()
+            auc = self.train_auc.compute()
+            self.train_accuracy.reset()
+            self.train_f1.reset()
+            self.train_auc.reset()
 
         elif mode == "val":
-            r2 = self.val_r2.compute()
-            torch_l1 = self.val_torch_l1.compute()
-            torch_mse = self.val_torch_mse.compute()
-            self.val_r2.reset()
-            self.val_torch_l1.reset()
-            self.val_torch_mse.reset()
+            acc = self.val_accuracy.compute()
+            f1 = self.val_f1.compute()
+            auc = self.val_auc.compute()
+            self.val_accuracy.reset()
+            self.val_f1.reset()
+            self.val_auc.reset()
 
         elif mode == "test":
-            r2 = self.test_r2.compute()
-            torch_l1 = self.test_torch_l1.compute()
-            torch_mse = self.test_torch_mse.compute()
-            self.test_r2.reset()
-            self.test_torch_l1.reset()
-            self.test_torch_mse.reset()
+            acc = self.test_accuracy.compute()
+            f1 = self.test_f1.compute()
+            auc = self.test_auc.compute()
+            self.test_accuracy.reset()
+            self.test_f1.reset()
+            self.test_auc.reset()
 
-        return r2, torch_l1, torch_mse
+        return acc, f1, auc
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
@@ -504,7 +501,7 @@ class GCNLinkPred(pl.LightningModule):
 
         scheduler = self._config_lr_scheduler(optimizer)
 
-        lr_scheduler = {"scheduler": scheduler, "monitor": "val_mae"}
+        lr_scheduler = {"scheduler": scheduler, "monitor": "val_f1"}
 
         return [optimizer], [lr_scheduler]
 
@@ -527,71 +524,48 @@ class GCNLinkPred(pl.LightningModule):
 
         return scheduler
 
-    def evaluate_manually(self, batch_graph, batch_label, scaler_list, per_atom=False):
+    def evaluate_manually(self, dataloader):
         """
         Evaluate a set of data manually
         Takes
             feats: dict, dictionary of batched features
             scaler_list: list, list of scalers
         """
-        # batch_graph, batch_label = batch
+        self.eval()
 
-        # batch_label = batch_label["global"]
-        preds = self.forward(batch_graph, batch_graph.ndata["feat"])
+        metric_hinge = HingeMetric()
+        metric_cross = CrossEntropyMetric()
+        metric_margin = MarginMetric()
+        metric_f1 = F1Metric()
+        metric_acc = AccuracyMetric()
+        metric_auc = AUCMetric()
 
-        preds_unscaled = deepcopy(preds.detach())
-        labels_unscaled = deepcopy(batch_label)
-        # print("preds unscaled", preds_unscaled)  # * this looks good
-        # print("labels unscaled", labels_unscaled)  # * this looks good
-        for scaler in scaler_list:
-            labels_unscaled = scaler.inverse_feats(labels_unscaled)
-            preds_unscaled = scaler.inverse_feats({"global": preds_unscaled})
+        for positive_graph, negative_graph, feat in dataloader:
+            positive_graph = positive_graph
+            negative_graph = negative_graph
+            pred_pos, pred_neg = self.forward(positive_graph, negative_graph, feat)
 
-        preds_unscaled = preds_unscaled["global"].view(-1, self.hparams.ntasks)
-        labels_unscaled = labels_unscaled["global"].view(-1, self.hparams.ntasks)
-        
-        if per_atom: 
-            abs_diff = torch.abs(preds_unscaled - labels_unscaled)
-            abs_diff = abs_diff.view(-1, self.hparams.ntasks)
-            n_atoms = batch_graph.batch_num_nodes("atom")
-            n_mols = batch_graph.batch_size
-            abs_diff = abs_diff.view(n_mols, -1)
-            # energies within tolerance
-            
-            # mae per atom
-            mae_per_atom = torch.sum(abs_diff, dim=1) / n_atoms
-            mae_per_molecule = torch.sum(abs_diff, dim=1)
-            ewt_prop = torch.sum(mae_per_molecule < 0.043) / len(mae_per_atom) # assumes eV
-            
-            #mse per atom
-            mse_per_atom = torch.sum(abs_diff**2, dim=1) / n_atoms
-            mean_mae = torch.mean(mae_per_atom)
-            mean_rmse = torch.sqrt(torch.mean(mse_per_atom))
-            return mean_mae, mean_rmse, ewt_prop, preds_unscaled, labels_unscaled
-        
-        else: 
-            # manually compute metrics
-            #r2_eval = torchmetrics.R2Score()
-            #mae_eval = torchmetrics.MeanAbsoluteError()
-            #mse_eval = torchmetrics.MeanSquaredError(squared=False)
-            r2_eval = MultioutputWrapper(
-                torchmetrics.R2Score(), num_outputs=self.hparams.ntasks
-            )
-            mae_eval = MultioutputWrapper(
-                torchmetrics.MeanAbsoluteError(), num_outputs=self.hparams.ntasks
-            )
-            mse_eval = MultioutputWrapper(
-                torchmetrics.MeanSquaredError(squared=False),
-                num_outputs=self.hparams.ntasks,
-            )
-            
+            metric_f1.update(pred_pos, pred_neg)
+            metric_acc.update(pred_pos, pred_neg)
+            metric_hinge.update(pred_pos, pred_neg)
+            metric_auc.update(pred_pos, pred_neg)
+            metric_margin.update(pred_pos, pred_neg)
+            metric_cross.update(pred_pos, pred_neg)
 
-            r2_eval.update(preds_unscaled, labels_unscaled)
-            mae_eval.update(preds_unscaled, labels_unscaled)
-            mse_eval.update(preds_unscaled, labels_unscaled)
+        metric_cross_val = metric_cross.compute()
+        metric_f1_val = metric_f1.compute()
+        metric_hinge_val = metric_hinge.compute()
+        metric_acc_val = metric_acc.compute()
+        metric_auc_val = metric_auc.compute()
+        metric_margin_val = metric_margin.compute()
 
-            r2_val = r2_eval.compute()
-            mae_val = mae_eval.compute()
-            mse_val = mse_eval.compute()
-            
-            return r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled
+        stats_dict = {
+            "Accuracy": float(metric_acc_val.numpy()),
+            "AUROC": float(metric_auc_val.numpy()),
+            "Cross_entropy": float(metric_cross_val.numpy()),
+            "F1": float(metric_f1_val.numpy()),
+            "Hinge": float(metric_hinge_val.numpy()),
+            "Margin": float(metric_margin_val.numpy()),
+        }
+
+        return stats_dict

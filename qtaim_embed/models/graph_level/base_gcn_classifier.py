@@ -28,8 +28,9 @@ from qtaim_embed.models.layers import (
     GlobalAttentionPoolingThenCat,
     MeanPoolingThenCat,
     WeightAndMeanThenCat,
-    MultitaskLinearSoftmax
+    MultitaskLinearSoftmax,
 )
+
 
 class GCNGraphPredClassifier(pl.LightningModule):
     """
@@ -70,8 +71,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
         conv_fn="GraphConvDropoutBatch",
         global_pooling="WeightAndSumThenCat",
         resid_n_graph_convs=None,
-        num_heads_gat=2, 
-        dropout_feat_gat=0.2, 
+        num_heads_gat=2,
+        dropout_feat_gat=0.2,
         dropout_attn_gat=0.2,
         hidden_size_gat=128,
         residual_gat=True,
@@ -110,7 +111,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightedMeanPoolingThenCat"
+            "WeightedMeanPoolingThenCat",
         ], (
             "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
             + f"but got {global_pooling}"
@@ -128,7 +129,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightedMeanPoolingThenCat"
+            "WeightedMeanPoolingThenCat",
         ], (
             "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, or GlobalAttentionPoolingThenCat"
             + f"but got {global_pooling}"
@@ -180,7 +181,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         # convert string activation to function
         if self.hparams.activation is not None:
             self.activation = getattr(torch.nn, self.hparams.activation)()
-        else: 
+        else:
             self.activation = None
 
         input_size = {
@@ -203,7 +204,12 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 # if i == 0:
                 embedding_in = True
 
-                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=embedding_in)
+                layer_args = get_layer_args(
+                    self.hparams,
+                    i,
+                    activation=self.activation,
+                    embedding_in=embedding_in,
+                )
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
@@ -238,7 +244,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
                     layer_ind = -1
 
                 layer_args = get_layer_args(
-                    self.hparams, layer_ind, activation=self.activation, embedding_in=embedding_in
+                    self.hparams,
+                    layer_ind,
+                    activation=self.activation,
+                    embedding_in=embedding_in,
                 )
                 # print("resid layer args", layer_args)
                 # for k, v in layer_args.items():
@@ -266,7 +275,9 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 # if i == 0:
                 embedding_in = True
 
-                layer_args = get_layer_args(self.hparams, i, activation=self.activation, embedding_in=True)
+                layer_args = get_layer_args(
+                    self.hparams, i, activation=self.activation, embedding_in=True
+                )
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
@@ -286,12 +297,11 @@ class GCNGraphPredClassifier(pl.LightningModule):
                     )
                 )
 
-
         self.conv_layers = nn.ModuleList(self.conv_layers)
         # print("conv layer out modes", self.conv_layers[-1].mods)
 
         # print("conv layer out feats", self.conv_layers[-1].out_feats)
-        #conv_out_size = self.conv_layers[-1].out_feats
+        # conv_out_size = self.conv_layers[-1].out_feats
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             conv_out_size = {}
@@ -300,12 +310,12 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         elif self.hparams.conv_fn == "ResidualBlock":
             conv_out_size = self.conv_layers[-1].out_feats
-        
+
         elif self.hparams.conv_fn == "GATConv":
             conv_out_size = {}
             for k, v in self.conv_layers[-1].mods.items():
                 conv_out_size[k] = v._out_feats
-        
+
         # print("conv out raw", conv_out_size)
         self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
         # print("conv out size: ", self.conv_out_size)
@@ -448,8 +458,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
                     for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.num_heads * self.hparams.hidden_size)
-                else:         
+                        feats[k] = v.reshape(
+                            -1, self.hparams.num_heads * self.hparams.hidden_size
+                        )
+                else:
                     for k, v in feats.items():
                         feats[k] = v.reshape(-1, self.hparams.hidden_size)
 
@@ -556,7 +568,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         Train step
         """
-        #return self.shared_step(batch, mode="train")
+        # return self.shared_step(batch, mode="train")
         return {"loss": self.shared_step(batch, mode="train")}
 
     def validation_step(self, batch, batch_idx):
@@ -567,7 +579,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         # Todo
-        #return self.shared_step(batch, mode="test")
+        # return self.shared_step(batch, mode="test")
         return {"test_loss": self.shared_step(batch, mode="test")}
 
     def on_train_epoch_end(self):
@@ -579,7 +591,6 @@ class GCNGraphPredClassifier(pl.LightningModule):
         self.log("train_auroc", auroc.mean(), prog_bar=False, sync_dist=True)
         # get epoch number
 
-
     def on_validation_epoch_end(self):
         """
         Validation epoch end
@@ -588,7 +599,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         self.log("val_f1", f1.mean(), prog_bar=True, sync_dist=True)
         self.log("val_auroc", auroc.mean(), prog_bar=True, sync_dist=True)
         return {"val_f1": f1.mean(), "val_auroc": auroc.mean()}
-    
+
     def on_test_epoch_end(self):
         """
         Test epoch end
@@ -685,7 +696,6 @@ class GCNGraphPredClassifier(pl.LightningModule):
         logits = self.forward(batch_graph, batch_graph.ndata["feat"])
         logits_one_hot = torch.argmax(logits, axis=-1)
 
-
         if self.hparams.ntasks > 1:
             # create a dict of softmax layers
             test_auroc = torchmetrics.classification.MultilabelAUROC(
@@ -701,13 +711,11 @@ class GCNGraphPredClassifier(pl.LightningModule):
             test_auroc.update(logits, labels)
             test_acc.update(logits, labels)
             test_f1.update(logits, labels)
-            
+
         else:
             labels_one_hot = labels_one_hot.reshape(-1)
-        
-            test_auroc = torchmetrics.classification.AUROC(
-                num_labels=1, task="binary"
-            )
+
+            test_auroc = torchmetrics.classification.AUROC(num_labels=1, task="binary")
             test_f1 = torchmetrics.F1Score(num_classes=2, task="binary")
             test_acc = torchmetrics.Accuracy(num_classes=2, task="binary")
 
@@ -717,5 +725,5 @@ class GCNGraphPredClassifier(pl.LightningModule):
         auroc = test_auroc.compute()
         test_acc.update(logits_one_hot, labels_one_hot)
         acc = test_acc.compute()
-        
+
         return acc, auroc, f1

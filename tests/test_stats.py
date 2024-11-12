@@ -148,13 +148,5 @@ class TestLinkPredMetrics:
 
 
 
-class_test = TestLinkPredMetrics()
-#class_test.test_hinge()
-#class_test.test_margin()
-#class_test.test_cross_entropy()
-
-class_test.test_accuracy()
-class_test.test_auc()
-
 
 

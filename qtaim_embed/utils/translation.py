@@ -1,14 +1,15 @@
-import numpy as np 
+import numpy as np
 from tqdm import tqdm
 from rdkit import Chem
 from rdkit import RDLogger
 
 import openbabel as ob
-import pandas as pd 
+import pandas as pd
 
 ob_log_handler = ob.OBMessageHandler()
 ob_log_handler.SetOutputLevel(0)
 RDLogger.DisableLog("rdApp.*")
+
 
 def get_molecule_translation_dimenet_qm8(df, file):
     z_list = []

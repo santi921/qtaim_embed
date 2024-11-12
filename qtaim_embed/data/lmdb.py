@@ -6,18 +6,20 @@ import tempfile
 
 
 from qtaim_embed.core.dataset import Subset
+
 scalar = 1 / 1024
 
+
 def TransformMol(data_object):
-    serialized_graph = data_object['molecule_graph']
-    # check if serialized_graph is DGL graph or if it is chunk 
+    serialized_graph = data_object["molecule_graph"]
+    # check if serialized_graph is DGL graph or if it is chunk
     if isinstance(serialized_graph, dgl.DGLGraph):
         return data_object
     elif isinstance(serialized_graph, dgl.DGLHeteroGraph):
         return data_object
 
     dgl_graph = load_dgl_graph_from_serialized(serialized_graph)
-    #data_object["molecule_graph"] = dgl_graph
+    # data_object["molecule_graph"] = dgl_graph
     return dgl_graph
 
 
@@ -38,7 +40,7 @@ def serialize_dgl_graph(dgl_graph):
 
 
 def load_dgl_graph_from_serialized(serialized_graph):
-    with tempfile.NamedTemporaryFile(mode='wb', delete=True) as tmpfile:
+    with tempfile.NamedTemporaryFile(mode="wb", delete=True) as tmpfile:
         tmpfile.write(serialized_graph)
         tmpfile.flush()  # Ensure all data is written
 
@@ -51,19 +53,11 @@ def load_dgl_graph_from_serialized(serialized_graph):
     return graphs[0]  # Assuming there's only one graph
 
 
-def write_molecule_lmdb(
-    graphs,
-    lmdb_dir,
-    lmdb_name,
-    global_values
-):
+def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values):
     os.makedirs(lmdb_dir, exist_ok=True)
 
     key_template = ["molecule_graph"]
-    dataset = [
-        {k: v for k, v in zip(key_template, values)}
-        for values in zip(graphs)
-    ]
+    dataset = [{k: v for k, v in zip(key_template, values)} for values in zip(graphs)]
 
     db = lmdb.open(
         lmdb_dir + lmdb_name,
@@ -73,19 +67,19 @@ def write_molecule_lmdb(
         map_async=True,
     )
 
-    #write samples
+    # write samples
     for ind, sample in enumerate(dataset):
-        #sample_index = sample["molecule_index"]
+        # sample_index = sample["molecule_index"]
         sample_index = ind
         txn = db.begin(write=True)
         txn.put(
-            #let index of molecule identical to index of sample
+            # let index of molecule identical to index of sample
             f"{sample_index}".encode("ascii"),
             pickle.dumps(sample, protocol=-1),
         )
         txn.commit()
 
-    #write properties.
+    # write properties.
     txn = db.begin(write=True)
     txn.put("length".encode("ascii"), pickle.dumps(len(dataset), protocol=-1))
     txn.commit()
@@ -102,13 +96,13 @@ def write_molecule_lmdb(
 def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
     """
     Converts dataset to lmdb and saves it to the specified directory
-    Takes: 
+    Takes:
         dataset: dataset object
         lmdb_dir: directory to save the lmdb
     Returns:
         None
     """
-    
+
     if type(dataset) == Subset:
         feature_size = dataset.dataset.feature_size
         feature_name = dataset.dataset.feature_names
@@ -120,8 +114,9 @@ def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
         target_dict = dataset.dataset.target_dict
         extra_dataset_info = dataset.dataset.extra_dataset_info
         # List of Molecules
-        dgl_graphs_serialized = [serialize_dgl_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices]
-
+        dgl_graphs_serialized = [
+            serialize_dgl_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices
+        ]
 
     else:
         feature_size = dataset.feature_size
@@ -135,7 +130,6 @@ def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
         extra_dataset_info = dataset.extra_dataset_info
         # List of Molecules
         dgl_graphs_serialized = [serialize_dgl_graph(g) for g in dataset.graphs]
-        
 
     global_dict = {
         "feature_size": feature_size,
@@ -146,15 +140,13 @@ def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
         "allowed_spins": allowed_spins,
         "target_dict": target_dict,
         "extra_dataset_info": extra_dataset_info,
-
     }
 
     print("...> writing molecules to lmdb")
-    #print("number of molecules to write: ", len(molecule_ind_list))
+    # print("number of molecules to write: ", len(molecule_ind_list))
     write_molecule_lmdb(
         graphs=dgl_graphs_serialized,
         lmdb_dir=lmdb_dir,
         lmdb_name="molecule.lmdb",
-        global_values=global_dict
+        global_values=global_dict,
     )
-

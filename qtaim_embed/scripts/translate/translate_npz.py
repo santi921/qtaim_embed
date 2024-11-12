@@ -10,13 +10,12 @@ from qtaim_embed.utils.translation import (
 )
 
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-dataset_loc", type=str, default="./qm9.json")
     parser.add_argument("-out_loc", type=str, default="./qm9_dimenet.json")
     parser.add_argument("-dataset_type", type=str, default="qm9")
-    
+
     args = parser.parse_args()
     dataset_loc = str(args.dataset_loc)
     out_loc = str(args.out_loc)
@@ -27,10 +26,10 @@ def main():
     elif dataset_loc.split(".")[-1] == "json":
         df = pd.read_json(dataset_loc)
 
-    if dataset_type == "qm8": 
+    if dataset_type == "qm8":
         get_molecule_translation_dimenet_qm8(df, out_loc)
-    else: 
+    else:
         get_molecule_translation_dimenet_qm9(df, out_loc)
-        
+
 
 main()

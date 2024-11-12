@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 import dgl
 from dgl.sampling import global_uniform_negative_sampling
-from qtaim_embed.data.transforms import DropBondHeterograph, hetero_to_homo, homo_to_hetero
+from qtaim_embed.data.transforms import hetero_to_homo
 
 
 class DataLoaderMoleculeNodeTask(DataLoader):
@@ -42,7 +42,7 @@ class DataLoaderMoleculeGraphTask(DataLoader):
             raise ValueError(
                 "'collate_fn' provided internally', you need not to provide one"
             )
-        
+
         self.transforms = transforms
 
         def collate(samples):
@@ -82,9 +82,7 @@ class DataLoaderLMDB(DataLoader):
             batched_labels = batched_graphs.ndata["labels"]
             return batched_graphs, batched_labels
 
-        super(DataLoaderLMDB, self).__init__(
-            dataset, collate_fn=collate, **kwargs
-        )
+        super(DataLoaderLMDB, self).__init__(dataset, collate_fn=collate, **kwargs)
 
 
 class DataLoaderLinkTaskHeterograph(DataLoader):
@@ -99,41 +97,52 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
             )
         self.transforms = transforms
         self.validation = bool(validation)
-        
-      
+
         def collate(samples):
 
             graphs = samples
-            
+
             if self.transforms is not None:
                 batched_graphs = dgl.batch(graphs)
                 graphs = self.transforms(batched_graphs)
 
-            #graphs = samples
+            # graphs = samples
             transformer = hetero_to_homo(concat_global=True)
             # convert to homographs
             graphs_hetero_to_homo = [transformer(i) for i in graphs]
-            # get number of edges 
-            
+            # get number of edges
+
             # get negative samples
-            graphs_negative = [get_negative_graph(graphs_hetero_to_homo[i], graphs_hetero_to_homo[i].num_edges()) for i in range(len(graphs_hetero_to_homo))]
-            if self.validation: 
-                graphs_negative_explicit = [get_negative_graph_explicit(graphs_hetero_to_homo[i])[0] for i in range(len(graphs_hetero_to_homo))]
-            
-            #source, dest = global_uniform_negative_sampling(g, num_samples = self.k)
-             
+            graphs_negative = [
+                get_negative_graph(
+                    graphs_hetero_to_homo[i], graphs_hetero_to_homo[i].num_edges()
+                )
+                for i in range(len(graphs_hetero_to_homo))
+            ]
+            if self.validation:
+                graphs_negative_explicit = [
+                    get_negative_graph_explicit(graphs_hetero_to_homo[i])[0]
+                    for i in range(len(graphs_hetero_to_homo))
+                ]
+
+            # source, dest = global_uniform_negative_sampling(g, num_samples = self.k)
+
             batched_graphs = dgl.batch(graphs_hetero_to_homo)
             batched_negative_graphs = dgl.batch(graphs_negative)
-            
-            feat = batched_graphs.ndata['ft']
-            
-            if self.validation: 
+
+            feat = batched_graphs.ndata["ft"]
+
+            if self.validation:
                 batch_neg_explicitly = dgl.batch(graphs_negative_explicit)
-                return batched_graphs, batched_negative_graphs, batch_neg_explicitly, feat
-    
+                return (
+                    batched_graphs,
+                    batched_negative_graphs,
+                    batch_neg_explicitly,
+                    feat,
+                )
+
             else:
                 return batched_graphs, batched_negative_graphs, feat
-            
 
         super(DataLoaderLinkTaskHeterograph, self).__init__(
             dataset, collate_fn=collate, **kwargs
@@ -150,17 +159,17 @@ def get_negative_graph(graph_pos, k):
         dgl.graph: negative graph
     """
     source, dest = global_uniform_negative_sampling(
-        graph_pos, num_samples = k, replace=False
+        graph_pos, num_samples=k, replace=False
     )
-    
+
     if int(source.shape[0]) != k:
         source, dest = global_uniform_negative_sampling(
-            graph_pos, num_samples = k, replace=False, redundancy=10.0
-        )   
+            graph_pos, num_samples=k, replace=False, redundancy=10.0
+        )
     return dgl.graph((source, dest), num_nodes=graph_pos.num_nodes())
-    
 
-def get_negative_graph_explicit(graph_pos): 
+
+def get_negative_graph_explicit(graph_pos):
     """
     Given a positive graph, get the negative graph.
     """

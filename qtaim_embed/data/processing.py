@@ -21,8 +21,8 @@ def _transform(X, copy, with_mean=True, with_std=True, threshold=1.0e-3, eta=1.0
     rst = scaler.fit(X)
     mean = scaler.mean_
     std = np.sqrt(scaler.var_)
-    #print("mean", mean)
-    #print("std", std)
+    # print("mean", mean)
+    # print("std", std)
     for i, v in enumerate(std):
         if v <= threshold:
             print(
@@ -38,7 +38,8 @@ def _transform(X, copy, with_mean=True, with_std=True, threshold=1.0e-3, eta=1.0
 
     return rst, mean, std
 
-def log_scale_from_dict(dict_params): 
+
+def log_scale_from_dict(dict_params):
     """
     Helper function to create a log scale from a dictionary of parameters
     Takes:
@@ -54,6 +55,7 @@ def log_scale_from_dict(dict_params):
         features_tf=dict_params["features_tf"],
         shift=dict_params["shift"],
     )
+
 
 def standard_scale_from_dict(dict_params):
     """
@@ -78,6 +80,7 @@ def standard_scale_from_dict(dict_params):
         mean=dict_params["mean"],
         std=dict_params["std"],
     )
+
 
 class HeteroGraphStandardScaler:
     """

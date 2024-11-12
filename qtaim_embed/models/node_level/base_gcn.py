@@ -1,6 +1,6 @@
 # baseline GNN model for node-level regression
 from copy import deepcopy
-import numpy as np 
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -75,8 +75,6 @@ class GCNNodePred(pl.LightningModule):
         super().__init__()
         self.learning_rate = lr
 
-
-        
         if "atom" not in target_dict or target_dict["atom"] == []:
             target_dict["atom"] = [None]
         if "bond" not in target_dict or target_dict["bond"] == []:
@@ -85,13 +83,16 @@ class GCNNodePred(pl.LightningModule):
             target_dict["global"] = [None]
 
         output_dims = 0
-        #print("target dict", target_dict)
+        # print("target dict", target_dict)
         for k, v in target_dict.items():
             if v != [None]:
                 output_dims += len(v)
 
-
-        assert conv_fn == "GraphConvDropoutBatch" or conv_fn == "ResidualBlock" or conv_fn == "GATConv", (
+        assert (
+            conv_fn == "GraphConvDropoutBatch"
+            or conv_fn == "ResidualBlock"
+            or conv_fn == "GATConv"
+        ), (
             "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
             + f"but got {conv_fn}"
         )
@@ -151,11 +152,15 @@ class GCNNodePred(pl.LightningModule):
 
         self.conv_layers = nn.ModuleList()
 
-
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             for i in range(self.hparams.n_conv_layers):
                 embedding_in = True
-                layer_args = get_layer_args(self.hparams, i, activation=self.hparams.activation, embedding_in=embedding_in)
+                layer_args = get_layer_args(
+                    self.hparams,
+                    i,
+                    activation=self.hparams.activation,
+                    embedding_in=embedding_in,
+                )
 
                 self.conv_layers.append(
                     dglnn.HeteroGraphConv(
@@ -188,7 +193,10 @@ class GCNNodePred(pl.LightningModule):
                     layer_ind = -1
 
                 layer_args = get_layer_args(
-                    self.hparams, layer_ind, embedding_in=True, activation=self.hparams.activation
+                    self.hparams,
+                    layer_ind,
+                    embedding_in=True,
+                    activation=self.hparams.activation,
                 )
 
                 output_block = False
@@ -205,11 +213,15 @@ class GCNNodePred(pl.LightningModule):
 
                 layer_tracker += self.hparams.resid_n_graph_convs
 
-
         elif self.hparams.conv_fn == "GATConv":
             for i in range(self.hparams.n_conv_layers):
 
-                layer_args = get_layer_args(self.hparams, i, activation=self.hparams.activation, embedding_in=True)
+                layer_args = get_layer_args(
+                    self.hparams,
+                    i,
+                    activation=self.hparams.activation,
+                    embedding_in=True,
+                )
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
@@ -273,24 +285,26 @@ class GCNNodePred(pl.LightningModule):
 
         for ind, conv in enumerate(self.conv_layers):
 
-            #if ind == 0:
+            # if ind == 0:
             #    feats = conv(graph, inputs)
-            #else:
+            # else:
             feats = conv(graph, feats)
-                
+
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
                     for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.num_heads * self.hparams.hidden_size)
-                else:         
+                        feats[k] = v.reshape(
+                            -1, self.hparams.num_heads * self.hparams.hidden_size
+                        )
+                else:
                     for k, v in feats.items():
                         feats[k] = v.reshape(-1, self.hparams.hidden_size)
         # filter features if output is None for one of the node types
-        
+
         for k, v in self.hparams.target_dict.items():
             if v == [None]:
                 del feats[k]
-        
+
         return feats
 
     def feature_at_each_layer(model, graph, feats):
@@ -329,7 +343,7 @@ class GCNNodePred(pl.LightningModule):
             layer_idx += 1
 
         return bond_feats, atom_feats, global_feats
- 
+
     def shared_step(self, batch, mode):
         batch_graph, batch_label = batch
         logits_list = []
@@ -337,7 +351,7 @@ class GCNNodePred(pl.LightningModule):
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
-        #print("lmdb batch", batch_graph, batch_label)
+        # print("lmdb batch", batch_graph, batch_label)
         max_nodes = -1
         for target_type, target_list in self.hparams.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
@@ -433,7 +447,7 @@ class GCNNodePred(pl.LightningModule):
         self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=True)
-        
+
         for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
                 for i, target in enumerate(target_list):
@@ -476,7 +490,6 @@ class GCNNodePred(pl.LightningModule):
                         prog_bar=False,
                         sync_dist=True,
                     )
-                
 
     def on_test_epoch_end(self):
         """
@@ -599,23 +612,24 @@ class GCNNodePred(pl.LightningModule):
         pred_dict = {}
         label_dict = {}
 
-
         for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
-            
+
                 r2_eval[target_type] = MultioutputWrapper(
-                    torchmetrics.R2Score(), num_outputs=len(self.target_dict[target_type])
+                    torchmetrics.R2Score(),
+                    num_outputs=len(self.target_dict[target_type]),
                 )
                 mae_eval[target_type] = MultioutputWrapper(
-                    torchmetrics.MeanAbsoluteError(), num_outputs=len(self.target_dict[target_type])
+                    torchmetrics.MeanAbsoluteError(),
+                    num_outputs=len(self.target_dict[target_type]),
                 )
                 pred_dict[target_type] = []
                 label_dict[target_type] = []
 
-        #batch_graph, batch_label = batch
+        # batch_graph, batch_label = batch
         for batch_graph, batched_label in test_dataloader:
             preds = self.forward(batch_graph, batch_graph.ndata["feat"])
-            # detach every tensor in dictionary 
+            # detach every tensor in dictionary
             preds_unscaled = {k: deepcopy(v.detach()) for k, v in preds.items()}
             labels_unscaled = deepcopy(batched_label)
 
@@ -623,21 +637,23 @@ class GCNNodePred(pl.LightningModule):
                 labels_unscaled = scaler.inverse_feats(labels_unscaled)
                 preds_unscaled = scaler.inverse_feats(preds_unscaled)
 
-            #max_nodes = -1
+            # max_nodes = -1
             for target_type, target_list in self.target_dict.items():
                 if target_list != [None] and len(target_list) > 0:
-                    r2_eval[target_type].update(preds_unscaled[target_type], labels_unscaled[target_type])
-                    mae_eval[target_type].update(preds_unscaled[target_type], labels_unscaled[target_type])
+                    r2_eval[target_type].update(
+                        preds_unscaled[target_type], labels_unscaled[target_type]
+                    )
+                    mae_eval[target_type].update(
+                        preds_unscaled[target_type], labels_unscaled[target_type]
+                    )
                     pred_dict[target_type].append(preds_unscaled[target_type].numpy())
                     label_dict[target_type].append(labels_unscaled[target_type].numpy())
-        
+
         for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
                 r2_dict[target_type] = r2_eval[target_type].compute()
                 mae_dict[target_type] = mae_eval[target_type].compute()
                 pred_dict[target_type] = np.concatenate(pred_dict[target_type])
                 label_dict[target_type] = np.concatenate(label_dict[target_type])
-                    
+
         return r2_dict, mae_dict, pred_dict, label_dict
-
-

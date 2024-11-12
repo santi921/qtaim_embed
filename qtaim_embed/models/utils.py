@@ -8,6 +8,7 @@ from qtaim_embed.models.graph_level.base_gcn_classifier import GCNGraphPredClass
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 from qtaim_embed.models.initializers import xavier_init, kaiming_init, equi_var_init
 
+
 def load_graph_level_model_from_config(config):
     """
     returns model and optimizer from dict of parameters
@@ -22,7 +23,7 @@ def load_graph_level_model_from_config(config):
         print(":::RESTORING MODEL FROM EXISTING FILE:::")
 
         if config["restore_path"] != None:
-            try: 
+            try:
                 try:
                     model = GCNGraphPred.load_from_checkpoint(
                         checkpoint_path=config["restore_path"]
@@ -30,16 +31,16 @@ def load_graph_level_model_from_config(config):
                     # model.to(device)
                     print(":::MODEL LOADED:::")
                     return model
-                except: 
+                except:
                     model = GCNGraphPredClassifier.load_from_checkpoint(
                         checkpoint_path=config["restore_path"]
                     )
                     # model.to(device)
                     print(":::MODEL LOADED:::")
-                    return model     
+                    return model
             except:
                 pass
-            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")   
+            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
             if load_dir == None:
                 load_dir = "./"
@@ -94,12 +95,11 @@ def load_graph_level_model_from_config(config):
             output_dims=2,
             pooling_ntypes=["atom", "bond", "global"],
             pooling_ntypes_direct=["global"],
-            num_heads_gat=config["num_heads_gat"], 
+            num_heads_gat=config["num_heads_gat"],
             dropout_feat_gat=config["dropout_feat_gat"],
             dropout_attn_gat=config["dropout_attn_gat"],
             hidden_size_gat=config["hidden_size_gat"],
             residual_gat=config["residual_gat"],
-            
         )
     else:
         print(":::REGRESSION MODEL:::")
@@ -130,17 +130,16 @@ def load_graph_level_model_from_config(config):
             fc_batch_norm=config["fc_batch_norm"],
             lstm_iters=config["lstm_iters"],
             lstm_layers=config["lstm_layers"],
-            #output_dims=config["output_dims"],
+            # output_dims=config["output_dims"],
             pooling_ntypes=["atom", "bond", "global"],
             pooling_ntypes_direct=["global"],
-            num_heads_gat=config["num_heads_gat"], 
+            num_heads_gat=config["num_heads_gat"],
             dropout_feat_gat=config["dropout_feat_gat"],
             dropout_attn_gat=config["dropout_attn_gat"],
             hidden_size_gat=config["hidden_size_gat"],
             residual_gat=config["residual_gat"],
         )
     # model.to(device)
-
 
     if config["initializer"] == "kaiming":
         print(":::USING KAIMING INITIALIZER:::")
@@ -174,16 +173,16 @@ def load_node_level_model_from_config(config):
         print(":::RESTORING MODEL FROM EXISTING FILE:::")
 
         if config["restore_path"] != None:
-            try: 
+            try:
                 model = GCNNodePred.load_from_checkpoint(
                     checkpoint_path=config["restore_path"]
                 )
                 # model.to(device)
                 print(":::MODEL LOADED:::")
-                return model                    
+                return model
             except:
                 pass
-            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")   
+            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
             if load_dir == None:
                 load_dir = "./"
@@ -222,14 +221,13 @@ def load_node_level_model_from_config(config):
         lr_scale_factor=config["lr_scale_factor"],
         loss_fn=config["loss_fn"],
         embedding_size=config["embedding_size"],
-        num_heads_gat=config["num_heads_gat"], 
+        num_heads_gat=config["num_heads_gat"],
         dropout_feat_gat=config["dropout_feat_gat"],
         dropout_attn_gat=config["dropout_attn_gat"],
         hidden_size_gat=config["hidden_size_gat"],
-        residual_gat=config["residual_gat"]
+        residual_gat=config["residual_gat"],
     )
     # model.to(device)
-
 
     if config["initializer"] == "kaiming":
         print(":::USING KAIMING INITIALIZER:::")
@@ -298,8 +296,8 @@ def get_charge_tmqm(batch_graph):
     charge_one_hot = global_feats[:, ind_charges[0] : ind_charges[1]]
     charge_one_hot = charge_one_hot.detach().numpy()
     charge_one_hot = list(np.argmax(charge_one_hot, axis=1) - 1)
-    
-    return charge_one_hot#, spin_one_hot
+
+    return charge_one_hot  # , spin_one_hot
 
 
 def test_and_predict_libe(dataset_test, dataset_train, model):
@@ -543,10 +541,9 @@ def test_and_predict(dataset_test, dataset_train, model):
 
 
 def get_test_train_preds_as_df(results_dict, key="qtaim_full"):
-    dict_test =  {
+    dict_test = {
         "preds": results_dict[key]["test_preds"].flatten(),
         "labels": results_dict[key]["test_labels"].flatten(),
-
     }
     dict_train = {
         "preds": results_dict[key]["train_preds"].flatten(),
@@ -561,8 +558,8 @@ def get_test_train_preds_as_df(results_dict, key="qtaim_full"):
         dict_train["charge"] = results_dict[key]["charge_list_train"]
         dict_train["spin"] = results_dict[key]["spin_list_train"]
 
-    df_test = pd.DataFrame(dict_test)   
-    df_train = pd.DataFrame(dict_train)   
+    df_test = pd.DataFrame(dict_test)
+    df_train = pd.DataFrame(dict_train)
 
     return df_test, df_train
 
@@ -574,13 +571,12 @@ def get_charge_tmqm(batch_graph):
     charge_one_hot = global_feats[:, ind_charges[0] : ind_charges[1]]
     charge_one_hot = charge_one_hot.detach().numpy()
     charge_one_hot = list(np.argmax(charge_one_hot, axis=1) - 1)
-    
-    return charge_one_hot#, spin_one_hot
+
+    return charge_one_hot  # , spin_one_hot
 
 
 def test_and_predict_tmqm(dataset_test, model, batch_size=100):
     statistics_dict = {}
-
 
     ### Test set
     data_loader = DataLoaderMoleculeGraphTask(
@@ -591,9 +587,9 @@ def test_and_predict_tmqm(dataset_test, model, batch_size=100):
     charge_list = []
 
     for i, (batch_graph, batched_labels) in enumerate(data_loader):
-        #batch_graph, batched_labels = next(iter(data_loader))
+        # batch_graph, batched_labels = next(iter(data_loader))
         charge_list_test = get_charge_tmqm(batch_graph)
-        
+
         r2_pre, mae, mse, pred, labels = model.evaluate_manually(
             batch_graph,
             batched_labels,
@@ -602,15 +598,14 @@ def test_and_predict_tmqm(dataset_test, model, batch_size=100):
         pred_list.append(pred)
         label_list.append(labels)
         charge_list.append(charge_list_test)
-        #r2_pre = r2_pre.numpy()[0]
-        #mae = mae.numpy()[0]
-        #mse = mse.numpy()[0]
+        # r2_pre = r2_pre.numpy()[0]
+        # mae = mae.numpy()[0]
+        # mse = mse.numpy()[0]
 
     preds_test = torch.cat(pred_list)
     label_list = torch.cat(label_list)
-    # charge list isn't a tensor , concat w numpy 
+    # charge list isn't a tensor , concat w numpy
     charge_list_test = np.concatenate(charge_list)
-
 
     # manually compute r2, mae, mse
     y = label_list
@@ -628,7 +623,6 @@ def test_and_predict_tmqm(dataset_test, model, batch_size=100):
     )
     print("--" * 50)
     statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
-
 
     # return preds_test, preds_train, label_list, label_list_train, statistics_dict, charge_list_test, spin_list_test, charge_list_train, spin_list_train
     return {

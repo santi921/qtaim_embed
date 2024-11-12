@@ -1,16 +1,13 @@
 import argparse
 from qtaim_embed.core.dataset import HeteroGraphNodeLabelDataset
 from qtaim_embed.utils.dataset import (
-    gather_atom_level_stats, 
-    gather_bond_level_stats, 
-    print_summary_complete, 
+    gather_atom_level_stats,
+    gather_bond_level_stats,
+    print_summary_complete,
     print_summary_atom_level,
     plot_violin_from_complete_dict,
-    plot_violin_from_atom_dict
-    
+    plot_violin_from_atom_dict,
 )
-
-
 
 
 def main():
@@ -53,11 +50,11 @@ def main():
                 "extra_feat_atom_det_hessian",
                 "extra_feat_atom_ellip_e_dens",
                 "extra_feat_atom_eta",
-                "extra_feat_atom_energy_density", 
-                "extra_feat_atom_density_beta", 
-                "extra_feat_atom_density_alpha", 
+                "extra_feat_atom_energy_density",
+                "extra_feat_atom_density_beta",
+                "extra_feat_atom_density_alpha",
                 "extra_feat_atom_spin_density",
-                "extra_feat_atom_lol"
+                "extra_feat_atom_lol",
             ],
             "bond": [
                 "extra_feat_bond_Lagrangian_K",
@@ -77,10 +74,10 @@ def main():
                 "extra_feat_bond_det_hessian",
                 "extra_feat_bond_ellip_e_dens",
                 "extra_feat_bond_eta",
-                "extra_feat_bond_energy_density", 
-                "extra_feat_bond_density_beta", 
-                "extra_feat_bond_density_alpha", 
-                "extra_feat_bond_spin_density", 
+                "extra_feat_bond_energy_density",
+                "extra_feat_bond_density_beta",
+                "extra_feat_bond_density_alpha",
+                "extra_feat_bond_spin_density",
                 "extra_feat_bond_lol",
                 "bond_length",
             ],
@@ -105,11 +102,11 @@ def main():
                 "extra_feat_atom_det_hessian",
                 "extra_feat_atom_ellip_e_dens",
                 "extra_feat_atom_eta",
-                "extra_feat_atom_energy_density", 
-                "extra_feat_atom_density_beta", 
-                "extra_feat_atom_density_alpha", 
+                "extra_feat_atom_energy_density",
+                "extra_feat_atom_density_beta",
+                "extra_feat_atom_density_alpha",
                 "extra_feat_atom_spin_density",
-                "extra_feat_atom_lol"
+                "extra_feat_atom_lol",
             ],
             "bond": [
                 "extra_feat_bond_Lagrangian_K",
@@ -129,10 +126,10 @@ def main():
                 "extra_feat_bond_det_hessian",
                 "extra_feat_bond_ellip_e_dens",
                 "extra_feat_bond_eta",
-                "extra_feat_bond_energy_density", 
-                "extra_feat_bond_density_beta", 
-                "extra_feat_bond_density_alpha", 
-                "extra_feat_bond_spin_density", 
+                "extra_feat_bond_energy_density",
+                "extra_feat_bond_density_beta",
+                "extra_feat_bond_density_alpha",
+                "extra_feat_bond_spin_density",
                 "extra_feat_bond_lol",
                 "bond_length",
             ],
@@ -141,7 +138,11 @@ def main():
         extra_dataset_info={},
     )
 
-    feat_dict_atoms, feat_dict_complete_atoms, feat_dict_summary_atoms = gather_atom_level_stats(dataset)
+    (
+        feat_dict_atoms,
+        feat_dict_complete_atoms,
+        feat_dict_summary_atoms,
+    ) = gather_atom_level_stats(dataset)
     feat_dict_complete_bonds, feat_dict_summary_bonds = gather_bond_level_stats(dataset)
 
     print("... > atom_summary stats")
@@ -151,12 +152,23 @@ def main():
     print("... > atom level stats")
     print_summary_atom_level(feat_dict_summary_atoms)
 
-    plot_violin_from_complete_dict(feat_dict_complete_atoms, plot_per_row=3, line_width=2, name="violin_plots_atoms.png")
-    plot_violin_from_complete_dict(feat_dict_complete_bonds, plot_per_row=3, line_width=2, name="violin_plots_bonds.png")
+    plot_violin_from_complete_dict(
+        feat_dict_complete_atoms,
+        plot_per_row=3,
+        line_width=2,
+        name="violin_plots_atoms.png",
+    )
+    plot_violin_from_complete_dict(
+        feat_dict_complete_bonds,
+        plot_per_row=3,
+        line_width=2,
+        name="violin_plots_bonds.png",
+    )
 
     atoms_in_dataset = list(feat_dict_atoms.keys())
 
     for atom in atoms_in_dataset:
         plot_violin_from_atom_dict(feat_dict_atoms, atom, plot_per_row=3, line_width=2)
+
 
 main()

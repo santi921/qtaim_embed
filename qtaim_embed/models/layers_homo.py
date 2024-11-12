@@ -1,4 +1,3 @@
-
 from typing import List, Tuple, Dict, Optional
 
 
@@ -14,7 +13,6 @@ from qtaim_embed.models.layers import GraphConvDropoutBatch
 
 
 class DotPredictor(nn.Module):
-
     def apply_edges(self, edges):
         """
         Computes a scalar score for each edge of the given graph.
@@ -32,59 +30,56 @@ class DotPredictor(nn.Module):
         dict
             A dictionary of new edge features.
         """
-        ret_val = torch.sum(edges.src['h'] * edges.dst['h'], dim=1)
-        return {'score': ret_val}
-
+        ret_val = torch.sum(edges.src["h"] * edges.dst["h"], dim=1)
+        return {"score": ret_val}
 
     def forward(self, g, h):
         with g.local_scope():
-            g.ndata['h'] = h
+            g.ndata["h"] = h
             # Compute a new edge feature named 'score' by a dot-product between the
             # source node feature 'h' and destination node feature 'h'.
-            #g.apply_edges(fn.u_dot_v('h', 'h', 'score'))
+            # g.apply_edges(fn.u_dot_v('h', 'h', 'score'))
             g.apply_edges(self.apply_edges)
             # u_dot_v returns a 1-element vector for each edge so you need to squeeze it.
-            #return g.edata['score'][:, 0]
-            return g.edata['score']
+            # return g.edata['score'][:, 0]
+            return g.edata["score"]
 
 
 class MLPPredictor(nn.Module):
-    def __init__(self, h_feats, h_dims=[100, 50], dropout=0.5, activation=None, batch_norm=False):
+    def __init__(
+        self, h_feats, h_dims=[100, 50], dropout=0.5, activation=None, batch_norm=False
+    ):
         super().__init__()
 
         if activation is not None:
             self.activation = getattr(torch.nn, activation)()
-        else: 
+        else:
             self.activation = None
 
-
         self.layers = nn.ModuleList()
-        #self.layers.append(nn.Linear(h_feats * 2, h_dims[0]))
+        # self.layers.append(nn.Linear(h_feats * 2, h_dims[0]))
         input_size = h_feats * 2
 
         for i in range(1, len(h_dims)):
-            
+
             output_size = h_dims[i]
             self.layers.append(nn.Linear(input_size, output_size))
             input_size = output_size
 
             if batch_norm:
-                self.layers.append(nn.BatchNorm1d(h_dims[i-1]))
-            
+                self.layers.append(nn.BatchNorm1d(h_dims[i - 1]))
+
             if activation is not None:
                 self.layers.append(self.activation)
-            
+
             if dropout > 0:
                 self.layers.append(nn.Dropout(dropout))
 
-            self.layers.append(nn.Linear(h_dims[i-1], h_dims[i]))
-            
-        
+            self.layers.append(nn.Linear(h_dims[i - 1], h_dims[i]))
+
         self.layers.append(nn.Linear(h_dims[-1], 1))
         self.layers.append(nn.Sigmoid())
 
-
-        
     def apply_edges(self, edges):
         """
         Computes a scalar score for each edge of the given graph.
@@ -102,27 +97,23 @@ class MLPPredictor(nn.Module):
         dict
             A dictionary of new edge features.
         """
-        h = torch.cat([edges.src['h'], edges.dst['h']], 1)
+        h = torch.cat([edges.src["h"], edges.dst["h"]], 1)
         for layer in self.layers[:-1]:
             h = layer(h)
-        return {'score': h.squeeze(1)}
+        return {"score": h.squeeze(1)}
 
     def forward(self, g, h):
         with g.local_scope():
-            g.ndata['h'] = h
+            g.ndata["h"] = h
             g.apply_edges(self.apply_edges)
-            return g.edata['score']
-        
-    
+            return g.edata["score"]
+
+
 class AttentionPredictor(nn.Module):
-    def __init__(
-        self,
-        in_feats: int
-    ):
+    def __init__(self, in_feats: int):
         super(AttentionPredictor, self).__init__()
         self.in_feats = in_feats
-        self.gate_nn = nn.Linear(2*in_feats, 1)
-
+        self.gate_nn = nn.Linear(2 * in_feats, 1)
 
     def apply_edges(self, edges, get_attention=False):
         """
@@ -141,22 +132,21 @@ class AttentionPredictor(nn.Module):
         dict
             A dictionary of new edge features.
         """
-        h = torch.cat([edges.src['h'], edges.dst['h']], 1)
+        h = torch.cat([edges.src["h"], edges.dst["h"]], 1)
 
         gate = F.leaky_relu(self.gate_nn(h))
         gate = F.softmax(gate, dim=1)
-        rst = torch.sum(gate * edges.src['h'], dim=1)
+        rst = torch.sum(gate * edges.src["h"], dim=1)
         if get_attention:
-            return {'score': rst}, gate
-        return {'score': rst}
-        
+            return {"score": rst}, gate
+        return {"score": rst}
 
     def forward(self, g, h):
         with g.local_scope():
-            g.ndata['h'] = h
+            g.ndata["h"] = h
             g.apply_edges(self.apply_edges)
-            return g.edata['score']
-        
+            return g.edata["score"]
+
 
 class UnifySize(nn.Module):
     """
@@ -186,9 +176,9 @@ class UnifySize(nn.Module):
         Returns:
             dict: size adjusted features
         """
-        #return {k: self.linears[k](x) for k, x in feats.items()}
+        # return {k: self.linears[k](x) for k, x in feats.items()}
         return self.linears(feats)
-        
+
 
 class ResidualBlockHomo(nn.Module):
     def __init__(
@@ -237,5 +227,3 @@ class ResidualBlockHomo(nn.Module):
         else:
             feat = {k: feat[k] + input_feats[k] for k in feat.keys()}
         return feat
-
-

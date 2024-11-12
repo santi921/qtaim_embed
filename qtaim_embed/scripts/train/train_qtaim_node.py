@@ -1,7 +1,7 @@
 import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
-import pandas as pd 
+import pandas as pd
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -21,10 +21,10 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 if __name__ == "__main__":
-    #print("here")
+    # print("here")
     parser = argparse.ArgumentParser()
     parser.add_argument("-config", type=str, default=None)
-    
+
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--use_lmdb", default=False, action="store_true")
     parser.add_argument("--log_save_dir", type=str, default="./test_logs/")
@@ -32,7 +32,6 @@ if __name__ == "__main__":
     parser.add_argument("--project_name", type=str, default="qtaim_embed_test")
     parser.add_argument("--dataset_loc", type=str, default=None)
     parser.add_argument("--dataset_test_loc", type=str, default=None)
-    
 
     args = parser.parse_args()
 
@@ -45,7 +44,7 @@ if __name__ == "__main__":
     wandb_entity = args.wandb_entity
     config = args.config
 
-    # print options 
+    # print options
     print("debug: ", debug)
     print("use_lmdb: ", use_lmdb)
     print("project_name: ", project_name)
@@ -54,13 +53,12 @@ if __name__ == "__main__":
     print("log_save_dir: ", log_save_dir)
     print("wandb_entity: ", wandb_entity)
     print("config: ", config)
-    
+
     if config is None:
         print("...using default config!")
         config = get_default_node_level_config()
     else:
         config = json.load(open(config, "r"))
-
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
@@ -74,11 +72,10 @@ if __name__ == "__main__":
     if "target_dict" not in config["model"]:
         config["model"]["target_dict"] = config["dataset"]["target_dict"]
 
-
     if use_lmdb:
         print("...using lmdbs!")
         dm = LMDBDataModule(config=config)
-        
+
     else:
         assert dataset_loc is not None, "dataset_loc must be provided if not using lmdb"
         # dataset
@@ -92,19 +89,18 @@ if __name__ == "__main__":
             config["optim"]["precision"] = int(config["optim"]["precision"])
 
         dm = QTAIMNodeTaskDataModule(config=config)
-        #config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
+        # config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
 
-        
         if dataset_test_loc is not None:
             test_config = deepcopy(config)
             test_config["dataset"]["test_dataset_loc"] = dataset_test_loc
             dm_test = QTAIMNodeTaskDataModule(
-                config=test_config, 
+                config=test_config,
             )
             dm_test.prepare_data(stage="test")
 
-    feature_names, feature_size = dm.prepare_data(stage="fit")  
-    print(feature_names, feature_size)  
+    feature_names, feature_size = dm.prepare_data(stage="fit")
+    print(feature_names, feature_size)
     print("feature size dict: ", feature_size)
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
@@ -123,7 +119,9 @@ if __name__ == "__main__":
         logger_tb = TensorBoardLogger(
             config["dataset"]["log_save_dir"], name="test_logs"
         )
-        logger_wb = WandbLogger(project=project_name, name="test_logs", entity=wandb_entity)
+        logger_wb = WandbLogger(
+            project=project_name, name="test_logs", entity=wandb_entity
+        )
         lr_monitor = LearningRateMonitor(logging_interval="step")
 
         checkpoint_callback = ModelCheckpoint(
@@ -136,10 +134,14 @@ if __name__ == "__main__":
         )
 
         early_stopping_callback = EarlyStopping(
-            monitor="val_loss", min_delta=0.00, patience=config["model"]["extra_stop_patience"], verbose=False, mode="min"
+            monitor="val_loss",
+            min_delta=0.00,
+            patience=config["model"]["extra_stop_patience"],
+            verbose=False,
+            mode="min",
         )
 
-        dm.setup(stage='fit')
+        dm.setup(stage="fit")
         val_dl = dm.train_dataloader()
         _, _ = next(iter(val_dl))
 
@@ -164,21 +166,21 @@ if __name__ == "__main__":
             precision=config["optim"]["precision"],
         )
 
-        # log dataset and optim settings from config 
+        # log dataset and optim settings from config
         run.config.update(config["dataset"])
         run.config.update(config["optim"])
-        
+
         print("dataset and optim settings logged!")
         print("fitting model!")
         trainer.fit(model, dm)
-        
+
         print("model fitted, testing!")
         if use_lmdb:
             if "test_lmdb" in config["dataset"]:
                 trainer.test(model, dm)
-        
+
         else:
             if config["dataset"]["test_prop"] > 0.0:
                 trainer.test(model, dm)
-        
+
     run.finish()

@@ -1,7 +1,6 @@
 import wandb, argparse, torch, json
-import numpy as np
 from copy import deepcopy
-import pandas as pd 
+import pandas as pd
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -31,7 +30,6 @@ if __name__ == "__main__":
     parser.add_argument("-wandb_entity", type=str, default="santi")
     parser.add_argument("--use_lmdb", default=False, action="store_true")
 
-
     args = parser.parse_args()
 
     on_gpu = bool(args.on_gpu)
@@ -49,7 +47,6 @@ if __name__ == "__main__":
     else:
         config = json.load(open(config, "r"))
 
-
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
 
@@ -60,7 +57,7 @@ if __name__ == "__main__":
     if use_lmdb:
         print("using lmdbs!")
         dm = LMDBDataModule(config=config)
-        #config["model"]["target_dict"]["global"] = {"global": ["value"]}
+        # config["model"]["target_dict"]["global"] = {"global": ["value"]}
         config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
 
     else:
@@ -78,17 +75,16 @@ if __name__ == "__main__":
         dm = QTAIMGraphTaskDataModule(config=config)
         config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
 
-        
         if dataset_test_loc is not None:
             test_config = deepcopy(config)
             test_config["dataset"]["test_dataset_loc"] = dataset_test_loc
             dm_test = QTAIMGraphTaskDataModule(
-                config=test_config, 
+                config=test_config,
             )
             dm_test.prepare_data(stage="test")
 
-    feature_names, feature_size = dm.prepare_data(stage="fit")  
-    print(feature_names, feature_size)  
+    feature_names, feature_size = dm.prepare_data(stage="fit")
+    print(feature_names, feature_size)
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
@@ -108,7 +104,9 @@ if __name__ == "__main__":
         logger_tb = TensorBoardLogger(
             config["dataset"]["log_save_dir"], name="test_logs"
         )
-        logger_wb = WandbLogger(project=project_name, name="test_logs", entity=wandb_entity)
+        logger_wb = WandbLogger(
+            project=project_name, name="test_logs", entity=wandb_entity
+        )
         lr_monitor = LearningRateMonitor(logging_interval="step")
 
         checkpoint_callback = ModelCheckpoint(
@@ -121,7 +119,11 @@ if __name__ == "__main__":
         )
 
         early_stopping_callback = EarlyStopping(
-            monitor="val_loss", min_delta=0.00, patience=config["model"]["extra_stop_patience"], verbose=False, mode="min"
+            monitor="val_loss",
+            min_delta=0.00,
+            patience=config["model"]["extra_stop_patience"],
+            verbose=False,
+            mode="min",
         )
 
         trainer = pl.Trainer(
@@ -145,33 +147,32 @@ if __name__ == "__main__":
             precision=config["optim"]["precision"],
         )
 
-        # log dataset and optim settings from config 
+        # log dataset and optim settings from config
         run.config.update(config["dataset"])
         run.config.update(config["optim"])
 
         trainer.fit(model, dm)
-        
+
         if use_lmdb:
             if "test_lmdb" in config["dataset"]:
                 trainer.test(model, dm)
-        
+
         else:
             if config["dataset"]["test_prop"] > 0.0:
                 trainer.test(model, dm)
-        
+
         if dataset_test_loc is not None:
-            
+
             batch_graph, batch_labels = next(iter(dm_test.test_dataloader()))
             scalers = dm.full_dataset.label_scalers
-            
+
             if config["dataset"]["per_atom"] == True:
-        
                 (
                     mean_mae_test,
                     mean_rmse_test,
                     ewt_prop_test,
-                    preds_unscaled, 
-                    labels_unscaled
+                    preds_unscaled,
+                    labels_unscaled,
                 ) = model.evaluate_manually(
                     batch_graph=batch_graph,
                     batch_label=batch_labels,
@@ -192,7 +193,13 @@ if __name__ == "__main__":
                     "labels_unscaled": labels_unscaled.numpy(),
                 }
             else:
-                r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled = model.evaluate_manually(
+                (
+                    r2_val,
+                    mae_val,
+                    mse_val,
+                    preds_unscaled,
+                    labels_unscaled,
+                ) = model.evaluate_manually(
                     batch_graph, batch_labels, scalers, per_atom=False
                 )
                 # make a table of the results
@@ -200,7 +207,7 @@ if __name__ == "__main__":
                 print("r2_test: ", r2_val.numpy())
                 print("mae_test: ", mae_val.numpy())
                 print("mse_test: ", mse_val.numpy())
-                # save results to pkl 
+                # save results to pkl
                 results = {
                     "r2_val": r2_val.numpy(),
                     "mae_val": mae_val.numpy(),
@@ -208,7 +215,8 @@ if __name__ == "__main__":
                     "preds_unscaled": preds_unscaled.numpy(),
                     "labels_unscaled": labels_unscaled.numpy(),
                 }
-            pd.to_pickle(results, config["dataset"]["log_save_dir"] + "test_results.pkl")
-
+            pd.to_pickle(
+                results, config["dataset"]["log_save_dir"] + "test_results.pkl"
+            )
 
     run.finish()

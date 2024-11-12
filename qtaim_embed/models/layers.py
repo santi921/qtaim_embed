@@ -1,4 +1,3 @@
-
 from typing import List, Tuple, Dict, Optional
 
 
@@ -9,8 +8,6 @@ from dgl.readout import sum_nodes, softmax_nodes
 import torch
 from torch import nn
 import torch.nn.functional as F
-
-
 
 
 class UnifySize(nn.Module):
@@ -543,7 +540,7 @@ class WeightAndMeanThenCat(nn.Module):
                 rst.append(feats[ntype])
 
         return torch.cat(rst, dim=-1)
-    
+
 
 class GlobalAttentionPoolingThenCat(nn.Module):
     """

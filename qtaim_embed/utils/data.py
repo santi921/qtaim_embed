@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 from qtaim_embed.core.dataset import Subset
 
+
 def get_default_node_level_config():
     root = Path(__file__).parent.parent.parent
     # to string
@@ -33,7 +34,7 @@ def get_default_node_level_config():
             },
             "extra_dataset_info": {},
             "debug": False,
-            "element_set": None, 
+            "element_set": None,
             "log_scale_features": False,
             "log_scale_targets": False,
             "standard_scale_features": True,
@@ -73,12 +74,12 @@ def get_default_node_level_config():
             "fc_batch_norm": True,
             "lstm_iters": 3,
             "lstm_layers": 2,
-            "num_heads_gat":2,
+            "num_heads_gat": 2,
             "dropout_feat_gat": 0.2,
             "dropout_attn_gat": 0.2,
             "hidden_size_gat": 64,
             "residual_gat": True,
-            #"output_dims": 1,
+            # "output_dims": 1,
             "pooling_ntypes": ["atom", "bond", "global"],
             "pooling_ntypes_direct": ["global"],
             "restore": False,
@@ -115,15 +116,15 @@ def get_default_graph_level_config():
             "standard_scale_features": True,
             "standard_scale_targets": True,
             "val_prop": 0.25,
-            "edge_dropout": 0.0,  
+            "edge_dropout": 0.0,
             "test_prop": 0.25,
             "seed": 42,
             "train_batch_size": 128,
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
             "num_workers": 1,
-            "impute": False, 
-            "verbose": False
+            "impute": False,
+            "verbose": False,
         },
         "model": {
             "classifier": False,
@@ -153,17 +154,17 @@ def get_default_graph_level_config():
             "fc_batch_norm": True,
             "lstm_iters": 3,
             "lstm_layers": 2,
-            "num_heads_gat":2,
+            "num_heads_gat": 2,
             "dropout_feat_gat": 0.2,
             "dropout_attn_gat": 0.2,
             "hidden_size_gat": 64,
             "residual_gat": True,
-            #"output_dims": 1,
+            # "output_dims": 1,
             "pooling_ntypes": ["atom", "bond", "global"],
             "pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
-            'initializer': 'kaiming'
+            "initializer": "kaiming",
         },
         "optim": {
             "num_devices": 1,
@@ -174,8 +175,8 @@ def get_default_graph_level_config():
             "precision": "bf16",
             "accumulate_grad_batches": 1,
             "pin_memory": False,
-            "persistent_workers": False, 
-            'train_batch_size': 2,
+            "persistent_workers": False,
+            "train_batch_size": 2,
         },
     }
 
@@ -283,7 +284,7 @@ def get_default_graph_level_config_classif():
             "lstm_iters": 3,
             "lstm_layers": 2,
             "output_dims": 2,
-            "num_heads_gat":2,
+            "num_heads_gat": 2,
             "dropout_feat_gat": 0.2,
             "dropout_attn_gat": 0.2,
             "hidden_size_gat": 64,

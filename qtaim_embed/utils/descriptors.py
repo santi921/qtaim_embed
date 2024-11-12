@@ -57,31 +57,31 @@ def get_bond_features(row, map_key, keys=None):
     else:
         old_parser = False
         bonds = row.bonds
-    
-    #print(bonds)
-    #print("len bonds: " + str(len(bonds)))
-    
+
+    # print(bonds)
+    # print("len bonds: " + str(len(bonds)))
+
     for bond in bonds:
         if (bond[0], bond[1]) not in bond_features.keys():
             bond_features[(bond[0], bond[1])] = {}
-        #if old_parser
+        # if old_parser
         #:
-        #print(bond)
-        #print(row[map_key])
+        # print(bond)
+        # print(row[map_key])
         try:
             bond_index_map = row[map_key][0].index(tuple(bond))
-        except: 
+        except:
             bond_index_map = row[map_key].index(tuple(bond))
-        #bond_index_map = row[map_key].index(tuple(bond))
-        #else: 
+        # bond_index_map = row[map_key].index(tuple(bond))
+        # else:
         #    bond_index_map = row[map_key].index(tuple(bond))
-        #print(bond_index_map)
+        # print(bond_index_map)
         for key in keys:
             if key != "bond_length":
-                #print(row[key])
-                #if old_parser:
+                # print(row[key])
+                # if old_parser:
                 bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
-                #else: 
+                # else:
                 #    bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
 
     return bond_features

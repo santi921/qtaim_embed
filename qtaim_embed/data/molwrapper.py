@@ -8,7 +8,14 @@ from qtaim_embed.utils.descriptors import (
 )
 
 
-def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_keys=[], filter_self_bonds=True):
+def mol_wrappers_from_df(
+    df,
+    bond_key=None,
+    atom_keys=[],
+    bond_keys=[],
+    global_keys=[],
+    filter_self_bonds=True,
+):
     """
     Creates a list of MoleculeWrapper objects from a dataframe
     Takes:
@@ -69,7 +76,7 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
 
         if filter_self_bonds:
             bonds = {tuple(sorted(b)): None for b in bonds if b[0] != b[1]}
-            bond_feats = {k: v for k, v in bond_feats.items() if k[0] != k[1]}  
+            bond_feats = {k: v for k, v in bond_feats.items() if k[0] != k[1]}
 
         if bond_feats != -1 and atom_feats != -1:
             mol_wrapper = MoleculeWrapper(
@@ -93,6 +100,6 @@ def mol_wrappers_from_df(df, bond_key=None, atom_keys=[], bond_keys=[], global_k
                 atom_feats_error_count += 1
     print("... > bond_feats_error_count: ", bond_feats_error_count)
     print("... > atom_feats_error_count: ", atom_feats_error_count)
-    # sort element set 
+    # sort element set
     element_set = set(sorted(list(element_set)))
     return mol_wrappers, element_set
