@@ -27,6 +27,7 @@ def get_networkx_explaination_graph(edge_mask, g, dataset, filter=False):
     edge_mask_z_processed = process_edge_mask(edge_mask_z, scale=True)
     # elements from heterographs
     elems_in_graph = get_element_list_heterograph(g, dataset)
+    print(elems_in_graph)
     # get blank template
     homo_graph_empty = construct_homograph_blank(nodes, bonds)
     # add processed data
@@ -74,7 +75,7 @@ def get_labelled_importance(feat_mask, dataset):
         feature_imp: dict of feature importance
     """
     importance_total = []
-    feature_names = dataset.feature_names()
+    feature_names = dataset.feature_names
     feature_imp = {}
     for key in feat_mask.keys():
         feature_imp[key] = {}

@@ -1,11 +1,11 @@
-from typing import Optional, Tuple, Union
-
 import torch 
 from torch import Tensor
 
 import torch.nn.functional as F
-from sklearn.metrics import roc_auc_score
 import torchmetrics
+
+from typing import Optional
+
 BaseMetric = torchmetrics.Metric
 
 class LinkPredMetric(BaseMetric):
@@ -78,6 +78,32 @@ class LinkPredMetric(BaseMetric):
         return f'{self.__class__.__name__}(k={self.k})'
 
 
+class AUCMetric(LinkPredMetric):
+    r"""Computes the AUCROC loss for link prediction.
+
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+    def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
+        val = compute_auc(pos_score, neg_score)
+        # return value as tensor copied over pos_score number of times
+        return torch.tensor([val for _ in range(pos_score.shape[0])])
+
+
+class AccuracyMetric(LinkPredMetric):
+    r"""Computes the Accuracy for link prediction.
+
+    """
+    def __init__(self) -> None:
+        super().__init__()
+
+    def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
+        val = compute_accuracy(pos_score, neg_score)
+        # return value as tensor copied over pos_score number of times
+        return torch.tensor([val for _ in range(pos_score.shape[0])])
+
+
 class HingeMetric(LinkPredMetric):
     r"""Computes the Hinge loss for link prediction.
 
@@ -89,15 +115,6 @@ class HingeMetric(LinkPredMetric):
         
         return compute_loss_hinge(pos_score, neg_score)
 
-class AccuracyMetric(LinkPredMetric):
-    r"""Computes the Accuracy for link prediction.
-
-    """
-    def __init__(self) -> None:
-        super().__init__()
-
-    def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
-        return compute_accuracy(pos_score, neg_score)
     
 class F1Metric(LinkPredMetric):
     r"""Computes the F1 score for link prediction.
@@ -131,6 +148,8 @@ class F1Metric(LinkPredMetric):
         metric = self._compute(pos_score, neg_score)
         self.accum += metric.sum()
         self.total += 1
+
+
 class MarginMetric(LinkPredMetric):
     r"""Computes the Margin loss for link prediction.
 
@@ -174,16 +193,6 @@ class CrossEntropyMetric(LinkPredMetric):
     def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
         return compute_loss_cross_entropy(pos_score, neg_score)
 
-
-class AUCMetric(LinkPredMetric):
-    r"""Computes the AUCROC loss for link prediction.
-
-    """
-    def __init__(self) -> None:
-        super().__init__()
-
-    def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
-        return compute_auc(pos_score, neg_score)
 
 
 def compute_loss_hinge(pos_score, neg_score):
@@ -239,15 +248,12 @@ def compute_auc(pos_score, neg_score):
     """
 
     scores = torch.cat([pos_score, neg_score])
-    labels = torch.cat(
-        [torch.ones(pos_score.shape[0], dtype=torch.int), torch.zeros(neg_score.shape[0], dtype=torch.int)])
-    #return roc_auc_score(labels, scores)
-    # use torchmetrics instead
-    return torchmetrics.functional.auroc(scores, labels, task="binary", average="Sum")
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])])
+    labels = labels.int()
+    return torchmetrics.functional.auroc(preds=scores, target=labels, average=None, task="binary")
 
 
 def compute_accuracy(pos_score, neg_score):
-
     """
     Accuracy.
     Args:
@@ -256,7 +262,10 @@ def compute_accuracy(pos_score, neg_score):
     Return:
         loss: Tensor of shape (1,)
     """
-    n_edges = pos_score.shape[0]
-    return ((pos_score > neg_score).float().sum() / n_edges).reshape(-1)
 
+    scores = torch.cat([pos_score, neg_score])
+    labels = torch.cat([torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])])
+    return torchmetrics.functional.accuracy(scores, labels, average=None, task="binary")
+
+    
 
