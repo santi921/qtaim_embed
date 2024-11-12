@@ -90,28 +90,25 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
     Dataloader for link tasks. Use normal datasets from qtaim-embed but they are converted to homographs
     """
 
-    def __init__(self, dataset, transforms=None, validation=False, **kwargs):
+    def __init__(self, dataset, transforms=None, **kwargs):
+        print("DataLoaderLinkTaskHeterograph")
         if "collate_fn" in kwargs:
             raise ValueError(
                 "'collate_fn' provided internally', you need not to provide one"
             )
         self.transforms = transforms
-        self.validation = bool(validation)
+        #self.validation = bool(validation)
 
         def collate(samples):
-
             graphs = samples
-
             if self.transforms is not None:
                 batched_graphs = dgl.batch(graphs)
                 graphs = self.transforms(batched_graphs)
 
-            # graphs = samples
             transformer = hetero_to_homo(concat_global=True)
             # convert to homographs
             graphs_hetero_to_homo = [transformer(i) for i in graphs]
-            # get number of edges
-
+            
             # get negative samples
             graphs_negative = [
                 get_negative_graph(
@@ -119,30 +116,13 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
                 )
                 for i in range(len(graphs_hetero_to_homo))
             ]
-            if self.validation:
-                graphs_negative_explicit = [
-                    get_negative_graph_explicit(graphs_hetero_to_homo[i])[0]
-                    for i in range(len(graphs_hetero_to_homo))
-                ]
-
-            # source, dest = global_uniform_negative_sampling(g, num_samples = self.k)
 
             batched_graphs = dgl.batch(graphs_hetero_to_homo)
             batched_negative_graphs = dgl.batch(graphs_negative)
 
             feat = batched_graphs.ndata["ft"]
 
-            if self.validation:
-                batch_neg_explicitly = dgl.batch(graphs_negative_explicit)
-                return (
-                    batched_graphs,
-                    batched_negative_graphs,
-                    batch_neg_explicitly,
-                    feat,
-                )
-
-            else:
-                return batched_graphs, batched_negative_graphs, feat
+            return batched_graphs, batched_negative_graphs, feat
 
         super(DataLoaderLinkTaskHeterograph, self).__init__(
             dataset, collate_fn=collate, **kwargs

@@ -119,7 +119,12 @@ class F1Metric(LinkPredMetric):
     def _compute(self, pos_score: Tensor, neg_score: Tensor) -> Tensor:
         n_edges = pos_score.shape[0]
         n_edges_neg = neg_score.shape[0]
-        y_true = torch.cat([torch.ones(n_edges), torch.zeros(n_edges_neg)])
+        y_true = torch.cat(
+            [
+                torch.ones(n_edges, device=pos_score.device), 
+                torch.zeros(n_edges_neg, device=pos_score.device)
+            ]
+        )
         y_pred = torch.cat([pos_score, neg_score])
         return torchmetrics.functional.f1_score(
             y_pred, y_true, task="binary", average="macro"
@@ -230,8 +235,10 @@ def compute_loss_cross_entropy(pos_score, neg_score):
 
     scores = torch.cat([pos_score, neg_score])
     labels = torch.cat(
-        [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]
+        [torch.ones(pos_score.shape[0], device=scores.device), torch.zeros(neg_score.shape[0], device=scores.device)]
     )
+    #print("device", scores.device)
+    #print("device", labels.device)
     return F.binary_cross_entropy_with_logits(scores, labels, reduction="none")
     # return F.binary_cross_entropy_with_logits(scores, labels, reduction="sum")
 
@@ -248,7 +255,8 @@ def compute_auc(pos_score, neg_score):
 
     scores = torch.cat([pos_score, neg_score])
     labels = torch.cat(
-        [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]
+        [torch.ones(pos_score.shape[0], device=scores.device), 
+         torch.zeros(neg_score.shape[0], device=scores.device)]
     )
     labels = labels.int()
     return torchmetrics.functional.auroc(
@@ -268,6 +276,7 @@ def compute_accuracy(pos_score, neg_score):
 
     scores = torch.cat([pos_score, neg_score])
     labels = torch.cat(
-        [torch.ones(pos_score.shape[0]), torch.zeros(neg_score.shape[0])]
+        [torch.ones(pos_score.shape[0], device=scores.device), 
+         torch.zeros(neg_score.shape[0], device=scores.device)],
     )
     return torchmetrics.functional.accuracy(scores, labels, average=None, task="binary")
