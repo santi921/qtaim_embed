@@ -504,7 +504,12 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
     return layer_args
 
 
-def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=None):
+def get_layer_args_homo(
+        hparams, 
+        layer_ind=None, 
+        embedding_in=False, 
+        activation=None
+    ):
     """
     Converts hparam dictionary to a dictionary of arguments for a layer.
     """
@@ -513,6 +518,7 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
         "GraphConvDropoutBatch",
         "ResidualBlock",
         "GATConv",
+        "GraphSAGE"
     ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
 
     layer_args = {}
@@ -521,13 +527,14 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
 
         if embedding_in:
             in_feats = hparams.embedding_size
-            out = hparams.embedding_size
         else:
             in_feats = hparams.input_size
-            out = hparams.input_size
-
-        if layer_ind == hparams.n_conv_layers - 1:
-            out = 1
+        
+        if layer_ind > 0:
+            in_feats = hparams.hidden_size
+        
+        out = hparams.hidden_size
+        
 
         layer_args["conv"] = {
             "in_feats": in_feats,
@@ -547,10 +554,12 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
         else:
             in_feats = hparams.input_size
 
-        if layer_ind != -1:  # last residual layer has different args
-            out = 1
+        if layer_ind > 0:
+            in_feats = hparams.hidden_size
+        print("layer ind: ", layer_ind)
+        out = hparams.hidden_size
 
-        layer_args["conv"] = {
+        layer_args["layer_args"] = {
             "in_feats": in_feats,
             "out_feats": out,
             "norm": hparams.norm,
@@ -559,6 +568,7 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
             "allow_zero_in_degree": True,
             "dropout": hparams.dropout,
             "batch_norm_tf": hparams.batch_norm_tf,
+            "embedding_size": hparams.embedding_size,
         }
 
     elif hparams.conv_fn == "GATConv":
@@ -577,93 +587,14 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
 
         if layer_ind == hparams.n_conv_layers - 1:
             num_heads = 1
-            out = 1
+            # TESTING
+            #out = 1
+
+        out = hparams.hidden_size
 
         layer_args["conv"] = {
             "in_feats": in_feats,
             "out_feats": out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
-            "bias": hparams.bias,
-            "activation": activation,
-        }
-
-    return layer_args
-
-
-def get_link_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None):
-    assert hparams.conv_fn in [
-        "GraphConvDropoutBatch",
-        "ResidualBlock",
-        "GATConv",
-        "GraphSAGE",
-    ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
-
-    layer_args = {}
-
-    if hparams.conv_fn == "GraphConvDropoutBatch":
-
-        if embedding_in:
-            in_feats = hparams.embedding_size
-            out = hparams.embedding_size
-        else:
-            in_feats = hparams.input_size
-
-        if layer_ind == hparams.n_conv_layers - 1:
-            out = 1
-
-        layer_args["conv"] = {
-            "in_feats": in_feats,
-            "out_feats": hparams.output_size,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-    elif hparams.conv_fn == "ResidualBlock":
-
-        if embedding_in:
-            in_feats = hparams.embedding_size
-        else:
-            in_feats = hparams.input_size
-
-        layer_args["conv"] = {
-            "in_feats": in_feats,
-            "out_feats": hparams.output_size,
-            "norm": hparams.norm,
-            "bias": hparams.bias,
-            "activation": activation,
-            "allow_zero_in_degree": True,
-            "dropout": hparams.dropout,
-            "batch_norm_tf": hparams.batch_norm_tf,
-        }
-
-    elif hparams.conv_fn == "GATConv":
-        in_feats = hparams.input_size
-        num_heads = hparams.num_heads
-
-        if layer_ind > 0:
-            in_feats = hparams.hidden_size
-
-            if num_heads > 1:
-                in_feats = hparams.hidden_size * num_heads
-
-        else:
-            if embedding_in:
-                in_feats = hparams.embedding_size
-
-        if layer_ind == hparams.n_conv_layers - 1:
-            num_heads = 1
-
-        layer_args["conv"] = {
-            "in_feats": in_feats,
-            "out_feats": hparams.output_size,
             "num_heads": num_heads,
             "feat_drop": hparams.feat_drop,
             "attn_drop": hparams.attn_drop,
@@ -675,21 +606,28 @@ def get_link_layer_args(hparams, layer_ind=None, embedding_in=False, activation=
 
     elif hparams.conv_fn == "GraphSAGE":
         in_feats = hparams.input_size
-        out_feats = hparams.input_size
-
+        
         if embedding_in:
             in_feats = hparams.embedding_size
-            out_feats = hparams.embedding_size
+        
+        if layer_ind > 0:
+            in_feats = hparams.hidden_size
+        
+        out = hparams.hidden_size
 
         layer_args["conv"] = {
             "in_feats": in_feats,
-            "out_feats": out_feats,
+            "out_feats": out,
             "aggregator_type": hparams.aggregator_type,
             "bias": hparams.bias,
             "activation": activation,
             "feat_drop": hparams.dropout,
-            "norm": hparams.batch_norm_tf,
+            "norm": None
         }
+
+    return layer_args
+
+
 
 
 def link_fmt_to_node_fmt(dict_feats):

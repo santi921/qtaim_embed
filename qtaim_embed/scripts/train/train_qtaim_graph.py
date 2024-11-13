@@ -20,7 +20,6 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--on_gpu", default=False, action="store_true")
     parser.add_argument("--debug", default=False, action="store_true")
     parser.add_argument("-project_name", type=str, default="qtaim_embed_test")
     parser.add_argument("-dataset_loc", type=str, default=None)
@@ -32,7 +31,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    on_gpu = bool(args.on_gpu)
     debug = bool(args.debug)
     use_lmdb = bool(args.use_lmdb)
     project_name = args.project_name

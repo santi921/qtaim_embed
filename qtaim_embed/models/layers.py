@@ -58,6 +58,7 @@ class GraphConvDropoutBatch(nn.Module):
         allow_zero_in_degree=False,
         dropout=0.5,
         batch_norm_tf=True,
+        **kwargs
     ):
         super(GraphConvDropoutBatch, self).__init__()
         # create graph convolutional layer

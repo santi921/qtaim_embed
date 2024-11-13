@@ -1,5 +1,5 @@
 from typing import List, Tuple, Dict, Optional
-
+from copy import deepcopy
 
 import dgl.nn.pytorch as dglnn
 import dgl
@@ -47,7 +47,7 @@ class DotPredictor(nn.Module):
 
 class MLPPredictor(nn.Module):
     def __init__(
-        self, h_feats, h_dims=[100, 50], dropout=0.5, activation=None, batch_norm=False
+        self, h_feats, h_dims=[100, 50], dropout=0.5, activation=None, batch_norm=False, **kwargs
     ):
         super().__init__()
 
@@ -110,7 +110,7 @@ class MLPPredictor(nn.Module):
 
 
 class AttentionPredictor(nn.Module):
-    def __init__(self, in_feats: int):
+    def __init__(self, in_feats: int, **kwargs):
         super(AttentionPredictor, self).__init__()
         self.in_feats = in_feats
         self.gate_nn = nn.Linear(2 * in_feats, 1)
@@ -163,7 +163,7 @@ class UnifySize(nn.Module):
             features to
     """
 
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, **kwargs):
         super(UnifySize, self).__init__()
 
         self.linears = nn.Linear(input_dim, output_dim, bias=False)
@@ -185,45 +185,59 @@ class ResidualBlockHomo(nn.Module):
         self,
         layer_args,
         resid_n_graph_convs=2,
-        output_block=False,
+        input_block=False,
+         **kwargs
     ):
         super(ResidualBlockHomo, self).__init__()
         # create graph convolutional layer
         self.layers = []
-        self.output_block = output_block
+        self.input_block = input_block
 
         for i in range(resid_n_graph_convs):
-            if output_block == True:
-                if i == resid_n_graph_convs - 1:
-                    # print("triggered separate outer layer")
-                    self.layers.append(
-                        GraphConvDropoutBatch(layer_args),
-                    )
-                else:
-                    # print("triggered separate intermediate layer")
-                    self.layers.append(
-                        GraphConvDropoutBatch(layer_args),
+            if input_block:
+                layer_arg_copy = deepcopy(layer_args)
+                    
+                if i==0: 
+                    layer_arg_copy["in_feats"] = layer_args["embedding_size"]
+                    print("layer arg copy:", layer_arg_copy)
+                    self.layers.append( 
+                        GraphConvDropoutBatch(**layer_arg_copy),
                     )
 
-            else:
-                # print("triggered normal outer layer")
-                self.layers.append(
+                else: 
+                    layer_arg_copy["in_feats"] = layer_args["out_feats"]
+                    print("layer arg copy:", layer_arg_copy)
                     self.layers.append(
-                        GraphConvDropoutBatch(layer_args),
+                        GraphConvDropoutBatch(**layer_arg_copy),
                     )
+            else:
+                print("layer args:", layer_args)
+                self.layers.append(
+                    GraphConvDropoutBatch(**layer_args),
                 )
 
-        self.layers = nn.ModuleList(self.layers)
-        self.out_feats = {}
-        for k, v in self.layers[-1].mods.items():
-            self.out_feats[k] = v.out_feats
+
+            
+        self.layers = nn.ModuleList(self.layers)        
+        self.out_feats = self.layers[-1].out_feats
+
 
     def forward(self, graph, feat, weight=None, edge_weight=None):
         input_feats = feat
-        for layer in self.layers:
-            feat = layer(graph, feat, weight, edge_weight)
-        if self.output_block == True:
-            return feat
+        
+        if self.input_block == True:
+            #print("input block")
+            feats_rectified = self.layers[0](graph, input_feats, weight, edge_weight)
+            feats = feats_rectified.detach().clone()
+            for layer in self.layers[1:]:
+                feats = layer(graph, feats, weight, edge_weight)
+            
+            feat = feats_rectified + feats
+            
         else:
-            feat = {k: feat[k] + input_feats[k] for k in feat.keys()}
+            #print("no input block")
+            for layer in self.layers:
+                feat = layer(graph, feat, weight, edge_weight)
+            feat = feat + input_feats 
+            
         return feat
