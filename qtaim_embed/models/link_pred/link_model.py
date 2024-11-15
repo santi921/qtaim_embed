@@ -104,7 +104,17 @@ class GCNLinkPred(pl.LightningModule):
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
             )
-        
+
+        # provide defaults
+        if predictor_param_dict == {} and predictor == "MLP":
+            predictor_param_dict = {
+                "fc_layer_size": [512, 512],
+                "fc_dropout": 0.2,
+                "batch_norm": False,
+                "activation": "ReLU",
+            }
+            print("...> Using default predictor parameters for MLP predictor!")
+
 
         params = {
             "input_size": input_size,
@@ -133,16 +143,6 @@ class GCNLinkPred(pl.LightningModule):
             "predictor_param_dict": predictor_param_dict,
             "aggregator_type": aggregator_type,
         }
-
-        # provide defaults
-        if predictor_param_dict == {} and params["predictor"] == "MLP":
-            params.predictor_param_dict = {
-                "fc_layer_size": [128, 128],
-                "fc_dropout": 0.2,
-                "batch_norm": True,
-                "activation": "ReLU",
-            }
-            print("...> Using default predictor parameters for MLP predictor!")
 
         self.hparams.update(params)
         self.save_hyperparameters()
@@ -232,7 +232,13 @@ class GCNLinkPred(pl.LightningModule):
                 self.conv_layers.append(SAGEConv(**layer_args["conv"]))
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
-        print(self.conv_layers)
+
+        if self.hparams.conv_fn in ["GraphSAGE", "GATConv"]:
+            self.conv_out_size = self.conv_layers[-1]._out_feats
+        else: 
+            self.conv_out_size = self.conv_layers[-1].out_feats
+        #print(self.conv_layers)
+        
         #self.conv_out_size = self.conv_layers[-1].out_feats
 
         ####################### predictor ######################
