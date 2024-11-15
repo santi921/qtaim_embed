@@ -5,6 +5,7 @@ import pandas as pd
 from qtaim_embed.models.graph_level.base_gcn import GCNGraphPred
 from qtaim_embed.models.node_level.base_gcn import GCNNodePred
 from qtaim_embed.models.graph_level.base_gcn_classifier import GCNGraphPredClassifier
+from qtaim_embed.models.link_pred.link_model import GCNLinkPred
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 from qtaim_embed.models.initializers import xavier_init, kaiming_init, equi_var_init
 
@@ -246,6 +247,94 @@ def load_node_level_model_from_config(config):
 
     return model
 
+
+def load_link_model_from_config(config):
+    """
+    returns model and optimizer from dict of parameters
+
+    Args:
+        dict_train(dict): dictionary
+    Returns:
+        model (pytorch model): model to train
+        optimizer (pytorch optimizer obj): optimizer
+    """
+    if config["restore"]:
+        print(":::RESTORING MODEL FROM EXISTING FILE:::")
+
+        if config["restore_path"] != None:
+            try:
+                model = GCNLinkPred.load_from_checkpoint(
+                    checkpoint_path=config["restore_path"]
+                )
+                # model.to(device)
+                print(":::MODEL LOADED:::")
+                return model
+            except:
+                pass
+            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+        else:
+            if load_dir == None:
+                load_dir = "./"
+
+            try:
+                model = GCNLinkPred.load_from_checkpoint(
+                    checkpoint_path=load_dir + "/last.ckpt"
+                )
+                # model.to(device)
+                print(":::MODEL LOADED:::")
+                return model
+
+            except:
+                print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+
+    print(config)
+    print(":::LINK-PRED MODEL:::")
+    model = GCNLinkPred(
+        input_size=config["input_size"],
+        n_conv_layers=config["n_conv_layers"],
+        target_dict=config["target_dict"],
+        conv_fn=config["conv_fn"],
+        resid_n_graph_convs=config["resid_n_graph_convs"],
+        num_heads_gat=config["num_heads_gat"],
+        dropout_feat_gat=config["dropout_feat_gat"],
+        dropout_attn_gat=config["dropout_attn_gat"],
+        residual_gat=config["residual_gat"],
+        hidden_size=config["hidden_size"],
+        dropout=config["dropout"],
+        batch_norm=config["batch_norm"],
+        activation=config["activation"],
+        bias=config["bias"],
+        norm=config["norm"],
+        lr=config["lr"],
+        scheduler_name="reduce_on_plateau",
+        weight_decay=config["weight_decay"],
+        lr_plateau_patience=config["lr_plateau_patience"],
+        lr_scale_factor=config["lr_scale_factor"],
+        loss_fn=config["loss_fn"],
+        embedding_size=config["embedding_size"],
+        predictor=config["predictor"],
+        predictor_param_dict=config["predictor_param_dict"],
+        aggregator_type=config["aggregator_type"],
+        
+    )
+    # model.to(device)
+
+    if config["initializer"] == "kaiming":
+        print(":::USING KAIMING INITIALIZER:::")
+        kaiming_init(model)
+
+    elif config["initializer"] == "xavier":
+        print(":::USING XAVIER INITIALIZER:::")
+        xavier_init(model)
+
+    elif config["initializer"] == "equi_var":
+        print(":::USING EQUIVARIANCE INITIALIZER:::")
+        equi_var_init(model)
+
+    else:
+        print(":::NO INITIALIZER USED:::")
+
+    return model
 
 class LogParameters(pl.Callback):
     # weight and biases to tensorboard

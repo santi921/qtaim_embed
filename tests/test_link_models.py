@@ -17,7 +17,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 class TestLinkPred:
 
     dataset = HeteroGraphNodeLabelDataset(
-        file="/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/low/low_train_50.pkl",
+        file="./data/low_train_50.pkl",
         allowed_ring_size=[4, 5, 6, 7],
         # allowed_charges=[-1, 0, 1],
         # allowed_spins=[1, 2, 3],

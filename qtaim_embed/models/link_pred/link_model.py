@@ -34,9 +34,7 @@ class GCNLinkPred(pl.LightningModule):
     """
     Basic GNN model for link prediction
     Takes
-        atom_input_size: int, dimension of atom features
-        bond_input_size: int, dimension of bond features
-        global_input_size: int, dimension of global features
+        input_size: int, dimension of input features
         target_dict: dict, dictionary of targets
         n_conv_layers: int, number of convolution layers
         conv_fn: str "GraphConvDropoutBatch"
@@ -69,8 +67,8 @@ class GCNLinkPred(pl.LightningModule):
         num_heads_gat=2,
         dropout_feat_gat=0.2,
         dropout_attn_gat=0.2,
-        hidden_size=128,
         residual_gat=True,
+        hidden_size=128,
         dropout=0.2,
         batch_norm=True,
         activation="ReLU",
