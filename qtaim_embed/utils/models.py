@@ -17,9 +17,27 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
         atom_out = hparams.atom_input_size
         bond_out = hparams.bond_input_size
         global_out = hparams.global_input_size
+
         atom_in = hparams.atom_input_size
         bond_in = hparams.bond_input_size
         global_in = hparams.global_input_size
+
+
+        if embedding_in and layer_ind == 0:
+            atom_in = hparams.embedding_size
+            bond_in = hparams.embedding_size
+            global_in = hparams.embedding_size
+            atom_out = hparams.hidden_size
+            bond_out = hparams.hidden_size
+            global_out = hparams.hidden_size
+
+        if layer_ind > 0: 
+            atom_in = hparams.hidden_size
+            bond_in = hparams.hidden_size
+            global_in = hparams.hidden_size
+            atom_out = hparams.hidden_size
+            bond_out = hparams.hidden_size
+            global_out = hparams.hidden_size
 
         if layer_ind == hparams.n_conv_layers - 1:
             if "atom" in hparams.target_dict.keys():
@@ -28,14 +46,6 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
                 bond_out = len(hparams.target_dict["bond"])
             if "global" in hparams.target_dict.keys():
                 global_out = len(hparams.target_dict["global"])
-
-        if embedding_in:
-            atom_in = hparams.embedding_size
-            bond_in = hparams.embedding_size
-            global_in = hparams.embedding_size
-            atom_out = hparams.embedding_size
-            bond_out = hparams.embedding_size
-            global_out = hparams.embedding_size
 
         layer_args["a2b"] = {
             "in_feats": atom_in,
@@ -137,13 +147,16 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
         }
 
     elif hparams.conv_fn == "ResidualBlock":
+
         atom_out = hparams.atom_input_size
         bond_out = hparams.bond_input_size
         global_out = hparams.global_input_size
+
         atom_in = hparams.atom_input_size
         bond_in = hparams.bond_input_size
         global_in = hparams.global_input_size
 
+        #print("layer ind: ", layer_ind)
         if embedding_in:
             atom_in = hparams.embedding_size
             bond_in = hparams.embedding_size
@@ -151,10 +164,9 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             atom_out = hparams.embedding_size
             bond_out = hparams.embedding_size
             global_out = hparams.embedding_size
+    
 
-        # resid_n_graph_convs = hparams.resid_n_graph_convs
-
-        if layer_ind != -1:  # last residual layer has different args
+        if layer_ind == -1:  # last residual layer has different args
             # print("triggered early stop condition!!!")
             layer_args["a2b_inner"] = {
                 "in_feats": atom_in,
@@ -363,35 +375,35 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
         }
 
     elif hparams.conv_fn == "GATConv":
-        atom_out = hparams.hidden_size
-        bond_out = hparams.hidden_size
-        global_out = hparams.hidden_size
         atom_in = hparams.atom_input_size
         bond_in = hparams.bond_input_size
         global_in = hparams.global_input_size
+        
+        atom_out = hparams.hidden_size
+        bond_out = hparams.hidden_size
+        global_out = hparams.hidden_size
+        
         num_heads = hparams.num_heads
 
+        if embedding_in and layer_ind == 0:
+            atom_in = hparams.embedding_size
+            bond_in = hparams.embedding_size
+            global_in = hparams.embedding_size
+            
         if layer_ind > 0:
-            atom_in = hparams.hidden_size
-            bond_in = hparams.hidden_size
-            global_in = hparams.hidden_size
+            atom_in = hparams.hidden_size * num_heads
+            bond_in = hparams.hidden_size * num_heads
+            global_in = hparams.hidden_size * num_heads
 
-            if num_heads > 1:
-                atom_in = hparams.hidden_size * num_heads
-                bond_in = hparams.hidden_size * num_heads
-                global_in = hparams.hidden_size * num_heads
-        else:
-            if embedding_in:
-                atom_in = hparams.embedding_size
-                bond_in = hparams.embedding_size
-                global_in = hparams.embedding_size
 
         if layer_ind == hparams.n_conv_layers - 1:
             num_heads = 1
-
-            # atom_out = hparams.embedding_size
-            # bond_out = hparams.embedding_size
-            # global_out = hparams.embedding_size
+            if "atom" in hparams.target_dict.keys():
+                atom_out = len(hparams.target_dict["atom"])
+            if "bond" in hparams.target_dict.keys():
+                bond_out = len(hparams.target_dict["bond"])
+            if "global" in hparams.target_dict.keys():
+                global_out = len(hparams.target_dict["global"])
 
         layer_args["a2b"] = {
             "in_feats": atom_in,
@@ -500,6 +512,8 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "bias": hparams.bias,
             "activation": activation,
         }
+        
+        print("layer args: ", layer_args)
 
     return layer_args
 

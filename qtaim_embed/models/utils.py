@@ -99,7 +99,7 @@ def load_graph_level_model_from_config(config):
             num_heads_gat=config["num_heads_gat"],
             dropout_feat_gat=config["dropout_feat_gat"],
             dropout_attn_gat=config["dropout_attn_gat"],
-            hidden_size_gat=config["hidden_size_gat"],
+            hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
         )
     else:
@@ -137,7 +137,7 @@ def load_graph_level_model_from_config(config):
             num_heads_gat=config["num_heads_gat"],
             dropout_feat_gat=config["dropout_feat_gat"],
             dropout_attn_gat=config["dropout_attn_gat"],
-            hidden_size_gat=config["hidden_size_gat"],
+            hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
         )
     # model.to(device)
@@ -225,7 +225,7 @@ def load_node_level_model_from_config(config):
         num_heads_gat=config["num_heads_gat"],
         dropout_feat_gat=config["dropout_feat_gat"],
         dropout_attn_gat=config["dropout_attn_gat"],
-        hidden_size_gat=config["hidden_size_gat"],
+        hidden_size=config["hidden_size"],
         residual_gat=config["residual_gat"],
     )
     # model.to(device)
@@ -335,6 +335,7 @@ def load_link_model_from_config(config):
         print(":::NO INITIALIZER USED:::")
 
     return model
+
 
 class LogParameters(pl.Callback):
     # weight and biases to tensorboard
@@ -687,9 +688,7 @@ def test_and_predict_tmqm(dataset_test, model, batch_size=100):
         pred_list.append(pred)
         label_list.append(labels)
         charge_list.append(charge_list_test)
-        # r2_pre = r2_pre.numpy()[0]
-        # mae = mae.numpy()[0]
-        # mse = mse.numpy()[0]
+
 
     preds_test = torch.cat(pred_list)
     label_list = torch.cat(label_list)

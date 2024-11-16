@@ -205,7 +205,7 @@ class TrainingObject:
                     "num_heads_gat": init_config["num_heads_gat"],
                     "dropout_feat_gat": init_config["dropout_feat_gat"],
                     "dropout_attn_gat": init_config["dropout_attn_gat"],
-                    "hidden_size_gat": init_config["hidden_size_gat"],
+                    "hidden_size": init_config["hidden_size"],
                     "residual_gat": init_config["residual_gat"],
                     "restore": init_config["restore"],
                     "max_epochs": init_config["max_epochs"],

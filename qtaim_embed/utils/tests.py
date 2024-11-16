@@ -279,11 +279,12 @@ def get_hyperparams_resid():
             "embedding_size": 10,
             "conv_fn": "ResidualBlock",
             "allow_zero_in_degree": True,
+            "hidden_size": 10,
         },
     )
     return get_layer_args(
         hparams=parms,
-        layer_ind=-1,
+        layer_ind=0,
         embedding_in=True,
     )
 
@@ -306,6 +307,7 @@ def get_hyperparams_gcn():
             "embedding_size": 10,
             "conv_fn": "GraphConvDropoutBatch",
             "allow_zero_in_degree": True,
+            "hidden_size": 10,
         },
     )
     return get_layer_args(

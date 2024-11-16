@@ -190,13 +190,13 @@ class GCNLinkPred(pl.LightningModule):
                     embedding_in=True,
                     activation=self.activation,
                 )
-                print("layer args: ", block_args)
-                print(layer_tracker)
+                #print("layer args: ", block_args)
+                #print(layer_tracker)
                 
 
                 input_block = False
                 if layer_tracker == 0:
-                    print("input block!")
+                    #print("input block!")
                     input_block = True
 
                 block_args["input_block"] = input_block
@@ -241,7 +241,6 @@ class GCNLinkPred(pl.LightningModule):
 
         ####################### predictor ######################
         if self.hparams.predictor == "MLP":
-            
             self.predictor = MLPPredictor(
                 h_feats=self.conv_out_size, # out layer
                 h_dims=self.hparams.predictor_param_dict["fc_layer_size"],
@@ -249,6 +248,7 @@ class GCNLinkPred(pl.LightningModule):
                 batch_norm=self.hparams.predictor_param_dict["batch_norm"],
                 activation=self.hparams.predictor_param_dict["activation"],
             )
+            
         elif self.hparams.predictor == "Dot":
             self.predictor = DotPredictor()
 

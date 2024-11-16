@@ -59,7 +59,7 @@ def get_datasets_qm8(loc_dict):
         'num_heads_gat': 1,
         'dropout_feat_gat': 0.1,
         'dropout_attn_gat': 0.1,
-        'hidden_size_gat': 8,
+        'hidden_size': 8,
         'residual_gat': True,
         'classifier': False,
         'batch_norm': True,

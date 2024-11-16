@@ -72,7 +72,7 @@ class GCNGraphPred(pl.LightningModule):
         num_heads_gat=2,
         dropout_feat_gat=0.2,
         dropout_attn_gat=0.2,
-        hidden_size_gat=128,
+        hidden_size=128,
         residual_gat=True,
         dropout=0.2,
         batch_norm=True,
@@ -163,7 +163,7 @@ class GCNGraphPred(pl.LightningModule):
             "feat_drop": dropout_feat_gat,
             "attn_drop": dropout_attn_gat,
             "residual": residual_gat,
-            "hidden_size": hidden_size_gat,
+            "hidden_size": hidden_size,
             "ntasks": len(target_dict["global"]),
         }
 
@@ -227,10 +227,10 @@ class GCNGraphPred(pl.LightningModule):
                     layer_tracker + self.hparams.resid_n_graph_convs
                     > self.hparams.n_conv_layers - 1
                 ):
-                    # print("triggered output_layer args")
-                    layer_ind = self.hparams.n_conv_layers - layer_tracker - 1
-                else:
+                    print("triggered output_layer args")
                     layer_ind = -1
+                else:
+                    layer_ind = layer_tracker
 
                 layer_args = get_layer_args(
                     self.hparams,
@@ -240,7 +240,8 @@ class GCNGraphPred(pl.LightningModule):
                 )
 
                 output_block = False
-                if layer_ind != -1:
+                
+                if layer_ind == -1:
                     output_block = True
 
                 self.conv_layers.append(
@@ -427,7 +428,7 @@ class GCNGraphPred(pl.LightningModule):
                         )
                 else:
                     for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.hidden_size)
+                        feats[k] = v.reshape(-1, self.hparams.input_size[k])
 
         readout_feats = self.readout(graph, feats)
         for ind, layer in enumerate(self.fc_layers):

@@ -18,7 +18,7 @@ from qtaim_embed.models.layers import (
     WeightAndMeanThenCat,
 )
 from qtaim_embed.utils.models import (
-    get_layer_args,
+    get_layer_args
 )
 
 

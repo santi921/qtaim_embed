@@ -61,7 +61,7 @@ class GCNNodePred(pl.LightningModule):
         aggregate="sum",
         lr=1e-3,
         embedding_size=16,
-        hidden_size_gat=128,
+        hidden_size=128,
         num_heads_gat=4,
         dropout_feat_gat=0.2,
         dropout_attn_gat=0.2,
@@ -89,9 +89,7 @@ class GCNNodePred(pl.LightningModule):
                 output_dims += len(v)
 
         assert (
-            conv_fn == "GraphConvDropoutBatch"
-            or conv_fn == "ResidualBlock"
-            or conv_fn == "GATConv"
+            conv_fn in ["GraphConvDropoutBatch", "ResidualBlock", "GATConv"]
         ), (
             "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
             + f"but got {conv_fn}"
@@ -128,7 +126,7 @@ class GCNNodePred(pl.LightningModule):
             "attn_drop": dropout_attn_gat,
             "residual": residual_gat,
             "resid_n_graph_convs": resid_n_graph_convs,
-            "hidden_size": hidden_size_gat,
+            "hidden_size": hidden_size,
             "embedding_size": embedding_size,
         }
 
@@ -187,10 +185,10 @@ class GCNNodePred(pl.LightningModule):
                     layer_tracker + self.hparams.resid_n_graph_convs
                     > self.hparams.n_conv_layers - 1
                 ):
-                    print("triggered output_layer args")
-                    layer_ind = self.hparams.n_conv_layers - layer_tracker - 1
-                else:
+                    #print("triggered output_layer args")
                     layer_ind = -1
+                else:
+                    layer_ind = layer_tracker
 
                 layer_args = get_layer_args(
                     self.hparams,
@@ -200,8 +198,10 @@ class GCNNodePred(pl.LightningModule):
                 )
 
                 output_block = False
-                if layer_ind != -1:
+                
+                if layer_ind == -1:
                     output_block = True
+
                 self.conv_layers.append(
                     ResidualBlock(
                         layer_args,
@@ -242,6 +242,7 @@ class GCNNodePred(pl.LightningModule):
                 )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
+        print(self.conv_layers)
         self.target_dict = target_dict
 
         self.loss = self.loss_function()
@@ -293,14 +294,21 @@ class GCNNodePred(pl.LightningModule):
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
                     for k, v in feats.items():
+                        #print(k)
+                        #print("feats shape", v.shape)
+                        #print("conv ind", ind)
+            
                         feats[k] = v.reshape(
                             -1, self.hparams.num_heads * self.hparams.hidden_size
                         )
                 else:
                     for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.hidden_size)
+                        #print(k)
+                        #print("feats shape", v.shape)
+                        #print("conv ind", ind)
+                        feats[k] = v.reshape(-1, len(self.target_dict[k]))
+        
         # filter features if output is None for one of the node types
-
         for k, v in self.hparams.target_dict.items():
             if v == [None]:
                 del feats[k]
@@ -611,6 +619,7 @@ class GCNNodePred(pl.LightningModule):
         mae_eval = {}
         pred_dict = {}
         label_dict = {}
+        #print("target dict: ", self.target_dict)
 
         for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
@@ -631,6 +640,7 @@ class GCNNodePred(pl.LightningModule):
             preds = self.forward(batch_graph, batch_graph.ndata["feat"])
             # detach every tensor in dictionary
             preds_unscaled = {k: deepcopy(v.detach()) for k, v in preds.items()}
+            #print("preds shape", preds_unscaled["atom"].shape)
             labels_unscaled = deepcopy(batched_label)
 
             for scaler in scaler_list:

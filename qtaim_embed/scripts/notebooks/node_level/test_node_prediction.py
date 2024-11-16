@@ -175,3 +175,10 @@ class TestNodePred:
 
     def test_gcn(self):
         self.main_train("GraphConvDropoutBatch")
+
+
+
+#tester = TestNodePred()
+#tester.test_gat()
+#tester.test_resid()
+#tester.test_gcn()
