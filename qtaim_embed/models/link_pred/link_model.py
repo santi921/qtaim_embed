@@ -5,17 +5,14 @@ import pytorch_lightning as pl
 from dgl.nn.pytorch import GATConv
 from dgl.nn import SAGEConv
 
-from qtaim_embed.utils.models import (
-    get_layer_args_homo,
-    _split_batched_output
-)
+from qtaim_embed.utils.models import get_layer_args_homo, _split_batched_output
 
 from qtaim_embed.models.layers_homo import (
     ResidualBlockHomo,
     UnifySize,
     MLPPredictor,
     DotPredictor,
-    AttentionPredictor
+    AttentionPredictor,
 )
 
 from qtaim_embed.models.layers import GraphConvDropoutBatch
@@ -94,7 +91,8 @@ class GCNLinkPred(pl.LightningModule):
             "ResidualBlock",
             "GraphConvDropoutBatch",
         ], (
-            "conv_fn must be either GraphConvDropoutBatch, GATConv, ResidualBlock, or GraphSAGE" + f"but got {conv_fn}",
+            "conv_fn must be either GraphConvDropoutBatch, GATConv, ResidualBlock, or GraphSAGE"
+            + f"but got {conv_fn}",
         )
 
         if conv_fn == "ResidualBlock":
@@ -112,7 +110,6 @@ class GCNLinkPred(pl.LightningModule):
                 "activation": "ReLU",
             }
             print("...> Using default predictor parameters for MLP predictor!")
-
 
         params = {
             "input_size": input_size,
@@ -147,9 +144,7 @@ class GCNLinkPred(pl.LightningModule):
 
         # convert string activation to function
         if self.hparams.activation is not None:
-            self.activation = getattr(
-                torch.nn, self.hparams.activation
-            )()
+            self.activation = getattr(torch.nn, self.hparams.activation)()
 
         else:
             self.activation = None
@@ -164,7 +159,6 @@ class GCNLinkPred(pl.LightningModule):
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             for i in range(self.hparams.n_conv_layers):
-
 
                 layer_args = get_layer_args_homo(
                     self.hparams, i, activation=self.activation, embedding_in=True
@@ -190,23 +184,18 @@ class GCNLinkPred(pl.LightningModule):
                     embedding_in=True,
                     activation=self.activation,
                 )
-                #print("layer args: ", block_args)
-                #print(layer_tracker)
-                
+                # print("layer args: ", block_args)
+                # print(layer_tracker)
 
                 input_block = False
                 if layer_tracker == 0:
-                    #print("input block!")
+                    # print("input block!")
                     input_block = True
 
                 block_args["input_block"] = input_block
                 block_args["resid_n_graph_convs"] = self.hparams.resid_n_graph_convs
-                
-                self.conv_layers.append(
-                    ResidualBlockHomo(
-                        **block_args                      
-                    )
-                )
+
+                self.conv_layers.append(ResidualBlockHomo(**block_args))
 
                 layer_tracker += self.hparams.resid_n_graph_convs
 
@@ -233,22 +222,22 @@ class GCNLinkPred(pl.LightningModule):
 
         if self.hparams.conv_fn in ["GraphSAGE", "GATConv"]:
             self.conv_out_size = self.conv_layers[-1]._out_feats
-        else: 
+        else:
             self.conv_out_size = self.conv_layers[-1].out_feats
-        #print(self.conv_layers)
-        
-        #self.conv_out_size = self.conv_layers[-1].out_feats
+        # print(self.conv_layers)
+
+        # self.conv_out_size = self.conv_layers[-1].out_feats
 
         ####################### predictor ######################
         if self.hparams.predictor == "MLP":
             self.predictor = MLPPredictor(
-                h_feats=self.conv_out_size, # out layer
+                h_feats=self.conv_out_size,  # out layer
                 h_dims=self.hparams.predictor_param_dict["fc_layer_size"],
                 dropout=self.hparams.predictor_param_dict["fc_dropout"],
                 batch_norm=self.hparams.predictor_param_dict["batch_norm"],
                 activation=self.hparams.predictor_param_dict["activation"],
             )
-            
+
         elif self.hparams.predictor == "Dot":
             self.predictor = DotPredictor()
 
@@ -257,21 +246,21 @@ class GCNLinkPred(pl.LightningModule):
 
         # print("creating statistics")
         ###################### statistics ######################
-        self.train_hinge = HingeMetric()#.to(self.device)
-        self.val_hinge = HingeMetric()#.to(self.device)
-        self.test_hinge = HingeMetric()#.to(self.device)
+        self.train_hinge = HingeMetric()  # .to(self.device)
+        self.val_hinge = HingeMetric()  # .to(self.device)
+        self.test_hinge = HingeMetric()  # .to(self.device)
 
-        self.train_auc = AUCMetric()#.to(self.device)
-        self.val_auc = AUCMetric()#.to(self.device)
-        self.test_auc = AUCMetric()#.to(self.device)
+        self.train_auc = AUCMetric()  # .to(self.device)
+        self.val_auc = AUCMetric()  # .to(self.device)
+        self.test_auc = AUCMetric()  # .to(self.device)
 
-        self.train_accuracy = AccuracyMetric()#.to(self.device)
-        self.val_accuracy = AccuracyMetric()#.to(self.device)
-        self.test_accuracy = AccuracyMetric()#.to(self.device)
+        self.train_accuracy = AccuracyMetric()  # .to(self.device)
+        self.val_accuracy = AccuracyMetric()  # .to(self.device)
+        self.test_accuracy = AccuracyMetric()  # .to(self.device)
 
-        self.train_f1 = F1Metric()#.to(self.device)
-        self.val_f1 = F1Metric()#.to(self.device)
-        self.test_f1 = F1Metric()#.to(self.device)
+        self.train_f1 = F1Metric()  # .to(self.device)
+        self.val_f1 = F1Metric()  # .to(self.device)
+        self.test_f1 = F1Metric()  # .to(self.device)
 
         self.loss = self.loss_function()
 
@@ -281,11 +270,11 @@ class GCNLinkPred(pl.LightningModule):
         """
         feats_embed = self.embedding(inputs)
         for ind, conv in enumerate(self.conv_layers):
-            #print("conv ind: ", ind)
-            if ind == 0: 
+            # print("conv ind: ", ind)
+            if ind == 0:
                 feats_pos = conv(pos_graph, feats_embed)
                 feats_neg = conv(neg_graph, feats_embed)
-            else: 
+            else:
                 feats_pos = conv(pos_graph, feats_pos)
                 feats_neg = conv(neg_graph, feats_neg)
 
@@ -302,7 +291,7 @@ class GCNLinkPred(pl.LightningModule):
                     # for k, v in feats.items():
                     feats_pos = feats_pos.reshape(-1, self.hparams.hidden_size)
                     feats_neg = feats_neg.reshape(-1, self.hparams.hidden_size)
-        #print("predictor!")
+        # print("predictor!")
         pos_pred = self.predictor(pos_graph, feats_pos)
         neg_pred = self.predictor(neg_graph, feats_neg)
 
@@ -312,7 +301,7 @@ class GCNLinkPred(pl.LightningModule):
         """
         Initialize loss function
         """
-        
+
         if self.hparams.loss_fn == "auroc":
             loss_fn = AUCMetric()
         elif self.hparams.loss_fn == "margin":
@@ -327,11 +316,11 @@ class GCNLinkPred(pl.LightningModule):
             loss_fn = F1Metric()
         else:
             loss_fn = CrossEntropyMetric()
-        
-        loss_fn = loss_fn#.to(self.device)
-        
-        #print(self.device)
-        #print(loss_fn.device)
+
+        loss_fn = loss_fn  # .to(self.device)
+
+        # print(self.device)
+        # print(loss_fn.device)
 
         return loss_fn
 
@@ -339,9 +328,9 @@ class GCNLinkPred(pl.LightningModule):
         """
         Compute loss
         """
-        #print("target device", target.device)
-        #print("pred device", pred.device)
-        #print("loss device", self.loss.device)
+        # print("target device", target.device)
+        # print("pred device", pred.device)
+        # print("loss device", self.loss.device)
         return self.loss(target, pred)
 
     def feature_at_each_layer(model, graph, feats):
@@ -381,9 +370,9 @@ class GCNLinkPred(pl.LightningModule):
 
     def shared_step(self, batch, mode):
 
-        #if mode == "train":
+        # if mode == "train":
         positive_graph, negative_graph, feat = batch
-        #else:
+        # else:
         #    positive_graph, negative_graph, negative_graph_explicit, feat = batch
 
         pred_pos, pred_neg = self.forward(
@@ -400,9 +389,9 @@ class GCNLinkPred(pl.LightningModule):
             prog_bar=True,
             sync_dist=True,
         )
-        #if mode == "train":
+        # if mode == "train":
         self.update_metrics(pred_pos, pred_neg, mode)
-        #else:
+        # else:
         #    self.update_metrics(
         #        pred_pos, pred_neg, mode, target_neg=negative_graph_explicit
         #    )

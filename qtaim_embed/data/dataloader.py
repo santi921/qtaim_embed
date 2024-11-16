@@ -97,7 +97,7 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
                 "'collate_fn' provided internally', you need not to provide one"
             )
         self.transforms = transforms
-        #self.validation = bool(validation)
+        # self.validation = bool(validation)
 
         def collate(samples):
             graphs = samples
@@ -108,7 +108,7 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
             transformer = hetero_to_homo(concat_global=True)
             # convert to homographs
             graphs_hetero_to_homo = [transformer(i) for i in graphs]
-            
+
             # get negative samples
             graphs_negative = [
                 get_negative_graph(

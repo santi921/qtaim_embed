@@ -255,7 +255,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
                 # embedding_in = False
                 output_block = False
-                
+
                 if layer_ind == -1:
                     output_block = True
 

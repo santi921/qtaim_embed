@@ -315,7 +315,6 @@ def load_link_model_from_config(config):
         predictor=config["predictor"],
         predictor_param_dict=config["predictor_param_dict"],
         aggregator_type=config["aggregator_type"],
-        
     )
     # model.to(device)
 
@@ -688,7 +687,6 @@ def test_and_predict_tmqm(dataset_test, model, batch_size=100):
         pred_list.append(pred)
         label_list.append(labels)
         charge_list.append(charge_list_test)
-
 
     preds_test = torch.cat(pred_list)
     label_list = torch.cat(label_list)

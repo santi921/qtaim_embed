@@ -18,6 +18,7 @@ def test_molwrapper():
     # TODO
     pass
 
+
 def test_classifier_dataset():
     # test single class
     dataset_single, dataset_multi = get_datasets_graph_level_classifier(
@@ -85,8 +86,6 @@ def test_classifier_dataset():
             graph_ind += 1
 
 
-
-
 def test_node_datamodule():
     config = get_default_node_level_config()
 
@@ -120,7 +119,7 @@ def test_graph_datamodule():
     config_w_test = get_default_graph_level_config()
     config_w_test["dataset"]["val_prop"] = 0.20
     config_w_test["dataset"]["test_prop"] = 0.15
-    
+
     dm = QTAIMGraphTaskClassifyDataModule(config=config_w_test)
     dm.prepare_data("fit")
 
@@ -137,11 +136,9 @@ def test_graph_datamodule():
 
     train_dl_2_size = len(dm.train_dataset)
     val_dl_2_size = len(dm.val_dataset)
-      
+
     # tests
     assert train_dl_size == 65, "Train size mismatch"
     assert train_dl_2_size == 75, "Train size mismatch"
     assert val_dl_size == 20, "Val size mismatch"
     assert val_dl_2_size == 25, "Val size mismatch"
-
-

@@ -47,7 +47,13 @@ class DotPredictor(nn.Module):
 
 class MLPPredictor(nn.Module):
     def __init__(
-        self, h_feats, h_dims=[100, 50], dropout=0.5, activation=None, batch_norm=False, **kwargs
+        self,
+        h_feats,
+        h_dims=[100, 50],
+        dropout=0.5,
+        activation=None,
+        batch_norm=False,
+        **kwargs
     ):
         super().__init__()
 
@@ -181,13 +187,7 @@ class UnifySize(nn.Module):
 
 
 class ResidualBlockHomo(nn.Module):
-    def __init__(
-        self,
-        layer_args,
-        resid_n_graph_convs=2,
-        input_block=False,
-         **kwargs
-    ):
+    def __init__(self, layer_args, resid_n_graph_convs=2, input_block=False, **kwargs):
         super(ResidualBlockHomo, self).__init__()
         # create graph convolutional layer
         self.layers = []
@@ -196,15 +196,15 @@ class ResidualBlockHomo(nn.Module):
         for i in range(resid_n_graph_convs):
             if input_block:
                 layer_arg_copy = deepcopy(layer_args)
-                    
-                if i==0: 
+
+                if i == 0:
                     layer_arg_copy["in_feats"] = layer_args["embedding_size"]
                     print("layer arg copy:", layer_arg_copy)
-                    self.layers.append( 
+                    self.layers.append(
                         GraphConvDropoutBatch(**layer_arg_copy),
                     )
 
-                else: 
+                else:
                     layer_arg_copy["in_feats"] = layer_args["out_feats"]
                     print("layer arg copy:", layer_arg_copy)
                     self.layers.append(
@@ -216,28 +216,25 @@ class ResidualBlockHomo(nn.Module):
                     GraphConvDropoutBatch(**layer_args),
                 )
 
-
-            
-        self.layers = nn.ModuleList(self.layers)        
+        self.layers = nn.ModuleList(self.layers)
         self.out_feats = self.layers[-1].out_feats
-
 
     def forward(self, graph, feat, weight=None, edge_weight=None):
         input_feats = feat
-        
+
         if self.input_block == True:
-            #print("input block")
+            # print("input block")
             feats_rectified = self.layers[0](graph, input_feats, weight, edge_weight)
             feats = feats_rectified.detach().clone()
             for layer in self.layers[1:]:
                 feats = layer(graph, feats, weight, edge_weight)
-            
+
             feat = feats_rectified + feats
-            
+
         else:
-            #print("no input block")
+            # print("no input block")
             for layer in self.layers:
                 feat = layer(graph, feat, weight, edge_weight)
-            feat = feat + input_feats 
-            
+            feat = feat + input_feats
+
         return feat

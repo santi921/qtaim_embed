@@ -16,6 +16,7 @@ from dimenet.training.metrics import Metrics
 from dimenet.training.data_container import DataContainer
 from dimenet.training.data_provider import DataProvider
 
+
 def id_generator(
     size=8, chars=string.ascii_uppercase + string.ascii_lowercase + string.digits
 ):
@@ -37,7 +38,6 @@ def main():
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "1"
     tf.get_logger().setLevel("WARN")
     tf.autograph.set_verbosity(2)
-
 
     config = {
         "model_name": "dimenet++",
@@ -76,7 +76,6 @@ def main():
         "targets": ["homo", "lumo", "gap", "U0"],  # edit for multitask
     }
 
-
     # For strings that yaml doesn't parse (e.g. None)
     for key, val in config.items():
         if type(val) is str:
@@ -84,7 +83,6 @@ def main():
                 config[key] = ast.literal_eval(val)
             except (ValueError, SyntaxError):
                 pass
-
 
     model_name = config["model_name"]
 
@@ -135,8 +133,6 @@ def main():
     comment = config["comment"]
     targets = config["targets"]
 
-
-
     # Create directories
     # A unique directory name is created for this run based on the input
     if restart is None:
@@ -180,11 +176,18 @@ def main():
     test["metrics"] = Metrics("test", targets)
 
     data_container = DataContainer(dataset, cutoff=cutoff, target_keys=targets)
-    data_container_test = DataContainer(dataset_test, cutoff=cutoff, target_keys=targets)
+    data_container_test = DataContainer(
+        dataset_test, cutoff=cutoff, target_keys=targets
+    )
 
     # Initialize DataProvider (splits dataset into 3 sets based on data_seed and provides tf.datasets)
     data_provider = DataProvider(
-        data_container, num_train, num_valid, batch_size, seed=data_seed, randomized=True
+        data_container,
+        num_train,
+        num_valid,
+        batch_size,
+        seed=data_seed,
+        randomized=True,
     )
 
     data_provider_test = DataProvider(
@@ -195,7 +198,6 @@ def main():
         seed=data_seed,
         randomized=True,
     )
-
 
     # Initialize datasets
     train["dataset"] = data_provider.get_dataset("train").prefetch(
@@ -250,7 +252,6 @@ def main():
     else:
         raise ValueError(f"Unknown model name: '{model_name}'")
 
-
     if os.path.isfile(best_loss_file):
         loss_file = np.load(best_loss_file)
         metrics_best = {k: v.item() for k, v in loss_file.items()}
@@ -281,7 +282,6 @@ def main():
     if ckpt_restored is not None:
         ckpt.restore(ckpt_restored)
 
-            
     with summary_writer.as_default():
         steps_per_epoch = int(np.ceil(num_train / batch_size))
 
@@ -310,7 +310,9 @@ def main():
 
                 # Compute results on the validation set
                 for i in range(int(np.ceil(num_valid / batch_size))):
-                    trainer.test_on_batch(validation["dataset_iter"], validation["metrics"])
+                    trainer.test_on_batch(
+                        validation["dataset_iter"], validation["metrics"]
+                    )
 
                 # for i in range(int(np.ceil(num_valid / batch_size))):
                 #    trainer.test_on_batch(test["dataset_iter"], test["metrics"])
@@ -335,7 +337,7 @@ def main():
                     f"mae: train={train['metrics'].mean_mae:.6f}, val={validation['metrics'].mean_mae:.6f}; "
                     f"val={validation['metrics'].mean_log_mae:.6f}, "
                 )
-                
+
                 train["metrics"].write()
                 validation["metrics"].write()
 
@@ -344,8 +346,7 @@ def main():
 
                 # Restore backup variables
                 trainer.restore_variable_backups()
-        
-        
+
         # Compute results on the validation set
         for i in range(int(np.ceil(num_test / batch_size))):
             trainer.test_on_batch(test["dataset_iter"], test["metrics"])
@@ -366,5 +367,6 @@ def main():
         print(test["metrics"].maes)
         test["metrics"].write()
         test["metrics"].reset_states()
+
 
 main()

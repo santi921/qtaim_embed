@@ -22,7 +22,6 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
         bond_in = hparams.bond_input_size
         global_in = hparams.global_input_size
 
-
         if embedding_in and layer_ind == 0:
             atom_in = hparams.embedding_size
             bond_in = hparams.embedding_size
@@ -31,7 +30,7 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             bond_out = hparams.hidden_size
             global_out = hparams.hidden_size
 
-        if layer_ind > 0: 
+        if layer_ind > 0:
             atom_in = hparams.hidden_size
             bond_in = hparams.hidden_size
             global_in = hparams.hidden_size
@@ -156,7 +155,7 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
         bond_in = hparams.bond_input_size
         global_in = hparams.global_input_size
 
-        #print("layer ind: ", layer_ind)
+        # print("layer ind: ", layer_ind)
         if embedding_in:
             atom_in = hparams.embedding_size
             bond_in = hparams.embedding_size
@@ -164,7 +163,6 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             atom_out = hparams.embedding_size
             bond_out = hparams.embedding_size
             global_out = hparams.embedding_size
-    
 
         if layer_ind == -1:  # last residual layer has different args
             # print("triggered early stop condition!!!")
@@ -378,23 +376,22 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
         atom_in = hparams.atom_input_size
         bond_in = hparams.bond_input_size
         global_in = hparams.global_input_size
-        
+
         atom_out = hparams.hidden_size
         bond_out = hparams.hidden_size
         global_out = hparams.hidden_size
-        
+
         num_heads = hparams.num_heads
 
         if embedding_in and layer_ind == 0:
             atom_in = hparams.embedding_size
             bond_in = hparams.embedding_size
             global_in = hparams.embedding_size
-            
+
         if layer_ind > 0:
             atom_in = hparams.hidden_size * num_heads
             bond_in = hparams.hidden_size * num_heads
             global_in = hparams.hidden_size * num_heads
-
 
         if layer_ind == hparams.n_conv_layers - 1:
             num_heads = 1
@@ -512,18 +509,13 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "bias": hparams.bias,
             "activation": activation,
         }
-        
+
         print("layer args: ", layer_args)
 
     return layer_args
 
 
-def get_layer_args_homo(
-        hparams, 
-        layer_ind=None, 
-        embedding_in=False, 
-        activation=None
-    ):
+def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=None):
     """
     Converts hparam dictionary to a dictionary of arguments for a layer.
     """
@@ -532,7 +524,7 @@ def get_layer_args_homo(
         "GraphConvDropoutBatch",
         "ResidualBlock",
         "GATConv",
-        "GraphSAGE"
+        "GraphSAGE",
     ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
 
     layer_args = {}
@@ -543,12 +535,11 @@ def get_layer_args_homo(
             in_feats = hparams.embedding_size
         else:
             in_feats = hparams.input_size
-        
+
         if layer_ind > 0:
             in_feats = hparams.hidden_size
-        
+
         out = hparams.hidden_size
-        
 
         layer_args["conv"] = {
             "in_feats": in_feats,
@@ -602,7 +593,7 @@ def get_layer_args_homo(
         if layer_ind == hparams.n_conv_layers - 1:
             num_heads = 1
             # TESTING
-            #out = 1
+            # out = 1
 
         out = hparams.hidden_size
 
@@ -620,13 +611,13 @@ def get_layer_args_homo(
 
     elif hparams.conv_fn == "GraphSAGE":
         in_feats = hparams.input_size
-        
+
         if embedding_in:
             in_feats = hparams.embedding_size
-        
+
         if layer_ind > 0:
             in_feats = hparams.hidden_size
-        
+
         out = hparams.hidden_size
 
         layer_args["conv"] = {
@@ -636,12 +627,10 @@ def get_layer_args_homo(
             "bias": hparams.bias,
             "activation": activation,
             "feat_drop": hparams.dropout,
-            "norm": None
+            "norm": None,
         }
 
     return layer_args
-
-
 
 
 def link_fmt_to_node_fmt(dict_feats):

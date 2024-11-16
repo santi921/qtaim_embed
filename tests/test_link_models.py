@@ -1,4 +1,4 @@
-# test statistics 
+# test statistics
 # test output shapes
 import torch
 import torch.nn.functional as F
@@ -57,112 +57,109 @@ class TestLinkPred:
         num_workers=4,
     )
 
-
     _, _, ft = next(iter(dataloader))
     node_len = ft.shape[1]
 
-    def main_lightning(self, model='GCN_Dot'):
+    def main_lightning(self, model="GCN_Dot"):
 
         if model == "GCN_Dot":
-            n_conv_layers=11
-            resid_n_graph_convs=3
-            conv_fn="GraphConvDropoutBatch"
-            predictor="Dot"
-            num_heads_gat=2
+            n_conv_layers = 11
+            resid_n_graph_convs = 3
+            conv_fn = "GraphConvDropoutBatch"
+            predictor = "Dot"
+            num_heads_gat = 2
 
         if model == "Resid_Dot":
-            n_conv_layers=9
-            resid_n_graph_convs=3
-            conv_fn="ResidualBlock"
-            predictor="Dot"
-            num_heads_gat=2
+            n_conv_layers = 9
+            resid_n_graph_convs = 3
+            conv_fn = "ResidualBlock"
+            predictor = "Dot"
+            num_heads_gat = 2
 
         if model == "Resid_Off_Dot":
-            n_conv_layers=11
-            resid_n_graph_convs=3
-            conv_fn="ResidualBlock"
-            predictor="Dot"
-            num_heads_gat=2
+            n_conv_layers = 11
+            resid_n_graph_convs = 3
+            conv_fn = "ResidualBlock"
+            predictor = "Dot"
+            num_heads_gat = 2
 
         if model == "GAT_Dot":
-            n_conv_layers=2
-            num_heads_gat=1
-            conv_fn="GATConv"
-            predictor="Dot"
-            resid_n_graph_convs=3
+            n_conv_layers = 2
+            num_heads_gat = 1
+            conv_fn = "GATConv"
+            predictor = "Dot"
+            resid_n_graph_convs = 3
 
         if model == "GAT_2_Dot":
-            n_conv_layers=2
-            num_heads_gat=2
-            conv_fn="GATConv"
-            predictor="Dot"
-            resid_n_graph_convs=3
-            
+            n_conv_layers = 2
+            num_heads_gat = 2
+            conv_fn = "GATConv"
+            predictor = "Dot"
+            resid_n_graph_convs = 3
 
         if model == "SAGE_Dot":
-            conv_fn="GraphSAGE"
-            predictor="Dot"
-            n_conv_layers=2
-            num_heads_gat=2
-            resid_n_graph_convs=3
+            conv_fn = "GraphSAGE"
+            predictor = "Dot"
+            n_conv_layers = 2
+            num_heads_gat = 2
+            resid_n_graph_convs = 3
 
         if model == "SAGE_Attention":
-            conv_fn="GraphSAGE"
-            predictor="Attention"
-            n_conv_layers=2
-            num_heads_gat=2
-            resid_n_graph_convs=3
-            
+            conv_fn = "GraphSAGE"
+            predictor = "Attention"
+            n_conv_layers = 2
+            num_heads_gat = 2
+            resid_n_graph_convs = 3
 
         if model == "GAT_2_Attention":
-            n_conv_layers=2
-            num_heads_gat=2
-            resid_n_graph_convs=3
-            conv_fn="GATConv"
-            predictor="Attention"
+            n_conv_layers = 2
+            num_heads_gat = 2
+            resid_n_graph_convs = 3
+            conv_fn = "GATConv"
+            predictor = "Attention"
 
         if model == "GCN_Attention":
-            n_conv_layers=11
-            resid_n_graph_convs=3
-            conv_fn="GraphConvDropoutBatch"
-            predictor="Attention"
-            num_heads_gat=2
+            n_conv_layers = 11
+            resid_n_graph_convs = 3
+            conv_fn = "GraphConvDropoutBatch"
+            predictor = "Attention"
+            num_heads_gat = 2
 
         if model == "Resid_Attention":
-            n_conv_layers=9
-            resid_n_graph_convs=3
-            conv_fn="ResidualBlock"
-            predictor="Attention"
-            num_heads_gat=2
+            n_conv_layers = 9
+            resid_n_graph_convs = 3
+            conv_fn = "ResidualBlock"
+            predictor = "Attention"
+            num_heads_gat = 2
 
         if model == "GAT_2_MLP":
-            n_conv_layers=2
-            num_heads_gat=2
+            n_conv_layers = 2
+            num_heads_gat = 2
 
-            resid_n_graph_convs=3
-            conv_fn="GATConv"
-            predictor="MLP"
+            resid_n_graph_convs = 3
+            conv_fn = "GATConv"
+            predictor = "MLP"
 
         if model == "GCN_MLP":
-            n_conv_layers=11
-            resid_n_graph_convs=3
-            conv_fn="GraphConvDropoutBatch"
-            predictor="MLP"
-            num_heads_gat=2
+            n_conv_layers = 11
+            resid_n_graph_convs = 3
+            conv_fn = "GraphConvDropoutBatch"
+            predictor = "MLP"
+            num_heads_gat = 2
 
         if model == "SAGE_MLP":
-            conv_fn="GraphSAGE"
-            predictor="MLP"
-            n_conv_layers=2
-            num_heads_gat=2
-            resid_n_graph_convs=3
+            conv_fn = "GraphSAGE"
+            predictor = "MLP"
+            n_conv_layers = 2
+            num_heads_gat = 2
+            resid_n_graph_convs = 3
 
         if model == "Resid_MLP":
-            n_conv_layers=9
-            resid_n_graph_convs=3
-            conv_fn="ResidualBlock"
-            predictor="MLP"
-            num_heads_gat=2
+            n_conv_layers = 9
+            resid_n_graph_convs = 3
+            conv_fn = "ResidualBlock"
+            predictor = "MLP"
+            num_heads_gat = 2
 
         model = GCNLinkPred(
             input_size=self.ft.shape[1],
@@ -179,14 +176,12 @@ class TestLinkPred:
             loss_fn="cross_entropy",
             embedding_size=50,
             hidden_size=256,
-                
         )
-
 
         trainer = pl.Trainer(
             max_epochs=2,
             accelerator="gpu",
-            devices=[0], 
+            devices=[0],
             gradient_clip_val=10.0,
             accumulate_grad_batches=1,
             enable_progress_bar=True,
@@ -196,12 +191,10 @@ class TestLinkPred:
 
         trainer.fit(model, self.dataloader, self.dataloader)
         stat_dict = model.evaluate_manually(self.dataloader)
-        print(
-            json.dumps(stat_dict, indent=4)
-        )
+        print(json.dumps(stat_dict, indent=4))
         return stat_dict
 
-    def test_gcn_dot(self): 
+    def test_gcn_dot(self):
         self.main_lightning("GCN_Dot")
 
     def test_gcn_attention(self):

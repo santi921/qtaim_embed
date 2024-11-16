@@ -17,9 +17,7 @@ from qtaim_embed.models.layers import (
     MeanPoolingThenCat,
     WeightAndMeanThenCat,
 )
-from qtaim_embed.utils.models import (
-    get_layer_args
-)
+from qtaim_embed.utils.models import get_layer_args
 
 
 class TestLayers:

@@ -88,9 +88,7 @@ class GCNNodePred(pl.LightningModule):
             if v != [None]:
                 output_dims += len(v)
 
-        assert (
-            conv_fn in ["GraphConvDropoutBatch", "ResidualBlock", "GATConv"]
-        ), (
+        assert conv_fn in ["GraphConvDropoutBatch", "ResidualBlock", "GATConv"], (
             "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
             + f"but got {conv_fn}"
         )
@@ -185,7 +183,7 @@ class GCNNodePred(pl.LightningModule):
                     layer_tracker + self.hparams.resid_n_graph_convs
                     > self.hparams.n_conv_layers - 1
                 ):
-                    #print("triggered output_layer args")
+                    # print("triggered output_layer args")
                     layer_ind = -1
                 else:
                     layer_ind = layer_tracker
@@ -198,7 +196,7 @@ class GCNNodePred(pl.LightningModule):
                 )
 
                 output_block = False
-                
+
                 if layer_ind == -1:
                     output_block = True
 
@@ -294,20 +292,20 @@ class GCNNodePred(pl.LightningModule):
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
                     for k, v in feats.items():
-                        #print(k)
-                        #print("feats shape", v.shape)
-                        #print("conv ind", ind)
-            
+                        # print(k)
+                        # print("feats shape", v.shape)
+                        # print("conv ind", ind)
+
                         feats[k] = v.reshape(
                             -1, self.hparams.num_heads * self.hparams.hidden_size
                         )
                 else:
                     for k, v in feats.items():
-                        #print(k)
-                        #print("feats shape", v.shape)
-                        #print("conv ind", ind)
+                        # print(k)
+                        # print("feats shape", v.shape)
+                        # print("conv ind", ind)
                         feats[k] = v.reshape(-1, len(self.target_dict[k]))
-        
+
         # filter features if output is None for one of the node types
         for k, v in self.hparams.target_dict.items():
             if v == [None]:
@@ -619,7 +617,7 @@ class GCNNodePred(pl.LightningModule):
         mae_eval = {}
         pred_dict = {}
         label_dict = {}
-        #print("target dict: ", self.target_dict)
+        # print("target dict: ", self.target_dict)
 
         for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
@@ -640,7 +638,7 @@ class GCNNodePred(pl.LightningModule):
             preds = self.forward(batch_graph, batch_graph.ndata["feat"])
             # detach every tensor in dictionary
             preds_unscaled = {k: deepcopy(v.detach()) for k, v in preds.items()}
-            #print("preds shape", preds_unscaled["atom"].shape)
+            # print("preds shape", preds_unscaled["atom"].shape)
             labels_unscaled = deepcopy(batched_label)
 
             for scaler in scaler_list:

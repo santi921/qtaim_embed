@@ -75,9 +75,7 @@ def test_manual_eval_graph_level_classifier():
     model_config = get_default_graph_level_config()
     model_config["model"]["atom_feature_size"] = dataset_single.feature_size["atom"]
     model_config["model"]["bond_feature_size"] = dataset_single.feature_size["bond"]
-    model_config["model"]["global_feature_size"] = dataset_single.feature_size[
-        "global"
-    ]
+    model_config["model"]["global_feature_size"] = dataset_single.feature_size["global"]
     model_config["model"]["target_dict"]["global"] = dataset_single.target_dict[
         "global"
     ]
@@ -135,7 +133,6 @@ def test_manual_eval_graph_level():
     data_loader = DataLoaderMoleculeGraphTask(
         dataset_graph_level, batch_size=len(dataset_graph_level.graphs), shuffle=False
     )
-    
 
     model_config = get_default_graph_level_config()
     model_config["model"]["atom_feature_size"] = dataset_graph_level.feature_size[
@@ -186,7 +183,7 @@ def test_manual_eval_graph_level():
             opt.zero_grad()
             loss.backward()
             opt.step()
- 
+
     r2_post, mae, mse, _, _ = model.evaluate_manually(
         data_loader,
         scaler_list=dataset_graph_level.label_scalers,
@@ -202,7 +199,7 @@ def test_manual_eval_graph_level():
 
 def test_multi_task():
     dataset_graph_level = get_dataset_graph_level_multitask(
-        log_scale_features=True, 
+        log_scale_features=True,
         log_scale_targets=False,
         standard_scale_features=True,
         standard_scale_targets=True,
@@ -242,4 +239,3 @@ def test_multi_task():
     )
 
     trainer.fit(model, data_loader)
-
