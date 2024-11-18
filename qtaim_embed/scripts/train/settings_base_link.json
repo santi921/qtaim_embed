@@ -1,0 +1,103 @@
+{
+    "dataset": {
+        "allowed_ring_size": [
+            3,
+            4,
+            5,
+            6
+        ],
+        "train_batch_size": 128,
+        "allowed_charges": [
+            -1,
+            0,
+            1
+        ],
+        "allowed_spins": null,
+        "self_loop": true,
+        "per_atom": false,
+        "element_set": [],
+        "val_prop": 0.1,
+        "test_prop": 0.1,
+        "debug": false,
+        "seed": 42,
+        "num_workers": 32,
+        "extra_dataset_info": null,
+        "log_scale_features": false,
+        "log_scale_targets": false,
+        "standard_scale_features": true,
+        "standard_scale_targets": true,
+        "extra_keys": {
+            "atom": [
+                "extra_feat_atom_esp_total"
+            ],
+            "bond": [
+                "bond_length"
+            ],
+            "global": [
+                "charge"
+            ]
+        },
+        "target_dict": {
+            "atom": [
+                "extra_feat_atom_esp_total"
+            ],
+            "bond": [],
+            "global": []
+        },
+        "verbose": false
+    },
+    "model": {
+        "conv_fn": "GraphSAGE",
+        "dropout": 0.2,
+        "initializer": "kaiming",
+        "batch_norm_tf": true,
+        "activation": "ReLU",
+        "bias": true,
+        "norm": "both",
+        "n_conv_layers": 2,
+        "lr": 0.01,
+        "weight_decay": 5e-05,
+        "lr_plateau_patience": 25,
+        "lr_scale_factor": 0.5,
+        "scheduler_name": "reduce_on_plateau",
+        "loss_fn": "mse",
+        "resid_n_graph_convs": 3,
+        "embedding_size": 25,
+        "lstm_iters": 15,
+        "lstm_layers": 2,
+        "num_heads": 2,
+        "feat_drop": 0.1,
+        "attn_drop": 0.1,
+        "predictor": "MLP",
+        "predictor_param_dict": {
+            "fc_layer_size": [
+                512
+            ],
+            "fc_dropout": 0.1,
+            "batch_norm": false,
+            "activation": "ReLU"
+        },
+        "aggregator_type": "pool",
+        "residual": false,
+        "num_heads_gat": 2,
+        "dropout_feat_gat": 0.1,
+        "dropout_attn_gat": 0.1,
+        "hidden_size": 64,
+        "residual_gat": true,
+        "batch_norm": true,
+        "restore": false,
+        "max_epochs": 1000,
+        "extra_stop_patience": 10
+    },
+    "optim": {
+        "num_devices": 1,
+        "num_nodes": 1,
+        "gradient_clip_val": 10.0,
+        "precision": 32,
+        "strategy": "auto",
+        "accumulate_grad_batches": 1,
+        "num_workers": 32,
+        "pin_memory": true,
+        "persistent_workers": true
+    }
+}

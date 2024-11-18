@@ -1,0 +1,387 @@
+{
+  "allowed_ring_size": {
+    "values": [
+      [
+        3,
+        4,
+        5,
+        6
+      ]
+    ]
+  },
+  "allowed_charges": {
+    "values": [
+      [
+        -1,
+        0,
+        1
+      ]
+    ]
+  },
+  "allowed_spins": {
+    "values": [
+      []
+    ]
+  },
+  "self_loop": {
+    "values": [
+      true
+    ]
+  },
+  "extra_keys": {
+    "values": [
+      {
+        "atom": [],
+        "bond": [
+          "bond_length",
+          "extra_feat_bond_Lagrangian_K"
+        ],
+        "global": [
+          "charge"
+        ]
+      }
+    ]
+  },
+  "target_dict": {
+    "values": [
+      {
+        "atom": [],
+        "bond": [
+          "extra_feat_bond_Lagrangian_K"
+        ]
+      }
+    ]
+  },
+  "predictor": {
+    "values": [
+      "MLP",
+      "Attention",
+      "Dot"
+    ]
+  },
+  "predictor_param_dict": {
+    "values": [
+      {
+        "fc_layer_size": [
+          512
+        ],
+        "batch_norm": true,
+        "fc_dropout": 0.2,
+        "activation": "ReLU"
+      },
+      {
+        "fc_layer_size": [
+          512,
+          512
+        ],
+        "batch_norm": true,
+        "fc_dropout": 0.2,
+        "activation": "ReLU"
+      },
+      {
+        "fc_layer_size": [
+          1024,
+          512
+        ],
+        "batch_norm": true,
+        "fc_dropout": 0.2,
+        "activation": "ReLU"
+      }
+    ]
+  },
+  "element_set": {
+    "values": [
+      []
+    ]
+  },
+  "persistent_workers": {
+    "values": [
+      false
+    ]
+  },
+  "pin_memory": {
+    "values": [
+      false
+    ]
+  },
+  "per_atom": {
+    "values": [
+      false
+    ]
+  },
+  "extra_dataset_info": {
+    "values": [
+      {}
+    ]
+  },
+  "log_scale_features": {
+    "values": [
+      false
+    ]
+  },
+  "log_scale_targets": {
+    "values": [
+      false
+    ]
+  },
+  "standard_scale_features": {
+    "values": [
+      true
+    ]
+  },
+  "standard_scale_targets": {
+    "values": [
+      true
+    ]
+  },
+  "val_prop": {
+    "values": [
+      0.15
+    ]
+  },
+  "test_prop": {
+    "values": [
+      0.1
+    ]
+  },
+  "seed": {
+    "values": [
+      42
+    ]
+  },
+  "train_batch_size": {
+    "values": [
+      256
+    ]
+  },
+  "n_conv_layers": {
+    "values": [
+      2,
+      3,
+      6
+    ]
+  },
+  "resid_n_graph_convs": {
+    "values": [
+      2,
+      3
+    ]
+  },
+  "conv_fn": {
+    "values": [
+      "GraphConvDropoutBatch",
+      "ResidualBlock",
+      "GATConv",
+      "GraphSAGE"
+    ]
+  },
+  "dropout": {
+    "values": [
+      0.0,
+      0.1
+    ]
+  },
+  "batch_norm": {
+    "values": [
+      true,
+      false
+    ]
+  },
+  "on_gpu": {
+    "values": [
+      true
+    ]
+  },
+  "activation": {
+    "values": [
+      "ReLU"
+    ]
+  },
+  "bias": {
+    "values": [
+      true
+    ]
+  },
+  "norm": {
+    "values": [
+      "both"
+    ]
+  },
+  "aggregate": {
+    "values": [
+      "sum"
+    ]
+  },
+  "aggregator_type": {
+    "values": [
+      "pool",
+      "gcn"
+    ]
+  },
+  "lr": {
+    "max": 0.1,
+    "min": 0.005,
+    "distribution": "log_uniform_values"
+  },
+  "scheduler_name": {
+    "values": [
+      "reduce_on_plateau"
+    ]
+  },
+  "weight_decay": {
+    "values": [
+      0.000001,
+      0.0
+    ]
+  },
+  "lr_plateau_patience": {
+    "values": [
+      30
+    ]
+  },
+  "lr_scale_factor": {
+    "values": [
+      0.5,
+      0.25
+    ]
+  },
+  "early_stop_patience": {
+    "values": [
+      100
+    ]
+  },
+  "loss_fn": {
+    "values": [
+      "cross_entropy",
+      "hinge",
+      "margin"
+    ]
+  },
+  "embedding_size": {
+    "values": [
+      16,
+      25
+    ]
+  },
+  "lstm_iters": {
+    "values": [
+      3,
+      9
+    ]
+  },
+  "lstm_layers": {
+    "values": [
+      1,
+      2,
+      3
+    ]
+  },
+  "num_heads_gat": {
+    "values": [
+      1,
+      2,
+      3
+    ]
+  },
+  "dropout_feat_gat": {
+    "values": [
+      0.0,
+      0.1
+    ]
+  },
+  "dropout_attn_gat": {
+    "values": [
+      0.0,
+      0.1
+    ]
+  },
+  "hidden_size": {
+    "values": [
+      10,
+      25,
+      50
+    ]
+  },
+  "residual_gat": {
+    "values": [
+      true,
+      false
+    ]
+  },
+  "restore": {
+    "values": [
+      false
+    ]
+  },
+  "max_epochs": {
+    "values": [
+      10
+    ]
+  },
+  "precision": {
+    "values": [
+      "bf16"
+    ]
+  },
+  "num_workers": {
+    "values": [
+      4
+    ]
+  },
+  "num_devices": {
+    "values": [
+      1
+    ]
+  },
+  "num_nodes": {
+    "values": [
+      1
+    ]
+  },
+  "accumulate_grad_batches": {
+    "values": [
+      1,
+      3,
+      5
+    ]
+  },
+  "gradient_clip_val": {
+    "values": [
+      1.0,
+      5.0,
+      10.0
+    ]
+  },
+  "initializer": {
+    "values": [
+      "kaiming",
+      "xavier",
+      "none"
+    ]
+  },
+  "strategy": {
+    "values": [
+      "auto"
+    ]
+  },
+  "verbose": {
+    "values": [
+      false
+    ]
+  },
+  "train_lmdb": {
+    "values": [
+      "/home/santiagovargas/dev/qtaim_embed/qtaim_embed/scripts/train/node_qm9/train/"
+    ]
+  },
+  "val_lmdb": {
+    "values": [
+      "/home/santiagovargas/dev/qtaim_embed/qtaim_embed/scripts/train/node_qm9/val/"
+    ]
+  },
+  "test_lmdb": {
+    "values": [
+      "/home/santiagovargas/dev/qtaim_embed/qtaim_embed/scripts/train/node_qm9/test/"
+    ]
+  }
+}
