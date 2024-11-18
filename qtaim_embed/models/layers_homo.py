@@ -212,12 +212,12 @@ class ResidualBlockHomo(nn.Module):
 
                 else:
                     layer_arg_copy["in_feats"] = layer_args["out_feats"]
-                    print("layer arg copy:", layer_arg_copy)
+                    #print("layer arg copy:", layer_arg_copy)
                     self.layers.append(
                         GraphConvDropoutBatch(**layer_arg_copy),
                     )
             else:
-                print("layer args:", layer_args)
+                #print("layer args:", layer_args)
                 self.layers.append(
                     GraphConvDropoutBatch(**layer_args),
                 )

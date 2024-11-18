@@ -227,7 +227,7 @@ class GCNGraphPred(pl.LightningModule):
                     layer_tracker + self.hparams.resid_n_graph_convs
                     > self.hparams.n_conv_layers - 1
                 ):
-                    print("triggered output_layer args")
+                    #print("triggered output_layer args")
                     layer_ind = -1
                 else:
                     layer_ind = layer_tracker

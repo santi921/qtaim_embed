@@ -510,7 +510,7 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
             "activation": activation,
         }
 
-        print("layer args: ", layer_args)
+        #print("layer args: ", layer_args)
 
     return layer_args
 
@@ -561,7 +561,7 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
 
         if layer_ind > 0:
             in_feats = hparams.hidden_size
-        print("layer ind: ", layer_ind)
+        #print("layer ind: ", layer_ind)
         out = hparams.hidden_size
 
         layer_args["layer_args"] = {
