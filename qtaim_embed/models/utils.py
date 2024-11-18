@@ -292,7 +292,6 @@ def load_link_model_from_config(config):
     model = GCNLinkPred(
         input_size=config["input_size"],
         n_conv_layers=config["n_conv_layers"],
-        target_dict=config["target_dict"],
         conv_fn=config["conv_fn"],
         resid_n_graph_convs=config["resid_n_graph_convs"],
         num_heads_gat=config["num_heads_gat"],
@@ -334,6 +333,9 @@ def load_link_model_from_config(config):
         print(":::NO INITIALIZER USED:::")
 
     return model
+
+
+
 
 
 class LogParameters(pl.Callback):

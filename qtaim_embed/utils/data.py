@@ -2,6 +2,83 @@ from pathlib import Path
 import numpy as np
 from qtaim_embed.core.dataset import Subset
 
+def get_default_link_level_config():
+    root = Path(__file__).parent.parent.parent
+    # to string
+    root = str(root)
+    return {
+        "dataset": {
+            "verbose": True,
+            "element_set": [],
+            "allowed_ring_size": [3, 4, 5, 6, 7],
+            "allowed_charges": None,
+            "allowed_spins": None,
+            "self_loop": True,
+            "extra_keys": {
+                "atom": ["extra_feat_atom_esp_total"],
+                "bond": [
+                    "bond_length",
+                ],
+            },
+            "target_dict": {
+                "atom": ["extra_feat_atom_esp_total"],
+                "bond": [
+                ],
+            },
+            "extra_dataset_info": {},
+            "debug": False,
+            "element_set": None,
+            "log_scale_features": False,
+            "log_scale_targets": False,
+            "standard_scale_features": True,
+            "standard_scale_targets": True,
+            "val_prop": 0.15,
+            "test_prop": 0.1,
+            "seed": 42,
+            "train_batch_size": 128,
+            "test_dataset_loc": None,
+            "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
+        },
+        "model": {
+            "classifier": False,
+            "n_conv_layers": 8,
+            "resid_n_graph_convs": 2,
+            "target_dict": {"global": "extra_feat_global_E1_CAM"},
+            "conv_fn": "ResidualBlock",
+            "global_pooling_fn": "SumPoolingThenCat",
+            "dropout": 0.2,
+            "batch_norm": False,
+            "activation": "ReLU",
+            "bias": True,
+            "norm": "both",
+            "aggregate": "sum",
+            "lr": 0.01,
+            "scheduler_name": "reduce_on_plateau",
+            "weight_decay": 0.00001,
+            "lr_plateau_patience": 25,
+            "lr_scale_factor": 0.6,
+            "loss_fn": "mse",
+            "embedding_size": 20,
+            # "fc_layer_size": [256, 128],
+            "shape_fc": "cone",
+            "fc_hidden_size_1": 256,
+            "fc_num_layers": 3,
+            "fc_dropout": 0.2,
+            "fc_batch_norm": True,
+            "lstm_iters": 3,
+            "lstm_layers": 2,
+            "num_heads_gat": 2,
+            "dropout_feat_gat": 0.2,
+            "dropout_attn_gat": 0.2,
+            "hidden_size": 64,
+            "residual_gat": True,
+            # "output_dims": 1,
+            "pooling_ntypes": ["atom", "bond", "global"],
+            "pooling_ntypes_direct": ["global"],
+            "restore": False,
+            "max_epochs": 1000,
+        },
+    }
 
 def get_default_node_level_config():
     root = Path(__file__).parent.parent.parent

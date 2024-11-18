@@ -49,7 +49,7 @@ class MLPPredictor(nn.Module):
     def __init__(
         self,
         h_feats,
-        h_dims=[100, 50],
+        h_dims=[100, 100],
         dropout=0.5,
         activation=None,
         batch_norm=False,
@@ -65,24 +65,30 @@ class MLPPredictor(nn.Module):
         self.layers = nn.ModuleList()
         # self.layers.append(nn.Linear(h_feats * 2, h_dims[0]))
         input_size = h_feats * 2
+        output_size = h_dims[0]
+        self.layers.append(nn.Linear(input_size, output_size))
 
         for i in range(1, len(h_dims)):
-
-            output_size = h_dims[i]
-            self.layers.append(nn.Linear(input_size, output_size))
-            input_size = output_size
-
+            #print("mlp layer: ", i)
+            
             if batch_norm:
                 self.layers.append(nn.BatchNorm1d(h_dims[i - 1]))
-
             if activation is not None:
                 self.layers.append(self.activation)
-
             if dropout > 0:
                 self.layers.append(nn.Dropout(dropout))
-
+            
+            input_size = output_size
+            
             self.layers.append(nn.Linear(h_dims[i - 1], h_dims[i]))
-
+        
+        if batch_norm:
+            self.layers.append(nn.BatchNorm1d(h_dims[-1]))
+        if activation is not None:
+            self.layers.append(self.activation)
+        if dropout > 0:
+            self.layers.append(nn.Dropout(dropout))
+        
         self.layers.append(nn.Linear(h_dims[-1], 1))
         self.layers.append(nn.Sigmoid())
 
