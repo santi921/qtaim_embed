@@ -52,7 +52,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
-        TODO: add support for no global features
         Args:
             file (string): path to data file
             standard_scale_features (bool): whether to scale features

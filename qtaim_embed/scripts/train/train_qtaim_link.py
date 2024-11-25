@@ -139,8 +139,6 @@ if __name__ == "__main__":
         )
 
         dm.setup(stage="fit")
-        #val_dl = dm.train_dataloader()
-        #_, _ = next(iter(val_dl))
 
         trainer = pl.Trainer(
             max_epochs=config["model"]["max_epochs"],

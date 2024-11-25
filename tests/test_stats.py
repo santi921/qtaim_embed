@@ -16,7 +16,6 @@ import torch
 
 
 class TestLinkPredMetrics:
-
     labels = torch.tensor([0, 0, 0, 1, 1])
     preds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5])
     labels2 = torch.tensor([0, 1, 1, 1, 1])
@@ -45,7 +44,6 @@ class TestLinkPredMetrics:
         hinge.reset()
 
     def test_accuracy(self):
-
         accuracy = AccuracyMetric()
         accuracy.reset()
         accuracy.update(self.preds, self.labels)
@@ -65,7 +63,6 @@ class TestLinkPredMetrics:
         accuracy.reset()
 
     def test_auc(self):
-
         auc = AUCMetric()
         auc.reset()
         auc.update(self.preds, self.labels)

@@ -9,7 +9,6 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 class TestNodePred:
-
     target_dict = {
         "atom": ["extra_feat_atom_esp_total"],
         "bond": [
@@ -96,7 +95,6 @@ class TestNodePred:
     scalers = dm.full_dataset.label_scalers
 
     def main_train(self, model="ResidualBlock"):
-
         config = deepcopy(self.config_base)
 
         if model == "ResidualBlock":

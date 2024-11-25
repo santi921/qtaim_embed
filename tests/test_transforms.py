@@ -13,7 +13,6 @@ from qtaim_embed.utils.grapher import compare_graphs
 
 
 def test_edge_dropout():
-
     drop_edge = DropBondHeterograph(p=0.8)
 
     dataset_graph_level = get_dataset_graph_level(
@@ -36,7 +35,6 @@ def test_edge_dropout():
 
 
 def test_homo_conversion():
-
     dataset_graph_level = get_dataset_graph_level(
         log_scale_features=True,
         log_scale_targets=False,

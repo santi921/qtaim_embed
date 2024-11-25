@@ -32,7 +32,6 @@ class GCNLinkPred(pl.LightningModule):
     Basic GNN model for link prediction
     Takes
         input_size: int, dimension of input features
-        target_dict: dict, dictionary of targets
         n_conv_layers: int, number of convolution layers
         conv_fn: str "GraphConvDropoutBatch"
         dropout: float, dropout rate
@@ -58,7 +57,6 @@ class GCNLinkPred(pl.LightningModule):
         self,
         input_size=12,
         n_conv_layers=3,
-        target_dict={"atom": "E"},
         conv_fn="GraphConvDropoutBatch",
         resid_n_graph_convs=None,
         num_heads_gat=2,
@@ -92,7 +90,7 @@ class GCNLinkPred(pl.LightningModule):
             "GraphConvDropoutBatch",
         ], (
             "conv_fn must be either GraphConvDropoutBatch, GATConv, ResidualBlock, or GraphSAGE"
-            + f"but got {conv_fn}",
+            + f" but got {conv_fn}",
         )
 
         if conv_fn == "ResidualBlock":
@@ -114,7 +112,6 @@ class GCNLinkPred(pl.LightningModule):
         params = {
             "input_size": input_size,
             "conv_fn": conv_fn,
-            "target_dict": target_dict,
             "dropout": dropout,
             "batch_norm_tf": batch_norm,
             "activation": activation,
@@ -163,7 +160,7 @@ class GCNLinkPred(pl.LightningModule):
                 layer_args = get_layer_args_homo(
                     self.hparams, i, activation=self.activation, embedding_in=True
                 )
-                print("layer args: ", layer_args)
+                #print("layer args: ", layer_args)
                 self.conv_layers.append(GraphConvDropoutBatch(**layer_args["conv"]))
 
         elif self.hparams.conv_fn == "ResidualBlock":
@@ -214,7 +211,7 @@ class GCNLinkPred(pl.LightningModule):
                 layer_args = get_layer_args_homo(
                     self.hparams, i, activation=self.activation, embedding_in=True
                 )
-                print("layer args:", layer_args)
+                #print("layer args:", layer_args)
 
                 self.conv_layers.append(SAGEConv(**layer_args["conv"]))
 
@@ -229,6 +226,8 @@ class GCNLinkPred(pl.LightningModule):
         # self.conv_out_size = self.conv_layers[-1].out_feats
 
         ####################### predictor ######################
+        #print("conv out: ", self.conv_out_size)
+
         if self.hparams.predictor == "MLP":
             self.predictor = MLPPredictor(
                 h_feats=self.conv_out_size,  # out layer

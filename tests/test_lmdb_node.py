@@ -2,37 +2,38 @@ import pytorch_lightning as pl
 import torch
 
 from qtaim_embed.core.datamodule import (
-    QTAIMGraphTaskDataModule,
+    QTAIMNodeTaskDataModule,
+    LMDBMoleculeDataset,
     LMDBDataModule,
 )
-from qtaim_embed.utils.data import (
-    get_default_graph_level_config,
-)
-from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset
-from qtaim_embed.models.utils import load_graph_level_model_from_config
+
 from qtaim_embed.core.dataset import LMDBMoleculeDataset
+from qtaim_embed.utils.data import get_default_node_level_config
+from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset
+from qtaim_embed.models.utils import load_node_level_model_from_config
 
 
 def test_write():
-    config_w_test = get_default_graph_level_config()
+    config_w_test = get_default_node_level_config()
 
-    dm = QTAIMGraphTaskDataModule(config=config_w_test)
+    dm = QTAIMNodeTaskDataModule(config=config_w_test)
     feature_size, feat_name = dm.prepare_data("fit")
+
     dm.setup("fit")
 
     train_dl_size = len(dm.train_dataset)
     val_dl_size = len(dm.val_dataset)
     test_dl_size = len(dm.test_dataset)
 
-    construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb/train/")
-    construct_lmdb_and_save_dataset(dm.val_dataset, "./data/lmdb/val/")
-    construct_lmdb_and_save_dataset(dm.test_dataset, "./data/lmdb/test/")
+    construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb_node/train/")
+    construct_lmdb_and_save_dataset(dm.val_dataset, "./data/lmdb_node/val/")
+    construct_lmdb_and_save_dataset(dm.test_dataset, "./data/lmdb_node/test/")
 
     config = {
         "dataset": {
-            "train_lmdb": "./data/lmdb/train/molecule.lmdb",
-            "val_lmdb": "./data/lmdb/val/molecule.lmdb",
-            "test_lmdb": "./data/lmdb/test/molecule.lmdb",
+            "train_lmdb": "./data/lmdb_node/train/molecule.lmdb",
+            "val_lmdb": "./data/lmdb_node/val/molecule.lmdb",
+            "test_lmdb": "./data/lmdb_node/test/molecule.lmdb",
         }
     }
 
@@ -46,33 +47,19 @@ def test_write():
 
 
 def test_multi_out():
-
-    config_w_test = get_default_graph_level_config()
-
+    config_w_test = get_default_node_level_config()
     config_w_test["dataset"]["verbose"] = False
-    config_w_test["dataset"]["extra_keys"] = {
-        "atom": ["extra_feat_atom_esp_total"],
-        "bond": [
-            "extra_feat_bond_esp_total",
-            "bond_length",
-        ],
-        "global": ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"],
-    }
-    config_w_test["dataset"]["target_list"] = [
-        "extra_feat_global_E1_CAM",
-        "extra_feat_global_E2_CAM",
-    ]
-
-    dm = QTAIMGraphTaskDataModule(config=config_w_test)
+    dm = QTAIMNodeTaskDataModule(config=config_w_test)
     feature_size, feat_name = dm.prepare_data("fit")
+
     dm.setup("fit")
-    construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb/train/")
+    construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb_node/train/")
 
     config = {
         "dataset": {
-            "train_lmdb": "./data/lmdb/train/",
-            "val_lmdb": "./data/lmdb/val/",
-            "test_lmdb": "./data/lmdb/test/",
+            "train_lmdb": "./data/lmdb_node/train/",
+            "val_lmdb": "./data/lmdb_node/val/",
+            "test_lmdb": "./data/lmdb_node/test/",
         },
         "optim": {
             "train_batch_size": 1,
@@ -96,32 +83,33 @@ def test_multi_out():
     dl = dm_lmdb.train_dataloader()
 
     for batched_graphs, batched_labels in dl:
-        assert batched_labels["global"].reshape(-1).shape == torch.Size([2])
+        assert batched_graphs.ndata["feat"]["atom"].shape[1] == 12
+        assert batched_graphs.ndata["feat"]["bond"].shape[1] == 8
+        assert batched_graphs.ndata["feat"]["global"].shape[1] == 3
+        assert batched_labels["atom"].shape[1] == 1
+        assert batched_labels["bond"].shape[1] == 3
         break
 
 
 def test_model_lmdb():
-    config = get_default_graph_level_config()
+    config = get_default_node_level_config()
 
     config["dataset"] = {
-        "train_lmdb": "./data/lmdb/train/",
-        "val_lmdb": "./data/lmdb/train/",
-        "test_lmdb": "./data/lmdb/train/",
-        "target_dict": {
-            "global": ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"]
-        },
+        "train_lmdb": "./data/lmdb_node/train/",
+        "val_lmdb": "./data/lmdb_node/train/",
+        "test_lmdb": "./data/lmdb_node/train/",
     }
 
     # check that the folders have been created with the correct number of files
     dm_lmdb = LMDBDataModule(config=config)
     feat_name, feature_size = dm_lmdb.prepare_data()
-    print(feature_size)
+
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
-    config["model"]["target_dict"] = config["dataset"]["target_dict"]
-    print(config["model"])
-    model = load_graph_level_model_from_config(config["model"])
+    # config["model"]["target_dict"] = config["dataset"]["target_dict"]
+    # print(config["model"])
+    model = load_node_level_model_from_config(config["model"])
     dm_lmdb.setup("fit")
     dl = dm_lmdb.train_dataloader()
 
@@ -137,6 +125,3 @@ def test_model_lmdb():
     )
 
     trainer.fit(model, dl)
-
-
-#

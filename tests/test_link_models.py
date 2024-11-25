@@ -15,7 +15,6 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 class TestLinkPred:
-
     dataset = HeteroGraphNodeLabelDataset(
         file="./data/low_train_50.pkl",
         allowed_ring_size=[4, 5, 6, 7],
@@ -61,7 +60,6 @@ class TestLinkPred:
     node_len = ft.shape[1]
 
     def main_lightning(self, model="GCN_Dot"):
-
         if model == "GCN_Dot":
             n_conv_layers = 11
             resid_n_graph_convs = 3

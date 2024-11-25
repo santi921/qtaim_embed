@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 from qtaim_embed.core.dataset import Subset
 
+
 def get_default_link_level_config():
     root = Path(__file__).parent.parent.parent
     # to string
@@ -43,7 +44,7 @@ def get_default_link_level_config():
             "classifier": False,
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
-            "target_dict": {"global": "extra_feat_global_E1_CAM"},
+            #"target_dict": {"global": "extra_feat_global_E1_CAM"},
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,
@@ -73,12 +74,13 @@ def get_default_link_level_config():
             "hidden_size": 64,
             "residual_gat": True,
             # "output_dims": 1,
-            "pooling_ntypes": ["atom", "bond", "global"],
-            "pooling_ntypes_direct": ["global"],
+            #"pooling_ntypes": ["atom", "bond", "global"],
+            #"pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
         },
     }
+
 
 def get_default_node_level_config():
     root = Path(__file__).parent.parent.parent
@@ -127,7 +129,14 @@ def get_default_node_level_config():
             "classifier": False,
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
-            "target_dict": {"global": "extra_feat_global_E1_CAM"},
+            "target_dict": {
+                "atom": ["extra_feat_atom_esp_total"],
+                "bond": [
+                    "extra_feat_bond_esp_total",
+                    "extra_feat_bond_ellip_e_dens",
+                    "extra_feat_bond_eta",
+                ],
+            },
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,
@@ -157,10 +166,23 @@ def get_default_node_level_config():
             "hidden_size": 64,
             "residual_gat": True,
             # "output_dims": 1,
-            "pooling_ntypes": ["atom", "bond", "global"],
-            "pooling_ntypes_direct": ["global"],
+            #"pooling_ntypes": ["atom", "bond", "global"],
+            #"pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
+            "initializer": "kaiming",
+        },
+        "optim": {
+            "num_devices": 1,
+            "num_nodes": 1,
+            "num_workers": 0,
+            "gradient_clip_val": 5.0,
+            "strategy": "auto",
+            "precision": "bf16",
+            "accumulate_grad_batches": 1,
+            "pin_memory": False,
+            "persistent_workers": False,
+            "train_batch_size": 2,
         },
     }
 
