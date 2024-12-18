@@ -135,6 +135,9 @@ class TrainingObject:
                     "pin_memory": self.sweep_config["parameters"]["pin_memory"][
                         "values"
                     ][0],
+                    "bond_key": self.sweep_config["parameters"]["bond_key"]["values"][
+                        0
+                    ],
                 },
             }
             print("config settings:")
@@ -251,6 +254,7 @@ class TrainingObject:
                     "val_prop": init_config["val_prop"],
                     "test_prop": init_config["test_prop"],
                     "seed": init_config["seed"],
+                    "bond_key": init_config["bond_key"],
                 }
                 config["model"]["target_dict"] = {"global": init_config["target_list"]}
 

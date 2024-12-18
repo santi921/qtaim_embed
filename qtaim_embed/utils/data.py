@@ -23,11 +23,11 @@ def get_default_link_level_config():
             },
             "target_dict": {
                 "atom": ["extra_feat_atom_esp_total"],
-                "bond": [
-                ],
+                "bond": [],
             },
             "extra_dataset_info": {},
             "debug": False,
+            "bond_key": "bonds",
             "element_set": None,
             "log_scale_features": False,
             "log_scale_targets": False,
@@ -44,7 +44,7 @@ def get_default_link_level_config():
             "classifier": False,
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
-            #"target_dict": {"global": "extra_feat_global_E1_CAM"},
+            # "target_dict": {"global": "extra_feat_global_E1_CAM"},
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,
@@ -74,10 +74,26 @@ def get_default_link_level_config():
             "hidden_size": 64,
             "residual_gat": True,
             # "output_dims": 1,
-            #"pooling_ntypes": ["atom", "bond", "global"],
-            #"pooling_ntypes_direct": ["global"],
+            # "pooling_ntypes": ["atom", "bond", "global"],
+            # "pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
+            "predictor": "Dot",
+            "predictor_param_dict": {},
+            "aggregator_type": "none",
+            "initializer": "kaiming",
+        },
+        "optim": {
+            "num_devices": 1,
+            "num_nodes": 1,
+            "num_workers": 0,
+            "gradient_clip_val": 5.0,
+            "strategy": "auto",
+            "precision": "bf16",
+            "accumulate_grad_batches": 1,
+            "pin_memory": False,
+            "persistent_workers": False,
+            "train_batch_size": 2,
         },
     }
 
@@ -94,6 +110,7 @@ def get_default_node_level_config():
             "allowed_charges": None,
             "allowed_spins": None,
             "self_loop": True,
+            "bond_key": "bonds",
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [
@@ -166,8 +183,8 @@ def get_default_node_level_config():
             "hidden_size": 64,
             "residual_gat": True,
             # "output_dims": 1,
-            #"pooling_ntypes": ["atom", "bond", "global"],
-            #"pooling_ntypes_direct": ["global"],
+            # "pooling_ntypes": ["atom", "bond", "global"],
+            # "pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
             "initializer": "kaiming",
@@ -199,6 +216,7 @@ def get_default_graph_level_config():
             "allowed_spins": None,
             "self_loop": True,
             "element_set": [],
+            "bond_key": "bonds",
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [
@@ -292,6 +310,7 @@ def get_default_graph_level_config_classif():
             "allowed_spins": None,
             "self_loop": True,
             "element_set": [],
+            "bond_key": "bonds",
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [

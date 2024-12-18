@@ -11,7 +11,7 @@ from pytorch_lightning.callbacks import (
 )
 
 from qtaim_embed.utils.data import get_default_link_level_config
-from qtaim_embed.core.datamodule import QTAIMLinkTaskDataModule, LMDBDataModule
+from qtaim_embed.core.datamodule import QTAIMLinkTaskDataModule, LMDBLinkDataModule
 from qtaim_embed.models.utils import LogParameters, load_link_model_from_config
 
 torch.set_float32_matmul_precision("high")  # might have to disable on older GPUs
@@ -48,7 +48,7 @@ class TrainingObject:
                     ],
                     "test_lmdb": self.sweep_config["parameters"]["test_lmdb"]["values"][
                         0
-                    ]
+                    ],
                 },
                 "optim": {
                     "num_workers": self.sweep_config["parameters"]["num_workers"][
@@ -76,7 +76,7 @@ class TrainingObject:
                     "test_lmdb"
                 ]["values"][0]
 
-            self.dm = LMDBDataModule(config=dm_config)
+            self.dm = LMDBLinkDataModule(config=dm_config)
 
         else:
             self.extra_keys = self.sweep_config["parameters"]["extra_keys"]["values"][0]
@@ -142,6 +142,9 @@ class TrainingObject:
                     "pin_memory": self.sweep_config["parameters"]["pin_memory"][
                         "values"
                     ][0],
+                    "bond_key": self.sweep_config["parameters"]["bond_key"]["values"][
+                        0
+                    ],
                 }
             }
             print("config settings:")
@@ -157,7 +160,7 @@ class TrainingObject:
         self.config = dm_config
 
     def make_model(self, config):
-        
+
         model = load_link_model_from_config(config["model"])
         return model
 
@@ -197,7 +200,7 @@ class TrainingObject:
                     "input_size": self.input_size,
                     "predictor": init_config["predictor"],
                     "predictor_param_dict": init_config["predictor_param_dict"],
-                    "aggregator_type": init_config["aggregator_type"], 
+                    "aggregator_type": init_config["aggregator_type"],
                     "early_stop_patience": init_config["early_stop_patience"],
                 },
                 "dataset": {},
@@ -242,6 +245,7 @@ class TrainingObject:
                     "verbose": init_config["verbose"],
                     "train_batch_size": init_config["train_batch_size"],
                     "input_size": self.input_size,
+                    "bond_key": init_config["bond_key"],
                 }
 
             # make helper to convert from old config to new config
@@ -270,8 +274,8 @@ class TrainingObject:
             logger_wb = WandbLogger(name="test_logs")
 
             self.dm.setup(stage="fit")
-            #train_dl = self.dm.train_dataloader()
-            #_, _ = next(iter(train_dl))
+            # train_dl = self.dm.train_dataloader()
+            # _, _ = next(iter(train_dl))
 
             trainer = pl.Trainer(
                 max_epochs=config["model"]["max_epochs"],

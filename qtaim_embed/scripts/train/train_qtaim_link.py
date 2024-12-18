@@ -66,9 +66,9 @@ if __name__ == "__main__":
 
     # for k, v in config.items():
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
-    #if "target_dict" not in config["dataset"]:
+    # if "target_dict" not in config["dataset"]:
     #    config["model"]["target_dict"] = config["dataset"]["target_dict"]
-    #if "target_dict" not in config["model"]:
+    # if "target_dict" not in config["model"]:
     #    config["model"]["target_dict"] = config["dataset"]["target_dict"]
 
     if use_lmdb:

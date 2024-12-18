@@ -47,6 +47,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             "atom": ["extra_feat_atom_esp_total"],
             "bond": ["extra_feat_bond_esp_total"],
         },
+        bond_key="bonds",
         extra_dataset_info={},
         verbose=True,
     ):
@@ -93,7 +94,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
         mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
-            bond_key="bonds",
+            bond_key=bond_key,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
@@ -365,6 +366,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         debug=False,
         filter_self_bonds=True,
         size=None,
+        bond_key="bonds",
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -426,7 +428,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
 
         mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
-            bond_key="bonds",
+            bond_key=bond_key,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],
@@ -700,6 +702,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             ],
             "global": ["NR-AR"],
         },
+        bond_key="bonds",
         target_list=["NR-AR"],
         extra_dataset_info={},
         impute=False,
@@ -749,7 +752,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
 
         mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
-            bond_key="bonds",
+            bond_key=bond_key,
             atom_keys=extra_keys["atom"],
             bond_keys=extra_keys["bond"],
             global_keys=extra_keys["global"],

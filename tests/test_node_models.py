@@ -31,6 +31,7 @@ class TestNodePred:
             "test_prop": 0.1,
             "debug": False,
             "seed": 42,
+            "bond_key": "bonds",
             "num_workers": 4,
             "train_batch_size": 32,
             "extra_dataset_info": {},

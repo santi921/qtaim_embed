@@ -24,6 +24,11 @@
       true
     ]
   },
+  "bond_key": {
+    "values": [
+      "bonds"
+    ]
+  },
   "extra_keys": {
     "values": [
       {

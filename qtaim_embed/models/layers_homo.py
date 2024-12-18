@@ -69,26 +69,26 @@ class MLPPredictor(nn.Module):
         self.layers.append(nn.Linear(input_size, output_size))
 
         for i in range(1, len(h_dims)):
-            #print("mlp layer: ", i)
-            
+            # print("mlp layer: ", i)
+
             if batch_norm:
                 self.layers.append(nn.BatchNorm1d(h_dims[i - 1]))
             if activation is not None:
                 self.layers.append(self.activation)
             if dropout > 0:
                 self.layers.append(nn.Dropout(dropout))
-            
+
             input_size = output_size
-            
+
             self.layers.append(nn.Linear(h_dims[i - 1], h_dims[i]))
-        
+
         if batch_norm:
             self.layers.append(nn.BatchNorm1d(h_dims[-1]))
         if activation is not None:
             self.layers.append(self.activation)
         if dropout > 0:
             self.layers.append(nn.Dropout(dropout))
-        
+
         self.layers.append(nn.Linear(h_dims[-1], 1))
         self.layers.append(nn.Sigmoid())
 
@@ -212,12 +212,12 @@ class ResidualBlockHomo(nn.Module):
 
                 else:
                     layer_arg_copy["in_feats"] = layer_args["out_feats"]
-                    #print("layer arg copy:", layer_arg_copy)
+                    # print("layer arg copy:", layer_arg_copy)
                     self.layers.append(
                         GraphConvDropoutBatch(**layer_arg_copy),
                     )
             else:
-                #print("layer args:", layer_args)
+                # print("layer args:", layer_args)
                 self.layers.append(
                     GraphConvDropoutBatch(**layer_args),
                 )

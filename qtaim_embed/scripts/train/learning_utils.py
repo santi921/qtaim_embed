@@ -53,6 +53,7 @@ def get_datasets_qm9(loc_dict):
         "restore": False,
         "pooling_ntypes": ["atom", "bond", "global"],
         "pooling_ntypes_direct": ["global"],
+        "bond_key": "bonds"
     }
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
@@ -294,6 +295,7 @@ def get_datasets_qm8(loc_dict):
         "embedding_size": 80,
         "fc_layer_size": [512, 512],
         "shape_fc": "flat",
+        "bond_key": "bonds"
         "fc_dropout": 0.1,
         "fc_batch_norm": True,
         "fc_num_layers": 2,
@@ -559,6 +561,7 @@ def get_datasets_libe(loc_dict):
         "conv_fn": "ResidualBlock",
         "target_dict": {"global": ["corrected_E"]},
         "dropout": 0.2,
+        "bond_key": "bonds"
         "batch_norm_tf": True,
         "activation": "ReLU",
         "bias": True,
@@ -877,6 +880,7 @@ def get_datasets_tmqm_low(loc_dict):
         "dropout": 0.1,
         "batch_norm_tf": True,
         "activation": "ReLU",
+        "bond_key": "bonds"
         "bias": True,
         "norm": "both",
         "edge_dropout": 0.1,
@@ -1231,6 +1235,7 @@ def get_datasets_tmqm_high(loc_dict):
         "dropout": 0.1,
         "batch_norm_tf": True,
         "activation": "ReLU",
+        "bond_key": "bonds"
         "bias": True,
         "norm": "both",
         "aggregate": "sum",

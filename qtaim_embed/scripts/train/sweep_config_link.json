@@ -18,6 +18,11 @@
       ]
     ]
   },
+  "bond_key": {
+    "values": [
+      "bonds"
+    ]
+  },
   "allowed_spins": {
     "values": [
       []

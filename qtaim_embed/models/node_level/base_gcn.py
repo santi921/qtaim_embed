@@ -240,7 +240,7 @@ class GCNNodePred(pl.LightningModule):
                 )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
-        #print(self.conv_layers)
+        # print(self.conv_layers)
         self.target_dict = target_dict
 
         self.loss = self.loss_function()

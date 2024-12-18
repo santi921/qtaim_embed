@@ -76,6 +76,7 @@ class TrainingObject:
                 "num_workers": self.sweep_config["parameters"]["num_workers"]["values"][
                     0
                 ],
+                "bond_key": self.sweep_config["parameters"]["bond_key"]["values"][0],
                 "impute": self.impute,
             },
         }
@@ -169,6 +170,7 @@ class TrainingObject:
                     "num_workers": init_config["num_workers"],
                     "impute": self.impute,
                     "element_set": init_config["element_set"],
+                    "bond_key": init_config["bond_key"],
                 },
                 "optim": {
                     "num_devices": init_config["num_devices"],

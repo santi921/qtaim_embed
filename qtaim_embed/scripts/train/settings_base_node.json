@@ -16,6 +16,7 @@
         "test_prop": 0.1,
         "debug": false,
         "seed": 42,
+        "bond_key": "bonds",
         "num_workers": 4,
         "extra_dataset_info": null,
         "log_scale_features": false,

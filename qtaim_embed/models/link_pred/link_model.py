@@ -160,7 +160,7 @@ class GCNLinkPred(pl.LightningModule):
                 layer_args = get_layer_args_homo(
                     self.hparams, i, activation=self.activation, embedding_in=True
                 )
-                #print("layer args: ", layer_args)
+                # print("layer args: ", layer_args)
                 self.conv_layers.append(GraphConvDropoutBatch(**layer_args["conv"]))
 
         elif self.hparams.conv_fn == "ResidualBlock":
@@ -211,7 +211,7 @@ class GCNLinkPred(pl.LightningModule):
                 layer_args = get_layer_args_homo(
                     self.hparams, i, activation=self.activation, embedding_in=True
                 )
-                #print("layer args:", layer_args)
+                # print("layer args:", layer_args)
 
                 self.conv_layers.append(SAGEConv(**layer_args["conv"]))
 
@@ -226,7 +226,7 @@ class GCNLinkPred(pl.LightningModule):
         # self.conv_out_size = self.conv_layers[-1].out_feats
 
         ####################### predictor ######################
-        #print("conv out: ", self.conv_out_size)
+        # print("conv out: ", self.conv_out_size)
 
         if self.hparams.predictor == "MLP":
             self.predictor = MLPPredictor(

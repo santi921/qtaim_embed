@@ -18,6 +18,7 @@
         "element_set": [],
         "val_prop": 0.1,
         "test_prop": 0.1,
+        "bond_key": "bonds", 
         "debug": false,
         "seed": 42,
         "num_workers": 32,

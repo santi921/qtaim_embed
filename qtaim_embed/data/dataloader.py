@@ -85,6 +85,44 @@ class DataLoaderLMDB(DataLoader):
         super(DataLoaderLMDB, self).__init__(dataset, collate_fn=collate, **kwargs)
 
 
+class DataLoaderLinkLMDB(DataLoader):
+    """
+    Dataloader for node-level tasks. labels are in the "label" key of node data
+    This assumes a heterograph dataset
+    """
+
+    def __init__(self, dataset, transforms=None, **kwargs):
+        if "collate_fn" in kwargs:
+            raise ValueError(
+                "'collate_fn' provided internally', you need not to provide one"
+            )
+        self.transforms = transforms
+        self.transformer = hetero_to_homo(concat_global=True)
+
+        def collate(samples):
+            graphs = samples
+            if self.transforms is not None:
+                graphs = [self.transforms(graph) for graph in graphs]
+            # normal graphs
+            graphs_hetero_to_homo = [self.transformer(i) for i in graphs]
+            # negative graphs
+            graphs_negative = [
+                get_negative_graph(
+                    graphs_hetero_to_homo[i], graphs_hetero_to_homo[i].num_edges()
+                )
+                for i in range(len(graphs_hetero_to_homo))
+            ]
+
+            batched_graphs = dgl.batch(graphs_hetero_to_homo)
+            batched_negative_graphs = dgl.batch(graphs_negative)
+
+            feat = batched_graphs.ndata["ft"]
+
+            return batched_graphs, batched_negative_graphs, feat
+
+        super(DataLoaderLinkLMDB, self).__init__(dataset, collate_fn=collate, **kwargs)
+
+
 class DataLoaderLinkTaskHeterograph(DataLoader):
     """
     Dataloader for link tasks. Use normal datasets from qtaim-embed but they are converted to homographs
@@ -97,6 +135,7 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
                 "'collate_fn' provided internally', you need not to provide one"
             )
         self.transforms = transforms
+        self.transformer = hetero_to_homo(concat_global=True)
         # self.validation = bool(validation)
 
         def collate(samples):
@@ -105,9 +144,9 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
                 batched_graphs = dgl.batch(graphs)
                 graphs = self.transforms(batched_graphs)
 
-            transformer = hetero_to_homo(concat_global=True)
+            # transformer = hetero_to_homo(concat_global=True)
             # convert to homographs
-            graphs_hetero_to_homo = [transformer(i) for i in graphs]
+            graphs_hetero_to_homo = [self.transformer(i) for i in graphs]
 
             # get negative samples
             graphs_negative = [

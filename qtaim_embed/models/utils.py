@@ -335,9 +335,6 @@ def load_link_model_from_config(config):
     return model
 
 
-
-
-
 class LogParameters(pl.Callback):
     # weight and biases to tensorboard
     def __init__(self):

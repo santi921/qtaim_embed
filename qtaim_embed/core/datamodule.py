@@ -1,12 +1,13 @@
 import os
 import pytorch_lightning as pl
-from torch.utils.data import random_split
 from qtaim_embed.data.dataloader import (
     DataLoaderMoleculeNodeTask,
     DataLoaderLinkTaskHeterograph,
     DataLoaderMoleculeGraphTask,
     DataLoaderLMDB,
+    DataLoaderLinkLMDB,
 )
+
 from qtaim_embed.utils.data import (
     get_default_node_level_config,
     get_default_link_level_config,
@@ -17,7 +18,6 @@ from qtaim_embed.core.dataset import (
     HeteroGraphGraphLabelDataset,
     HeteroGraphGraphLabelClassifierDataset,
     LMDBMoleculeDataset,
-    
 )
 from qtaim_embed.utils.data import train_validation_test_split
 from qtaim_embed.data.transforms import DropBondHeterograph
@@ -84,6 +84,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
+                    bond_key=self.config["dataset"]["bond_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
                 validation = self.config["dataset"]["val_prop"]
@@ -143,6 +144,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                     standard_scale_features=self.config["dataset"][
                         "standard_scale_features"
                     ],
+                    bond_key=self.config["dataset"]["bond_key"],
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
@@ -152,7 +154,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                 if self.node_len is None:
                     feat_dict = self.test_dataset.feature_size
                     self.node_len = feat_dict["atom"] + feat_dict["global"]
-                
+
                 return (
                     self.test_dataset.feature_names,
                     self.test_dataset.feature_size,
@@ -181,9 +183,8 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
             self.node_len = ft.shape[1]
         return dl
 
-
     def val_dataloader(self):
-        dl =  DataLoaderLinkTaskHeterograph(
+        dl = DataLoaderLinkTaskHeterograph(
             self.val_dataset,
             batch_size=len(self.val_dataset),
             transforms=self.transforms,
@@ -195,7 +196,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
         return dl
 
     def test_dataloader(self):
-        dl =  DataLoaderLinkTaskHeterograph(
+        dl = DataLoaderLinkTaskHeterograph(
             self.test_dataset,
             batch_size=len(self.test_dataset),
             transforms=self.transforms,
@@ -266,6 +267,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                     verbose=self.config["dataset"]["verbose"],
+                    bond_key=self.config["dataset"]["bond_key"],
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -324,6 +326,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                     verbose=self.config["dataset"]["verbose"],
+                    bond_key=self.config["dataset"]["bond_key"],
                 )
                 self.prepare_tf = True
                 return (
@@ -418,6 +421,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     debug=self.config["dataset"]["debug"],
                     log_scale_features=self.config["dataset"]["log_scale_features"],
                     log_scale_targets=self.config["dataset"]["log_scale_targets"],
+                    bond_key=self.config["dataset"]["bond_key"],
                     standard_scale_features=self.config["dataset"][
                         "standard_scale_features"
                     ],
@@ -489,6 +493,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
+                    bond_key=self.config["dataset"]["bond_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
 
@@ -598,6 +603,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                         "standard_scale_features"
                     ],
                     impute=self.config["dataset"]["impute"],
+                    bond_key=self.config["dataset"]["bond_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
 
@@ -659,6 +665,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     standard_scale_features=self.config["dataset"][
                         "standard_scale_features"
                     ],
+                    bond_key=self.config["dataset"]["bond_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
                 print("test set size: ", len(self.test_dataset))
@@ -796,7 +803,6 @@ class LMDBDataModule(pl.LightningDataModule):
         )
 
 
-
 class LMDBLinkDataModule(pl.LightningDataModule):
     def __init__(self, config):
         super().__init__()
@@ -842,10 +848,11 @@ class LMDBLinkDataModule(pl.LightningDataModule):
                 transform=TransformMol,
             )
 
-        self.train_dataset = LMDBMoleculeDataset(
-            config={"src": os.path.join(self.train_lmdb_loc, "molecule.lmdb")},
-            transform=TransformMol,
-        )
+        if "train_lmdb" in self.config["dataset"]:
+            self.train_dataset = LMDBMoleculeDataset(
+                config={"src": os.path.join(self.train_lmdb_loc, "molecule.lmdb")},
+                transform=TransformMol,
+            )
 
         return self.train_dataset.feature_names, self.train_dataset.feature_size
 
@@ -854,31 +861,41 @@ class LMDBLinkDataModule(pl.LightningDataModule):
             self.train_ds = self.train_dataset
             self.val_ds = self.val_dataset
 
+            self.train_dl = DataLoaderLinkLMDB(
+                dataset=self.train_ds,
+                batch_size=self.config["optim"]["train_batch_size"],
+                shuffle=True,
+                num_workers=self.config["optim"]["num_workers"],
+                pin_memory=self.config["optim"]["pin_memory"],
+                persistent_workers=self.config["optim"]["persistent_workers"],
+            )
+
+            self.val_dl = DataLoaderLinkLMDB(
+                dataset=self.val_ds,
+                batch_size=len(self.val_ds),
+                shuffle=False,
+                num_workers=self.config["optim"]["num_workers"],
+            )
+
+            _, _, ft = next(iter(self.train_dl))
+            self.node_len = ft.shape[1]
+
         if stage in ("test", "predict"):
-            self.test_ds = self.test_dataset
+            self.test_dl = DataLoaderLinkLMDB(
+                dataset=self.test_ds,
+                batch_size=len(self.test_ds),
+                shuffle=False,
+                num_workers=self.config["optim"]["num_workers"],
+            )
+
+            _, _, ft = next(iter(self.test_dl))
+            self.node_len = ft.shape[1]
 
     def train_dataloader(self):
-        return DataLoaderLMDB(
-            dataset=self.train_ds,
-            batch_size=self.config["optim"]["train_batch_size"],
-            shuffle=True,
-            num_workers=self.config["optim"]["num_workers"],
-            pin_memory=self.config["optim"]["pin_memory"],
-            persistent_workers=self.config["optim"]["persistent_workers"],
-        )
+        return self.train_dl
 
     def test_dataloader(self):
-        return DataLoaderLMDB(
-            dataset=self.test_ds,
-            batch_size=len(self.test_ds),
-            shuffle=False,
-            num_workers=self.config["optim"]["num_workers"],
-        )
+        return self.test_dl
 
     def val_dataloader(self):
-        return DataLoaderLMDB(
-            dataset=self.val_ds,
-            batch_size=len(self.val_ds),
-            shuffle=False,
-            num_workers=self.config["optim"]["num_workers"],
-        )
+        return self.val_dl
