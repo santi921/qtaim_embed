@@ -59,7 +59,7 @@ def mol_wrappers_from_df(
         if bond_keys != []:
             bond_feats = get_bond_features(
                 row,
-                "extra_feat_bond_indices_qtaim",
+                map_key=bond_key,
                 keys=bond_keys,
             )
 

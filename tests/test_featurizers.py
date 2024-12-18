@@ -8,7 +8,7 @@ class TestGrapher:
     df_test = get_data()
     df_test_spin_charge = get_data_spin_charge()
 
-    def test_node_sizes(self):
+    def test_node_sizes(self):  # check
         atom_keys = [
             "extra_feat_atom_esp_total",
         ]
@@ -17,7 +17,7 @@ class TestGrapher:
         ]
         mol_wrappers, element_set = mol_wrappers_from_df(
             df=self.df_test,
-            bond_key="bonds",
+            bond_key="extra_feat_bond_indices_qtaim",
             atom_keys=atom_keys,
             bond_keys=bond_keys,
             global_keys=[],
@@ -107,7 +107,7 @@ class TestGrapher:
                 == graph_list_bare[ind].ndata["feat"]["atom"].shape[1] + 8
             )
 
-    def test_bond_featurizer(self):
+    def test_bond_featurizer(self):  # check!
         # test qtaim AND bond length as features!!!
 
         bond_keys = [
@@ -117,7 +117,10 @@ class TestGrapher:
         ]
 
         mol_wrappers, element_set = mol_wrappers_from_df(
-            df=self.df_test, bond_key="bonds", atom_keys=[], bond_keys=bond_keys
+            df=self.df_test,
+            bond_key="extra_feat_bond_indices_qtaim",
+            atom_keys=[],
+            bond_keys=bond_keys,
         )
 
         list_test = []
@@ -325,5 +328,5 @@ class TestGrapher:
             )
 
 
-# test = TestGrapher()
-# test.test_node_sizes()
+test = TestGrapher()
+test.test_node_sizes()
