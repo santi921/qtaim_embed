@@ -45,6 +45,8 @@ class TestLinkPred:
         standard_scale_features=True,
         standard_scale_targets=True,
         filter_self_bonds=True,
+        bond_key="bonds",
+        map_key="extra_feat_bond_indices_qtaim",
     )
 
     dataloader = DataLoaderLinkTaskHeterograph(

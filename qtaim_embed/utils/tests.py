@@ -62,6 +62,8 @@ def get_dataset(
         log_scale_targets=log_scale_targets,
         standard_scale_features=standard_scale_features,
         standard_scale_targets=standard_scale_targets,
+        bond_key="bonds",
+        map_key="extra_feat_bond_indices_qtaim",
     )
 
     return dataset
@@ -98,6 +100,8 @@ def get_dataset_graph_level(
         log_scale_targets=log_scale_targets,
         standard_scale_features=standard_scale_features,
         standard_scale_targets=standard_scale_targets,
+        bond_key="bonds",
+        map_key="extra_feat_bond_indices_qtaim",
     )
 
     return dataset
@@ -134,6 +138,8 @@ def get_dataset_graph_level_multitask(
         log_scale_targets=log_scale_targets,
         standard_scale_features=standard_scale_features,
         standard_scale_targets=standard_scale_targets,
+        bond_key="bonds",
+        map_key="extra_feat_bond_indices_qtaim",
     )
 
     return dataset
@@ -161,6 +167,8 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
         element_set=[],
         log_scale_features=log_scale_features,
         standard_scale_features=standard_scale_features,
+        bond_key="bonds",
+        map_key="extra_feat_bond_indices_qtaim",
     )
     dataset_multi = HeteroGraphGraphLabelClassifierDataset(
         file="./data/test_classifier_labelled.pkl",
@@ -184,6 +192,8 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
         target_list=["NR-AR", "SR-p53"],
         extra_dataset_info={},
         element_set=[],
+        bond_key="bonds",
+        map_key="extra_feat_bond_indices_qtaim",
     )
     return dataset_single, dataset_multi
 

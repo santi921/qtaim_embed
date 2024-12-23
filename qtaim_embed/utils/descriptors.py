@@ -32,7 +32,12 @@ def get_atom_feats(row, atom_keys):
     return atom_feats
 
 
-def get_bond_features(row, map_key, keys=None):
+def get_bond_features(
+        row, 
+        map_key, 
+        bond_key=None, 
+        keys=None
+    ):
     """
     Takes the mappings in the map_key and returns the features for the bonds
     in the form of a dictionary
@@ -43,6 +48,9 @@ def get_bond_features(row, map_key, keys=None):
     Returns:
         bond_features: dictionary of bond features
     """
+    if bond_key is None:
+        bond_key = "bonds"
+
     bond_features = {}
 
     for key in keys:
@@ -51,12 +59,10 @@ def get_bond_features(row, map_key, keys=None):
                 if row[key] == -1:
                     return -1
 
-    if len(row.bonds) == 1:
-        bonds = row.bonds[0]
-        old_parser = True
+    if len(row[bond_key]) == 1:
+        bonds = row[bond_key][0]
     else:
-        old_parser = False
-        bonds = row.bonds
+        bonds = row[bond_key]
 
     #print(bonds)
     #print("len bonds: " + str(len(bonds)))
@@ -72,7 +78,10 @@ def get_bond_features(row, map_key, keys=None):
         try:
             bond_index_map = row[map_key][0].index(tuple(bond))
         except:
+            #print("Error in bond index map")
             bond_index_map = row[map_key].index(tuple(bond))
+
+        
         # bond_index_map = row[map_key].index(tuple(bond))
         # else:
         #    bond_index_map = row[map_key].index(tuple(bond))
@@ -82,11 +91,13 @@ def get_bond_features(row, map_key, keys=None):
                 # print(row[key])
                 # if old_parser:
                 # print(row[key])
+                
                 if type(row[key][0]) == list: 
                     bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map] 
                 else: 
                     bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
 
+                    
     return bond_features
 
 

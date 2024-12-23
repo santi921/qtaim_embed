@@ -28,6 +28,7 @@ def get_default_link_level_config():
             "extra_dataset_info": {},
             "debug": False,
             "bond_key": "bonds",
+            "map_key": "extra_feat_bond_indices_qtaim",
             "element_set": None,
             "log_scale_features": False,
             "log_scale_targets": False,
@@ -111,6 +112,7 @@ def get_default_node_level_config():
             "allowed_spins": None,
             "self_loop": True,
             "bond_key": "bonds",
+            "map_key": "extra_feat_bond_indices_qtaim",
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [
@@ -217,6 +219,7 @@ def get_default_graph_level_config():
             "self_loop": True,
             "element_set": [],
             "bond_key": "bonds",
+            "map_key": "extra_feat_bond_indices_qtaim",
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [
@@ -311,6 +314,7 @@ def get_default_graph_level_config_classif():
             "self_loop": True,
             "element_set": [],
             "bond_key": "bonds",
+            "map_key": "extra_feat_bond_indices_qtaim",
             "extra_keys": {
                 "atom": ["extra_feat_atom_esp_total"],
                 "bond": [

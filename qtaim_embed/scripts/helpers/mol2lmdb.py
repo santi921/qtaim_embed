@@ -87,6 +87,8 @@ if __name__ == "__main__":
         log_scale_targets=config["dataset"]["log_scale_targets"],
         standard_scale_features=config["dataset"]["standard_scale_features"],
         standard_scale_targets=config["dataset"]["standard_scale_targets"],
+        bond_key=config["dataset"]["bond_key"],
+        map_key=config["dataset"]["map_key"],
     )
 
     if split == True:

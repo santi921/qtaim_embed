@@ -138,6 +138,7 @@ class TrainingObject:
                     "bond_key": self.sweep_config["parameters"]["bond_key"]["values"][
                         0
                     ],
+                    "map_key": self.sweep_config["parameters"]["map_key"]["values"][0],
                 },
             }
             print("config settings:")
@@ -255,6 +256,7 @@ class TrainingObject:
                     "test_prop": init_config["test_prop"],
                     "seed": init_config["seed"],
                     "bond_key": init_config["bond_key"],
+                    "map_key": init_config["map_key"],
                 }
                 config["model"]["target_dict"] = {"global": init_config["target_list"]}
 

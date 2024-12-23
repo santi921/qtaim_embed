@@ -145,6 +145,7 @@ class TrainingObject:
                     "bond_key": self.sweep_config["parameters"]["bond_key"]["values"][
                         0
                     ],
+                    "map_key": self.sweep_config["parameters"]["map_key"]["values"][0],
                 }
             }
             print("config settings:")
@@ -246,6 +247,7 @@ class TrainingObject:
                     "train_batch_size": init_config["train_batch_size"],
                     "input_size": self.input_size,
                     "bond_key": init_config["bond_key"],
+                    "map_key": init_config["map_key"],
                 }
 
             # make helper to convert from old config to new config

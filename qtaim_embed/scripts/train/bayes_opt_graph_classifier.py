@@ -77,6 +77,7 @@ class TrainingObject:
                     0
                 ],
                 "bond_key": self.sweep_config["parameters"]["bond_key"]["values"][0],
+                "map_key": self.sweep_config["parameters"]["map_key"]["values"][0],
                 "impute": self.impute,
             },
         }
@@ -171,6 +172,7 @@ class TrainingObject:
                     "impute": self.impute,
                     "element_set": init_config["element_set"],
                     "bond_key": init_config["bond_key"],
+                    "map_key": init_config["map_key"],
                 },
                 "optim": {
                     "num_devices": init_config["num_devices"],

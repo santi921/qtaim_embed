@@ -85,6 +85,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
                 validation = self.config["dataset"]["val_prop"]
@@ -145,6 +146,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                         "standard_scale_features"
                     ],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                     standard_scale_targets=self.config["dataset"][
                         "standard_scale_targets"
                     ],
@@ -268,6 +270,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     ],
                     verbose=self.config["dataset"]["verbose"],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -327,6 +330,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     ],
                     verbose=self.config["dataset"]["verbose"],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                 )
                 self.prepare_tf = True
                 return (
@@ -422,6 +426,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     log_scale_features=self.config["dataset"]["log_scale_features"],
                     log_scale_targets=self.config["dataset"]["log_scale_targets"],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                     standard_scale_features=self.config["dataset"][
                         "standard_scale_features"
                     ],
@@ -494,6 +499,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
 
@@ -604,6 +610,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     ],
                     impute=self.config["dataset"]["impute"],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
 
@@ -666,6 +673,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                         "standard_scale_features"
                     ],
                     bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 )
                 print("test set size: ", len(self.test_dataset))

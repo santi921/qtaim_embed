@@ -32,6 +32,7 @@ class TestNodePred:
             "debug": False,
             "seed": 42,
             "bond_key": "bonds",
+            "map_key": "extra_feat_bond_indices_qtaim",
             "num_workers": 4,
             "train_batch_size": 32,
             "extra_dataset_info": {},

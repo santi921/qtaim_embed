@@ -17,7 +17,8 @@ class TestGrapher:
         ]
         mol_wrappers, element_set = mol_wrappers_from_df(
             df=self.df_test,
-            bond_key="extra_feat_bond_indices_qtaim",
+            bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
             atom_keys=atom_keys,
             bond_keys=bond_keys,
             global_keys=[],
@@ -61,6 +62,7 @@ class TestGrapher:
         mol_wrappers, element_set = mol_wrappers_from_df(
             self.df_test,
             bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
             atom_keys=atom_keys,
             bond_keys=[],
             global_keys=[],
@@ -118,7 +120,8 @@ class TestGrapher:
 
         mol_wrappers, element_set = mol_wrappers_from_df(
             df=self.df_test,
-            bond_key="extra_feat_bond_indices_qtaim",
+            bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
             atom_keys=[],
             bond_keys=bond_keys,
         )
@@ -178,6 +181,7 @@ class TestGrapher:
         mol_wrappers, element_set = mol_wrappers_from_df(
             self.df_test,
             bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
             atom_keys=[],
             bond_keys=[],
             global_keys=global_keys,
@@ -235,6 +239,7 @@ class TestGrapher:
         mol_wrappers, element_set = mol_wrappers_from_df(
             self.df_test_spin_charge,
             bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
             atom_keys=[],
             bond_keys=[],
             global_keys=global_keys,

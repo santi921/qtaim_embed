@@ -11,6 +11,7 @@ from qtaim_embed.utils.descriptors import (
 def mol_wrappers_from_df(
     df,
     bond_key=None,
+    map_key=None,
     atom_keys=[],
     bond_keys=[],
     global_keys=[],
@@ -26,6 +27,7 @@ def mol_wrappers_from_df(
             - names: molecule name
             - bonds: list of bonds
         bond_key: bond key to be used as features
+        map_key: key to map bond features to bond keys
         atom_keys: list of atom keys to be used as features
         bond_keys: list of bond keys to be used as features
         filter_self_bonds: whether to filter self bonds
@@ -38,6 +40,7 @@ def mol_wrappers_from_df(
     print("... > creating MoleculeWrapper objects")
     bond_feats_error_count = 0
     atom_feats_error_count = 0
+    #print("... > bond_key: ", bond_key)
     for index, row in tqdm(df.iterrows(), total=len(df)):
         charge = 0
         free_energy = 0
@@ -59,7 +62,8 @@ def mol_wrappers_from_df(
         if bond_keys != []:
             bond_feats = get_bond_features(
                 row,
-                map_key=bond_key,
+                map_key=map_key,
+                bond_key=bond_key,
                 keys=bond_keys,
             )
 
@@ -69,10 +73,11 @@ def mol_wrappers_from_df(
         elements = elements_from_pmg(pmg_mol)
         element_set.update(elements)
 
-        if len(row.bonds) == 1:
-            bonds = row.bonds[0]
+
+        if len(row[bond_key]) == 1:
+            bonds = row[bond_key][0]
         else:
-            bonds = row.bonds
+            bonds = row[bond_key]
 
         if filter_self_bonds:
             bonds = {tuple(sorted(b)): None for b in bonds if b[0] != b[1]}
@@ -98,6 +103,7 @@ def mol_wrappers_from_df(
                 bond_feats_error_count += 1
             if atom_feats == -1:
                 atom_feats_error_count += 1
+                
     print("... > bond_feats_error_count: ", bond_feats_error_count)
     print("... > atom_feats_error_count: ", atom_feats_error_count)
     # sort element set
