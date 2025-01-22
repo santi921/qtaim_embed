@@ -115,7 +115,8 @@ class TestGrapher:
         bond_keys = [
             "extra_feat_bond_esp_total",
             "extra_feat_bond_esp_nuc",
-            "bond_length",
+            "bond_length", 
+            "boo_2"
         ]
 
         mol_wrappers, element_set = mol_wrappers_from_df(
@@ -172,7 +173,7 @@ class TestGrapher:
 
             assert (
                 graph_list[ind].ndata["feat"]["bond"].shape[1]
-                == graph_list_bare[ind].ndata["feat"]["bond"].shape[1] + 7
+                == graph_list_bare[ind].ndata["feat"]["bond"].shape[1] + 16
             )
 
     def test_global_featurizers(self):

@@ -14,11 +14,6 @@ from qtaim_embed.utils.data import (
 )
 
 
-def test_molwrapper():
-    # TODO
-    pass
-
-
 def test_classifier_dataset():
     # test single class
     dataset_single, dataset_multi = get_datasets_graph_level_classifier(

@@ -1,7 +1,8 @@
 import itertools
 import networkx as nx
 import numpy as np
-
+import torch
+from e3nn.o3._spherical_harmonics import _spherical_harmonics
 
 def get_global_features(row, global_keys):
     """
@@ -32,6 +33,27 @@ def get_atom_feats(row, atom_keys):
     return atom_feats
 
 
+@torch.jit.script
+def get_node_direction_expansion(
+    distance_vec: torch.Tensor, lmax: int 
+):
+    """
+    Calculate Bond-Orientational Order (BOO) for each node in the graph.
+    Ref: Steinhardt, et al. "Bond-orientational order in liquids and glasses." Physical Review B 28.2 (1983): 784.
+    Return: (N, )
+    """
+    distance_vec = torch.nn.functional.normalize(distance_vec, dim=-1)
+    edge_sh = _spherical_harmonics(
+        lmax=lmax,
+        x=distance_vec[0],
+        y=distance_vec[1],
+        z=distance_vec[2],
+    )
+    
+    edge_sh = torch.abs(edge_sh)
+    return edge_sh
+
+
 def get_bond_features(
         row, 
         map_key, 
@@ -54,7 +76,7 @@ def get_bond_features(
     bond_features = {}
 
     for key in keys:
-        if key != "bond_length":
+        if key != "bond_length" and "boo_" not in key:
             if type(row[key]) == int:
                 if row[key] == -1:
                     return -1
@@ -82,15 +104,8 @@ def get_bond_features(
             bond_index_map = row[map_key].index(tuple(bond))
 
         
-        # bond_index_map = row[map_key].index(tuple(bond))
-        # else:
-        #    bond_index_map = row[map_key].index(tuple(bond))
-        # print(bond_index_map)
         for key in keys:
-            if key != "bond_length":
-                # print(row[key])
-                # if old_parser:
-                # print(row[key])
+            if key != "bond_length" and "boo_" not in key:
                 
                 if type(row[key][0]) == list: 
                     bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map] 

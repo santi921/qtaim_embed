@@ -24,7 +24,7 @@ class HeteroCompleteGraphFromMolWrapper:
         a2b = []
         b2a = []
         if num_bonds == 0:
-            print("num bonds 1 examples!!!!!")
+            #print("num bonds 1 examples!!!!!")
             num_bonds = 1
             a2b = [(0, 0)]
             b2a = [(0, 0)]

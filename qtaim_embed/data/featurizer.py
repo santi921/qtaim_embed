@@ -3,8 +3,6 @@ Featurize a molecule heterograph of atom, bond, and global nodes with RDkit.
 """
 
 import torch
-import dgl
-import os
 import numpy as np
 from rdkit.Chem.rdchem import GetPeriodicTable
 from qtaim_embed.utils.descriptors import (
@@ -13,9 +11,11 @@ from qtaim_embed.utils.descriptors import (
     ring_features_from_atom_full,
     ring_features_for_bonds_full,
     find_rings,
+    get_node_direction_expansion
 )
 
 from rdkit import RDLogger
+from e3nn.o3._spherical_harmonics import _spherical_harmonics
 
 lg = RDLogger.logger()
 lg.setLevel(RDLogger.CRITICAL)
@@ -82,6 +82,31 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             )
         print("selected bond keys", selected_keys)
 
+class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
+    """BaseFeaturizer
+    Featurize all bonds in a molecule.
+
+    The bond indices will be preserved, i.e. feature i corresponds to atom i.
+    The number of features will be equal to the number of bonds in the molecule,
+    so this is suitable for the case where we represent bond as graph nodes.
+
+    See Also:
+        BondAsEdgeBidirectedFeaturizer
+    """
+
+    def __init__(self, dtype="float32", selected_keys=[], allowed_ring_size=[]):
+        super(BaseFeaturizer, self).__init__()
+        self._feature_size = 0
+        self._feature_name = []
+        self.selected_keys = selected_keys
+        self.dtype = dtype
+        self.allowed_ring_size = allowed_ring_size
+        if allowed_ring_size == []:
+            print(
+                "NOTE: No ring size if no ring features are enabled, metal/nonmetal bonds are also off"
+            )
+        print("selected bond keys", selected_keys)
+
     def __call__(self, mol, **kwargs):
         """
         Parameters
@@ -105,7 +130,13 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         # count number of keys in features
         num_feats = len(self.selected_keys)
         num_feats += 7
-
+        
+        bool_boo = False
+        for key in self.selected_keys:
+            if "boo_" in key:
+                bool_boo = True
+                l_order = int(key.split("_")[1])
+        
         if num_bonds == 0:
             ft = [0.0 for _ in range(num_feats)]
             feats = [ft]
@@ -146,13 +177,19 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                     )
                     ft.append(bond_len)
 
+                if bool_boo:
+                    dist = torch.abs(torch.tensor(xyz_coordinates[bond[0]]) - torch.tensor(xyz_coordinates[bond[1]]))
+                    boo_expansion = get_node_direction_expansion(dist, lmax=l_order)
+                    ft += boo_expansion                
+
                 if self.selected_keys != None:
                     for key in self.selected_keys:
-                        if key != "bond_length":
+                        if key != "bond_length" and "boo_" not in key:
                             ft.append(features[bond][key])
 
                 feats.append(ft)
 
+        
         feats = torch.tensor(feats, dtype=getattr(torch, self.dtype))
 
         if self.allowed_ring_size != []:
@@ -163,10 +200,15 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
         if "bond_length" in self.selected_keys:
             self._feature_name += ["bond_length"]
+        
+        # check that "boo_" is not in subset of keystrings 
+        if bool_boo:
+            for l_num in range((l_order+1)**2):
+                self._feature_name += ["boo_{}_{}".format(l_order, l_num)]
 
         if self.selected_keys != []:
             for key in self.selected_keys:
-                if key != "bond_length":
+                if key != "bond_length" and "boo_" not in key:
                     self._feature_name.append(key)
 
             # self._feature_name += self.selected_keys
