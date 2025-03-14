@@ -93,7 +93,7 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values):
     db.close()
 
 
-def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
+def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str):
     """
     Converts dataset to lmdb and saves it to the specified directory
     Takes:
@@ -150,3 +150,32 @@ def construct_lmdb_and_save_dataset(dataset, lmdb_dir):
         lmdb_name="molecule.lmdb",
         global_values=global_dict,
     )
+
+
+#def omol_read_lmdbs(chunked: bool):
+
+
+def combined_mean_std(mean_list, std_list, count_list):
+    """
+    Calculate the combined mean and standard deviation of multiple datasets.
+
+    :param mean_list: List of means of the datasets.
+    :param std_list: List of standard deviations of the datasets.
+    :param count_list: List of number of data points in each dataset.
+    :return: Combined mean and standard deviation.
+    """
+    # Calculate total number of data points
+    total_count = sum(count_list)
+
+    # Calculate combined mean
+    combined_mean = sum(mean * count for mean, count in zip(mean_list, count_list)) / total_count
+
+    # Calculate combined variance
+    combined_variance = sum(
+        ((std ** 2) * (count - 1) + count * (mean - combined_mean) ** 2 for mean, std, count in zip(mean_list, std_list, count_list))
+    ) / (total_count - len(mean_list))
+
+    # Calculate combined standard deviation
+    combined_std = (combined_variance ** 0.5)
+
+    return combined_mean, combined_std

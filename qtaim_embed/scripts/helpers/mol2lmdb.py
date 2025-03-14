@@ -12,16 +12,7 @@ from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset
 from qtaim_embed.utils.data import train_validation_test_split
 from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
 
-# from bondnet.data.dataset import ReactionDatasetGraphs
-# from bondnet.utils import seed_torch
-# from bondnet.model.training_utils import get_grapher
-# from bondnet.data.dataset import train_validation_test_split
-
-
 torch.set_float32_matmul_precision("high")  # might have to disable on older GPUs
-# seed_torch()
-# import torch.multiprocessing
-# torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 if __name__ == "__main__":

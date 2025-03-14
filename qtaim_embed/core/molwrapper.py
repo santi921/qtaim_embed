@@ -18,6 +18,15 @@ class MoleculeWrapper:
         mol_graph (MoleculeGraph): pymatgen molecule graph instance
         free_energy (float): free energy of the molecule
         id (str): (unique) identification of the molecule
+        functional_group (str): functional group of the molecule
+        bonds (list of tuple): each tuple is a bond (atom indices)
+        non_metal_bonds (list of tuple): each tuple is a bond (atom indices) between
+            non-metal atoms
+        atom_features (dict): features of atoms
+        bond_features (dict): features of bonds
+        global_features (dict): features of the molecule
+        original_atom_ind (list): original atom indices
+        original_bond_mapping (list): original bond indices
     """
 
     def __init__(

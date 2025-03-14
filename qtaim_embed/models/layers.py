@@ -571,6 +571,7 @@ class GlobalAttentionPoolingThenCat(nn.Module):
 
     def forward(self, graph, feats, get_attention=False):
         rst = []
+        
         readout_dict = {}
         gate_dict = {}
         gated_feats = {}

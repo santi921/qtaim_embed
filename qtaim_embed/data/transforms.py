@@ -9,7 +9,6 @@ from qtaim_embed.utils.grapher import (
     construct_homograph_blank,
 )
 
-
 class DropBondHeterograph(BaseTransform):
     r"""Randomly drop edges, as described in
     `DropEdge: Towards Deep Graph Convolutional Networks on Node Classification
