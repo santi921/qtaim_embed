@@ -267,7 +267,7 @@ class GCNLinkPred(pl.LightningModule):
 
         self.forward_fn = (
             torch.compile(self.compiled_forward)
-            if self.compiled is not None
+            if compiled is not None
             else self.compiled_forward
         )
 
