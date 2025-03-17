@@ -94,6 +94,7 @@ class GCNGraphPred(pl.LightningModule):
         lstm_layers=1,
         pooling_ntypes=["atom", "bond"],
         pooling_ntypes_direct=["global"],
+        compiled=None
     ):
         super().__init__()
         self.learning_rate = lr
@@ -165,6 +166,7 @@ class GCNGraphPred(pl.LightningModule):
             "residual": residual_gat,
             "hidden_size": hidden_size,
             "ntasks": len(target_dict["global"]),
+            "compiled": compiled,
         }
 
         self.hparams.update(params)
@@ -412,10 +414,13 @@ class GCNGraphPred(pl.LightningModule):
             num_outputs=self.hparams.ntasks,
         )
 
-    def forward(self, graph, feat, eweight=None):
-        """
-        Forward pass
-        """
+        self.forward_fn = (
+            torch.compile(self.compiled_forward)
+            if self.compiled_forward is not None
+            else self.compiled_forward
+        )
+
+    def compiled_forward(self, graph, feat, eweight=None):
         feats = self.embedding(feat)
         for ind, conv in enumerate(self.conv_layers):
             feats = conv(graph, feats)
@@ -436,6 +441,15 @@ class GCNGraphPred(pl.LightningModule):
 
         # print("preds shape:", readout_feats.shape)
         return readout_feats
+
+
+    def forward(self, graph, feat, eweight=None):
+        """
+        Forward pass
+        """
+        # just use the compiled forward function
+        return self.forward_fn(graph, feat, eweight)
+
 
     def loss_function(self):
         """

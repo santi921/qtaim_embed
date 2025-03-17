@@ -79,6 +79,7 @@ class GCNLinkPred(pl.LightningModule):
         predictor="Dot",
         predictor_param_dict={},
         aggregator_type="mean",
+        compiled=None
     ):
         super().__init__()
         self.learning_rate = lr
@@ -134,6 +135,7 @@ class GCNLinkPred(pl.LightningModule):
             "predictor": predictor,
             "predictor_param_dict": predictor_param_dict,
             "aggregator_type": aggregator_type,
+            "compiled": compiled,
         }
 
         self.hparams.update(params)
@@ -263,7 +265,13 @@ class GCNLinkPred(pl.LightningModule):
 
         self.loss = self.loss_function()
 
-    def forward(self, pos_graph, neg_graph, inputs):
+        self.forward_fn = (
+            torch.compile(self.compiled_forward)
+            if self.compiled is not None
+            else self.compiled_forward
+        )
+
+    def compiled_forward(self, pos_graph, neg_graph, inputs):
         """
         Forward pass
         """
@@ -295,6 +303,15 @@ class GCNLinkPred(pl.LightningModule):
         neg_pred = self.predictor(neg_graph, feats_neg)
 
         return pos_pred, neg_pred
+
+    def forward(self, pos_graph, neg_graph, inputs):
+        """
+        Forward pass
+        """
+        # just use the compiled forward function
+        return self.forward_fn(pos_graph, neg_graph, inputs)
+
+
 
     def loss_function(self):
         """

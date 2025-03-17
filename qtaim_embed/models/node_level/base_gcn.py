@@ -71,6 +71,7 @@ class GCNNodePred(pl.LightningModule):
         lr_plateau_patience=5,
         lr_scale_factor=0.5,
         loss_fn="mse",
+        compiled=None
     ):
         super().__init__()
         self.learning_rate = lr
@@ -126,6 +127,7 @@ class GCNNodePred(pl.LightningModule):
             "resid_n_graph_convs": resid_n_graph_convs,
             "hidden_size": hidden_size,
             "embedding_size": embedding_size,
+            "compiled": compiled,
         }
 
         self.hparams.update(params)
@@ -276,7 +278,14 @@ class GCNNodePred(pl.LightningModule):
             torchmetrics.MeanSquaredError(squared=False), num_outputs=output_dims
         )
 
-    def forward(self, graph, inputs):
+
+        self.forward_fn = (
+            torch.compile(self.compiled_forward)
+            if self.compiled is not None
+            else self.compiled_forward
+        )
+
+    def compiled_forward(self, graph, inputs):
         """
         Forward pass
         """
@@ -312,6 +321,13 @@ class GCNNodePred(pl.LightningModule):
                 del feats[k]
 
         return feats
+
+    def forward(self, graph, inputs):
+        """
+        Forward pass
+        """
+        return self.forward_fn(graph, inputs)
+
 
     def feature_at_each_layer(model, graph, feats):
         """
@@ -357,8 +373,9 @@ class GCNNodePred(pl.LightningModule):
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
-        # print("lmdb batch", batch_graph, batch_label)
+        #print("lmdb batch", batch_graph, batch_label.keys())
         max_nodes = -1
+
         for target_type, target_list in self.hparams.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
                 labels = batch_label[target_type]

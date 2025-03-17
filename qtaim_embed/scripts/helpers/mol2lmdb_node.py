@@ -66,6 +66,8 @@ if __name__ == "__main__":
         config = json.load(f)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("extra dataset info")
+    print(config["dataset"]["extra_keys"])
 
     dataset = HeteroGraphNodeLabelDataset(
         file=dataset_loc,
@@ -100,7 +102,7 @@ if __name__ == "__main__":
             print("validation set size: ", len(val_dataset))
             print("test set size: ", len(test_dataset))
             print(dataset.feature_names)
-            construct_lmdb_and_save_dataset(dataset, lmdb_dir)
+            #construct_lmdb_and_save_dataset(dataset, lmdb_dir)
             construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
             construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
             construct_lmdb_and_save_dataset(test_dataset, lmdb_dir + "/test/")
@@ -116,7 +118,7 @@ if __name__ == "__main__":
             print("training set size: ", len(train_dataset))
             print("validation set size: ", len(val_dataset))
 
-            construct_lmdb_and_save_dataset(dataset, lmdb_dir)
+            #construct_lmdb_and_save_dataset(dataset, lmdb_dir)
             construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
             construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
 
