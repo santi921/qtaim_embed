@@ -416,9 +416,10 @@ class GCNGraphPred(pl.LightningModule):
 
         self.forward_fn = (
             torch.compile(self.compiled_forward)
-            if compiled is not None
+            if compiled
             else self.compiled_forward
         )
+
 
     def compiled_forward(self, graph, feat, eweight=None):
         feats = self.embedding(feat)
@@ -536,6 +537,8 @@ class GCNGraphPred(pl.LightningModule):
         all_loss = self.compute_loss(logits, labels)
         logits = logits.view(-1, self.hparams.ntasks)
         labels = labels.view(-1, self.hparams.ntasks)
+        if type(all_loss) == list: 
+            all_loss = torch.stack(all_loss)
         # log loss
         self.log(
             f"{mode}_loss",
@@ -572,7 +575,14 @@ class GCNGraphPred(pl.LightningModule):
         Training epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="train")
+        
         # get epoch number
+        if type(r2) == list: 
+            r2 = torch.stack(r2)
+        if type(mae) == list:
+            mae = torch.stack(mae)
+        if type(mse) == list:
+            mse = torch.stack(mse)
 
         if self.trainer.current_epoch < 2:
             self.log("val_mae", 10**10, prog_bar=False)
@@ -585,6 +595,12 @@ class GCNGraphPred(pl.LightningModule):
         Validation epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="val")
+        if type(r2) == list: 
+            r2 = torch.stack(r2)
+        if type(mae) == list:
+            mae = torch.stack(mae)
+        if type(mse) == list:
+            mse = torch.stack(mse)
         r2_median = r2.median().type(torch.float32)
         self.log("val_r2", r2_median, prog_bar=True, sync_dist=True)
         self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
@@ -595,6 +611,12 @@ class GCNGraphPred(pl.LightningModule):
         Test epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="test")
+        if type(r2) == list: 
+            r2 = torch.stack(r2)
+        if type(mae) == list:
+            mae = torch.stack(mae)
+        if type(mse) == list:
+            mse = torch.stack(mse)        
         self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
@@ -736,9 +758,9 @@ class GCNGraphPred(pl.LightningModule):
             r2_manual = torchmetrics.functional.r2_score(y_pred, y)
             print("r2 manual", r2_manual)
             mae_per_atom = torch.mean(abs_diff / n_atom_list)
-            mae_per_molecule = torch.mean(abs_diff)
+            #mae_per_molecule = torch.mean(abs_diff)
             ewt_prop = torch.sum(abs_diff < 0.043) / len(abs_diff)
-            rmse_per_molecule = torch.mean(torch.sqrt(torch.mean(abs_diff**2)))
+            #rmse_per_molecule = torch.mean(torch.sqrt(torch.mean(abs_diff**2)))
             mse_per_atom = abs_diff**2 / n_atom_list
             mean_rmse_per_atom = torch.sqrt(torch.mean(mse_per_atom))
 
@@ -770,5 +792,10 @@ class GCNGraphPred(pl.LightningModule):
             r2_val = r2_eval.compute()
             mae_val = mae_eval.compute()
             mse_val = mse_eval.compute()
-
+            if type(r2_val) == list:
+                r2_val = torch.stack(r2_val)
+            if type(mae_val) == list:
+                mae_val = torch.stack(mae_val)
+            if type(mse_val) == list:
+                mse_val = torch.stack(mse_val)
             return r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled

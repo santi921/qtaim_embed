@@ -43,6 +43,7 @@ def get_default_link_level_config():
         },
         "model": {
             "classifier": False,
+            "compiled": False, 
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
             # "target_dict": {"global": "extra_feat_global_E1_CAM"},
@@ -147,6 +148,7 @@ def get_default_node_level_config():
         "model": {
             "classifier": False,
             "n_conv_layers": 8,
+            "compiled": False, 
             "resid_n_graph_convs": 2,
             "target_dict": {
                 "atom": ["extra_feat_atom_esp_total"],
@@ -197,11 +199,11 @@ def get_default_node_level_config():
             "num_workers": 0,
             "gradient_clip_val": 5.0,
             "strategy": "auto",
-            "precision": "bf16",
+            "precision": "32",
             "accumulate_grad_batches": 1,
             "pin_memory": False,
             "persistent_workers": False,
-            "train_batch_size": 2,
+            "train_batch_size": 3,
         },
     }
 
@@ -249,6 +251,7 @@ def get_default_graph_level_config():
         "model": {
             "classifier": False,
             "n_conv_layers": 8,
+            "compiled": False, 
             "resid_n_graph_convs": 2,
             "target_dict": {"global": "extra_feat_global_E1_CAM"},
             "conv_fn": "ResidualBlock",
@@ -366,6 +369,7 @@ def get_default_graph_level_config_classif():
             "classifier": True,
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
+            "compiled": False, 
             "target_dict": {
                 "global": [
                     "NR-AR",

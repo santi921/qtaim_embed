@@ -76,6 +76,7 @@ class TestNodePred:
             "attn_drop": 0.1,
             "residual": False,
             "num_heads_gat": 2,
+            "compiled": False, 
             "dropout_feat_gat": 0.1,
             "dropout_attn_gat": 0.1,
             "hidden_size": 100,

@@ -267,9 +267,10 @@ class GCNLinkPred(pl.LightningModule):
 
         self.forward_fn = (
             torch.compile(self.compiled_forward)
-            if compiled is not None
+            if compiled
             else self.compiled_forward
         )
+
 
     def compiled_forward(self, pos_graph, neg_graph, inputs):
         """
@@ -419,6 +420,7 @@ class GCNLinkPred(pl.LightningModule):
         Train step
         """
         loss = self.shared_step(batch, mode="train")
+        
         return {"train_loss": loss, "loss": loss}
 
     def validation_step(self, batch, batch_idx):

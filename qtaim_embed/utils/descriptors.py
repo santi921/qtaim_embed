@@ -90,29 +90,24 @@ def get_bond_features(
     #print("len bonds: " + str(len(bonds)))
 
     for bond in bonds:
-        
         if (bond[0], bond[1]) not in bond_features.keys():
             bond_features[(bond[0], bond[1])] = {}
-        # if old_parser
-        #:
-        # print(bond)
-        # print(row[map_key])
+        
         try:
             bond_index_map = row[map_key][0].index(tuple(bond))
         except:
             #print("Error in bond index map")
             bond_index_map = row[map_key].index(tuple(bond))
 
-        
         for key in keys:
             if key != "bond_length" and "boo_" not in key:
-                
                 if type(row[key][0]) == list: 
                     bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map] 
                 else: 
                     bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
 
                     
+ 
     return bond_features
 
 

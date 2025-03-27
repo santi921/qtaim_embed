@@ -281,7 +281,7 @@ class GCNNodePred(pl.LightningModule):
 
         self.forward_fn = (
             torch.compile(self.compiled_forward)
-            if compiled is not None
+            if compiled
             else self.compiled_forward
         )
 
@@ -394,7 +394,13 @@ class GCNNodePred(pl.LightningModule):
         logits = torch.cat(logits_list, dim=1)
         labels = torch.cat(labels_list, dim=1)
 
+         
         all_loss = self.compute_loss(logits, labels)
+        
+        # compat with older torchmetrics/dgl 
+        if type(all_loss) == list: 
+            all_loss = torch.stack(all_loss)
+
 
         # log loss
         self.log(
@@ -463,6 +469,14 @@ class GCNNodePred(pl.LightningModule):
         Training epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="train")
+        
+        if type(r2) == list: 
+            r2 = torch.stack(r2)
+        if type(mae) == list:
+            mae = torch.stack(mae)
+        if type(mse) == list:
+            mse = torch.stack(mse)
+
         # get epoch number
         if self.trainer.current_epoch == 0:
             self.log("val_mae", 10000000.0, prog_bar=False, sync_dist=True)
@@ -492,6 +506,14 @@ class GCNNodePred(pl.LightningModule):
         Validation epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="val")
+        
+        if type(r2) == list: 
+            r2 = torch.stack(r2)
+        if type(mae) == list:
+            mae = torch.stack(mae)
+        if type(mse) == list:
+            mse = torch.stack(mse)
+
         r2_median = r2.median().type(torch.float32)
         self.log("val_r2", r2_median, prog_bar=True, sync_dist=True)
         self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
@@ -519,6 +541,15 @@ class GCNNodePred(pl.LightningModule):
         Test epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="test")
+        
+        # compat with older torchmetrics/dgl 
+        if type(r2) == list: 
+            r2 = torch.stack(r2)
+        if type(mae) == list:
+            mae = torch.stack(mae)
+        if type(mse) == list:
+            mse = torch.stack(mse)
+
         self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)

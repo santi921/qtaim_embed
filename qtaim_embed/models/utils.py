@@ -101,6 +101,7 @@ def load_graph_level_model_from_config(config):
             dropout_attn_gat=config["dropout_attn_gat"],
             hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
+
         )
     else:
         print(":::REGRESSION MODEL:::")
@@ -139,6 +140,7 @@ def load_graph_level_model_from_config(config):
             dropout_attn_gat=config["dropout_attn_gat"],
             hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
+            compiled=config["compiled"],
         )
     # model.to(device)
 
@@ -227,6 +229,7 @@ def load_node_level_model_from_config(config):
         dropout_attn_gat=config["dropout_attn_gat"],
         hidden_size=config["hidden_size"],
         residual_gat=config["residual_gat"],
+        compiled=config["compiled"],
     )
     # model.to(device)
 
@@ -314,6 +317,7 @@ def load_link_model_from_config(config):
         predictor=config["predictor"],
         predictor_param_dict=config["predictor_param_dict"],
         aggregator_type=config["aggregator_type"],
+        compiled=config["compiled"],
     )
     # model.to(device)
 
