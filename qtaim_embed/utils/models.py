@@ -1,9 +1,23 @@
 import torch
+from typing import Optional, Dict, Any
+from dgl import Batch
 
-
-def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None):
+def get_layer_args(
+        hparams: Any,
+        layer_ind: Optional[int] = None,
+        embedding_in: bool = False,
+        activation: Optional[Any] = None
+    ) -> Dict[str, Dict[str, Any]]:
+            
     """
     Converts hparam dictionary to a dictionary of arguments for a layer.
+    Args:
+        hparams: hparam dictionary
+        layer_ind: layer index
+        embedding_in: whether to use embedding input
+        activation: activation function
+    Returns:
+        layer_args: dictionary of arguments for a layer
     """
 
     assert hparams.conv_fn in [
@@ -515,9 +529,23 @@ def get_layer_args(hparams, layer_ind=None, embedding_in=False, activation=None)
     return layer_args
 
 
-def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=None):
+def get_layer_args_homo(
+        hparams: Any,
+        layer_ind: Optional[int] = None,
+        embedding_in: bool = False,
+        activation: Optional[Any] = None
+    ) -> Dict[str, Dict[str, Any]]:        
     """
     Converts hparam dictionary to a dictionary of arguments for a layer.
+
+    Args:
+        hparams (Any): Hyperparameter dictionary.
+        layer_ind (Optional[int]): Layer index. Defaults to None.
+        embedding_in (bool): Whether to use embedding input. Defaults to False.
+        activation (Optional[Any]): Activation function. Defaults to None.
+
+    Returns:
+        Dict[str, Dict[str, Any]]: Dictionary of arguments for a layer.
     """
 
     assert hparams.conv_fn in [
@@ -633,9 +661,17 @@ def get_layer_args_homo(hparams, layer_ind=None, embedding_in=False, activation=
     return layer_args
 
 
-def link_fmt_to_node_fmt(dict_feats):
+def link_fmt_to_node_fmt(
+    dict_feats: Dict[str, torch.Tensor],
+    ) -> Dict[str, Dict[str, Any]]:    
     """
     Converts a dictionary of features from link format to node format.
+    The input dictionary should have keys ending with 'g', 'b', or 'a',
+    representing global, bond, and atom features, respectively.
+    Args: 
+        dict_feats (dict): Dictionary of features with keys ending with 'g', 'b', or 'a'.
+    Returns:
+        dict: Dictionary with keys 'global', 'bond', and 'atom' containing the corresponding features.  
     """
     ret_dict = {}
     for k, v in dict_feats.items():
@@ -650,10 +686,19 @@ def link_fmt_to_node_fmt(dict_feats):
     return ret_dict
 
 
-def _split_batched_output(graph, value, key):
+def _split_batched_output(
+        graph: Batch,
+        value: torch.Tensor,
+        key: str = "global"
+    ):
     """
     Split a tensor into `num_graphs` chunks, the size of each chunk equals the
     number of bonds in the graph.
+
+    Args: 
+        graph (dgl.DGLGraph): Batched graph.
+        value (torch.Tensor): Tensor to be split.
+        key (str): Key for the graph.
 
     Returns:
         list of tensor.

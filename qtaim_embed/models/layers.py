@@ -4,10 +4,6 @@ from typing import List, Tuple, Dict, Optional
 import dgl.nn.pytorch as dglnn
 import dgl
 from dgl.readout import sum_nodes, softmax_nodes
-from typing import Optional
-import torch
-from torch import nn
-from typing import Optional
         
 import torch
 from torch import nn
