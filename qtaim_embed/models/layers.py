@@ -4,10 +4,18 @@ from typing import List, Tuple, Dict, Optional
 import dgl.nn.pytorch as dglnn
 import dgl
 from dgl.readout import sum_nodes, softmax_nodes
-
+from typing import Optional
+import torch
+from torch import nn
+from typing import Optional
+        
 import torch
 from torch import nn
 import torch.nn.functional as F
+import torch.autograd.profiler as profiler
+        
+        
+    
 
 
 class UnifySize(nn.Module):
@@ -25,17 +33,16 @@ class UnifySize(nn.Module):
             features to
     """
 
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim: Dict[str, int], output_dim: int):
         super(UnifySize, self).__init__()
 
-        self.linears = nn.ModuleDict(
-            {
-                k: nn.Linear(size, output_dim, bias=False)
-                for k, size in input_dim.items()
-            }
+        self.node_types = list(input_dim.keys())
+        self.linears = nn.ModuleList(
+            [nn.Linear(input_dim[k], output_dim, bias=False) for k in self.node_types]
         )
-
-    def forward(self, feats):
+    
+    @torch.jit.export  # Decorate the forward method for TorchScript
+    def forward(self, feats: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Args:
             feats (dict): features dict with node type as key and feature as value
@@ -43,25 +50,30 @@ class UnifySize(nn.Module):
         Returns:
             dict: size adjusted features
         """
-        return {k: self.linears[k](x) for k, x in feats.items()}
+        output = {}
+        with profiler.record_function("Unify"):
+            with torch.cuda.amp.autocast():  # Enable mixed precision
+                for i, node_type in enumerate(self.node_types):
+                    output[node_type] = self.linears[i](feats[node_type])
+            return output
+            #return {k: self.linears[k](x) for k, x in feats.items()}
 
 
 class GraphConvDropoutBatch(nn.Module):
     def __init__(
         self,
-        in_feats,
-        out_feats,
-        norm="both",
-        weight=True,
-        bias=True,
-        activation=None,
-        allow_zero_in_degree=False,
-        dropout=0.5,
-        batch_norm_tf=True,
-        **kwargs
+        in_feats: int,
+        out_feats: int,
+        norm: str = "both",
+        weight: bool = True,
+        bias: bool = True,
+        activation: Optional[nn.Module] = None,
+        allow_zero_in_degree: bool = False,
+        dropout: float = 0.5,
+        batch_norm_tf: bool = True,
     ):
         super(GraphConvDropoutBatch, self).__init__()
-        # create graph convolutional layer
+        # Create graph convolutional layer
         self.graph_conv = dglnn.GraphConv(
             in_feats=in_feats,
             out_feats=out_feats,
@@ -71,42 +83,59 @@ class GraphConvDropoutBatch(nn.Module):
             activation=activation,
             allow_zero_in_degree=allow_zero_in_degree,
         )
-        self.dropout = None
-        self.batch_norm = None
+        self.dropout = nn.Dropout(p=dropout) if dropout > 0 else None
+        self.batch_norm = nn.BatchNorm1d(out_feats) if batch_norm_tf else None
         self.out_feats = out_feats
-        # create dropout layer
-        if dropout > 0:
-            self.dropout = nn.Dropout(p=dropout)
 
-        # create batch norm layer
-        if batch_norm_tf:
-            self.batch_norm = nn.BatchNorm1d(out_feats)
+    @torch.jit.export  # Decorate the forward method for TorchScript
+    def forward(
+        self,
+        graph: dgl.DGLGraph,
+        feat: torch.Tensor,
+        weight: Optional[torch.Tensor] = None,
+        edge_weight: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """
+        Args:
+            graph: The input graph.
+            feat: Node features.
+            weight: Optional weight tensor for the graph convolution.
+            edge_weight: Optional edge weight tensor.
 
-    def forward(self, graph, feat, weight=None, edge_weight=None):
-        # apply graph convolutional layer
-        feat = self.graph_conv(graph, feat, weight, edge_weight)
-        # apply dropout to output features
-        if self.dropout is not None:
-            feat = self.dropout(feat)
-        # apply batch norm
-        if self.batch_norm is not None:
-            feat = self.batch_norm(feat)
-
-        return feat
+        Returns:
+            torch.Tensor: The output features after applying graph convolution, dropout, and batch normalization.
+        """
+        with profiler.record_function("GCN Conv"):
+            # Apply graph convolutional layer
+            feat = self.graph_conv(graph, feat, weight, edge_weight)
+            # Apply dropout to output features
+            if self.dropout is not None:
+                feat = self.dropout(feat)
+            # Apply batch normalization
+            if self.batch_norm is not None:
+                feat = self.batch_norm(feat)
+        return feat        
 
 
 class ResidualBlock(nn.Module):
     def __init__(
         self,
-        layer_args,
-        aggregate="sum",
-        resid_n_graph_convs=2,
-        output_block=False,
+        layer_args: Dict[str, Dict[str, Dict[str, int]]],
+        aggregate: str = "sum",
+        resid_n_graph_convs: int = 2,
+        output_block: bool = False,
     ):
+
+        """
+        Args:
+            layer_args: A dictionary containing arguments for each graph convolution layer.
+            aggregate: Aggregation type for HeteroGraphConv (e.g., "sum", "mean").
+            resid_n_graph_convs: Number of graph convolution layers in the residual block.
+            output_block: Whether this is the output block (affects layer configuration).
+        """
         super(ResidualBlock, self).__init__()
-        # create graph convolutional layer
-        self.layers = []
         self.output_block = output_block
+        self.layers = nn.ModuleList()
 
         for i in range(resid_n_graph_convs):
             if output_block == True:
@@ -167,21 +196,43 @@ class ResidualBlock(nn.Module):
                 )
 
         self.layers = nn.ModuleList(self.layers)
-        self.out_feats = {}
-        for k, v in self.layers[-1].mods.items():
-            self.out_feats[k] = v.out_feats
+        
+        self.out_feats = {
+            k: v.out_feats for k, v in self.layers[-1].mods.items()
+        }
 
-    def forward(self, graph, feat, weight=None, edge_weight=None):
-        input_feats = feat
-        for layer in self.layers:
-            feat = layer(graph, feat, weight, edge_weight)
-        if self.output_block == True:
+
+    @torch.jit.export
+    def forward(
+        self,
+        graph: dgl.DGLGraph,
+        feat: Dict[str, torch.Tensor],
+        weight: Optional[torch.Tensor] = None,
+        edge_weight: Optional[torch.Tensor] = None,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Args:
+            graph: The input graph.
+            feat: Node features as a dictionary with node type as key and features as value.
+            weight: Optional weight tensor for the graph convolution.
+            edge_weight: Optional edge weight tensor.
+
+        Returns:
+            Updated node features as a dictionary.
+        """
+        with profiler.record_function("ResidualBlock"):
+            input_feats = feat
+            for layer in self.layers:
+                feat = layer(graph, feat, weight, edge_weight)
+
+            if self.output_block:
+                return feat
+            else:
+                # Add residual connections
+                feat = {k: feat[k] + input_feats[k] for k in feat.keys()}
             return feat
-        else:
-            feat = {k: feat[k] + input_feats[k] for k in feat.keys()}
-        return feat
-
-
+        
+        
 class Set2Set(nn.Module):
     r"""
     Compared to the Official dgl implementation, we allowed node type.
@@ -420,8 +471,9 @@ class WeightAndSumThenCat(nn.Module):
                 if ntype not in self.ntypes_direct_cat:
                     weight_dict[ntype] = self.atom_weighting[ntype](feats[ntype])
 
-            graph.ndata["h"] = feats
-            graph.ndata["w"] = weight_dict
+            #graph.ndata["h"] = feats
+            #graph.ndata["w"] = weight_dict
+            graph.ndata.update({"h": feats, "w": weight_dict})
 
             for ntype in self.ntypes:
                 if ntype not in self.ntypes_direct_cat:
@@ -429,10 +481,11 @@ class WeightAndSumThenCat(nn.Module):
                         dgl.readout_nodes(graph, "h", "w", ntype=ntype, op="sum")
                     )
 
-        if self.ntypes_direct_cat is not None:
-            for ntype in self.ntypes_direct_cat:
-                rst.append(feats[ntype])
-
+        #if self.ntypes_direct_cat is not None:
+        #    for ntype in self.ntypes_direct_cat:
+        #        rst.append(feats[ntype])
+        if self.ntypes_direct_cat:
+            rst.extend(feats[ntype] for ntype in self.ntypes_direct_cat)
         return torch.cat(rst, dim=-1)
 
 
@@ -520,6 +573,7 @@ class WeightAndMeanThenCat(nn.Module):
         """
         Compute the sumpooling of each node type and each graph in the batch.
         """
+        
         rst = []
         with graph.local_scope():
             weight_dict = {}
@@ -527,8 +581,9 @@ class WeightAndMeanThenCat(nn.Module):
                 if ntype not in self.ntypes_direct_cat:
                     weight_dict[ntype] = self.atom_weighting[ntype](feats[ntype])
 
-            graph.ndata["h"] = feats
-            graph.ndata["w"] = weight_dict
+            #graph.ndata["h"] = feats
+            #graph.ndata["w"] = weight_dict
+            graph.ndata.update({"h": feats, "w": weight_dict})
 
             for ntype in self.ntypes:
                 if ntype not in self.ntypes_direct_cat:
@@ -570,46 +625,48 @@ class GlobalAttentionPoolingThenCat(nn.Module):
             self.gate_nn[ntype] = nn.Linear(in_feat, 1)
 
     def forward(self, graph, feats, get_attention=False):
-        rst = []
-        
-        readout_dict = {}
-        gate_dict = {}
-        gated_feats = {}
-        with graph.local_scope():
-            # gather, assign gate to graph
-            for ntype in self.ntypes:
-                if ntype not in self.ntypes_direct_cat:
-                    gate_dict[ntype] = F.leaky_relu(self.gate_nn[ntype](feats[ntype]))
+        with profiler.record_function("GAT Global"):
 
-            graph.ndata["gate"] = gate_dict
-            graph.nodes["atom"].data["gate"]
-            graph.nodes["bond"].data["gate"]
+            rst = []
+            
+            readout_dict = {}
+            gate_dict = {}
+            gated_feats = {}
+            with graph.local_scope():
+                # gather, assign gate to graph
+                for ntype in self.ntypes:
+                    if ntype not in self.ntypes_direct_cat:
+                        gate_dict[ntype] = F.leaky_relu(self.gate_nn[ntype](feats[ntype]))
 
-            # gather, assign gated features to graph
-            for ntype in self.ntypes:
-                if ntype not in self.ntypes_direct_cat:
-                    gate = softmax_nodes(graph=graph, feat="gate", ntype=ntype)
-                    gated_feats[ntype] = feats[ntype] * gate
-            graph.ndata.pop("gate")
+                graph.ndata["gate"] = gate_dict
+                graph.nodes["atom"].data["gate"]
+                graph.nodes["bond"].data["gate"]
 
-            # gather, assign readout features to graph
-            graph.ndata["r"] = gated_feats
-            for ntype in self.ntypes:
-                if ntype not in self.ntypes_direct_cat:
-                    readout_dict[ntype] = sum_nodes(graph, "r", ntype=ntype)
-                    rst.append(readout_dict[ntype])
-            graph.ndata.pop("r")
+                # gather, assign gated features to graph
+                for ntype in self.ntypes:
+                    if ntype not in self.ntypes_direct_cat:
+                        gate = softmax_nodes(graph=graph, feat="gate", ntype=ntype)
+                        gated_feats[ntype] = feats[ntype] * gate
+                graph.ndata.pop("gate")
 
-        if self.ntypes_direct_cat is not None:
-            for ntype in self.ntypes_direct_cat:
-                rst.append(feats[ntype])
+                # gather, assign readout features to graph
+                graph.ndata["r"] = gated_feats
+                for ntype in self.ntypes:
+                    if ntype not in self.ntypes_direct_cat:
+                        readout_dict[ntype] = sum_nodes(graph, "r", ntype=ntype)
+                        rst.append(readout_dict[ntype])
+                graph.ndata.pop("r")
 
-        rst = torch.cat(rst, dim=-1)
+            if self.ntypes_direct_cat is not None:
+                for ntype in self.ntypes_direct_cat:
+                    rst.append(feats[ntype])
 
-        if get_attention:
-            return rst, gate
-        else:
-            return rst
+            rst = torch.cat(rst, dim=-1)
+
+            if get_attention:
+                return rst, gate
+            else:
+                return rst
 
 
 class MultitaskLinearSoftmax(nn.Module):
@@ -630,10 +687,12 @@ class MultitaskLinearSoftmax(nn.Module):
             self.layers_dict[str(i)].append(nn.Softmax(dim=1))
 
     def forward(self, x):
+        
         ret_dict = {}
         for i in range(self.n_tasks):
             x_temp = x
-            for layer in self.layers_dict[str(i)]:
+            task_layers = self.layers_dict[str(i)]  # Store in a local variable
+            for layer in task_layers:
                 x_temp = layer(x_temp)
             ret_dict[str(i)] = x_temp
         out_dict_as_tensor = torch.stack([ret_dict[k] for k in ret_dict.keys()], dim=1)

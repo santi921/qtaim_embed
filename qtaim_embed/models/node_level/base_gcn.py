@@ -15,7 +15,8 @@ import torchmetrics
 from qtaim_embed.utils.models import _split_batched_output, get_layer_args
 from qtaim_embed.models.layers import GraphConvDropoutBatch, ResidualBlock, UnifySize
 from dgl.nn.pytorch import GATConv
-
+import torch.autograd.profiler as profiler
+import dgl
 
 class GCNNodePred(pl.LightningModule):
     """
@@ -280,45 +281,149 @@ class GCNNodePred(pl.LightningModule):
 
 
         self.forward_fn = (
-            torch.compile(self.compiled_forward)
+            torch.compile(self.compiled_forward, dynamic=True)
             if compiled
             else self.compiled_forward
         )
+        def compiled_forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
+            """
+            Forward pass
+            """
+            with profiler.record_function("Embedding"):
+                feats = self.embedding(inputs)
 
-    def compiled_forward(self, graph, inputs):
+            for ind, conv in enumerate(self.conv_layers):
+                feats = conv(graph, feats)
+
+                if self.hparams.conv_fn == "GATConv":
+                    for k, v in feats.items():
+                        reshape_dim = (
+                            self.hparams.num_heads * self.hparams.hidden_size
+                            if ind < self.hparams.n_conv_layers - 1
+                            else len(self.target_dict[k])
+                        )
+                        feats[k] = v.reshape(-1, reshape_dim)
+
+            # filter features if output is None for one of the node types
+            feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
+
+            return feats
+
+        def forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
+            """
+            Forward pass
+            """
+            return self.forward_fn(graph, inputs)
+
+        def feature_at_each_layer(
+            model: "GCNNodePred", graph: dgl.DGLHeteroGraph, feats: dict
+        ) -> tuple[dict, dict, dict]:
+            """
+            Get the features at each layer before the final fully-connected layer.
+
+            This is used for feature visualization to see how the model learns.
+
+            Returns:
+                tuple: (bond_feats, atom_feats, global_feats), each is a dictionary
+            """
+            layer_idx = 0
+            atom_feats, bond_feats, global_feats = {}, {}, {}
+
+            feats = model.embedding(feats)
+            bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
+            atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
+            global_feats[layer_idx] = _split_batched_output(
+                graph, feats["global"], "global"
+            )
+
+            layer_idx += 1
+
+            # gated layer
+            for layer in model.conv_layers[:-1]:
+                feats = layer(graph, feats)
+                # store bond feature of each molecule
+                bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
+
+                atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
+
+                global_feats[layer_idx] = _split_batched_output(
+                    graph, feats["global"], "global"
+                )
+                layer_idx += 1
+
+            return bond_feats, atom_feats, global_feats
+
+        def shared_step(self, batch: tuple, mode: str) -> torch.Tensor:
+            batch_graph, batch_label = batch
+            logits_list = []
+            labels_list = []
+            logits = self.forward(
+                batch_graph, batch_graph.ndata["feat"]
+            )  # returns a dict of node types
+            max_nodes = -1
+
+            for target_type, target_list in self.hparams.target_dict.items():
+                if target_list != [None] and len(target_list) > 0:
+                    labels = batch_label[target_type]
+                    logits_temp = logits[target_type]
+                    if max_nodes < logits_temp.shape[0]:
+                        max_nodes = logits_temp.shape[0]
+                    logits_list.append(logits_temp)
+                    labels_list.append(labels)
+            logits_list = [
+                F.pad(i, (0, 0, max_nodes - i.shape[0])) for i in logits_list
+            ]  # unify node size
+            labels_list = [
+                F.pad(i, (0, 0, max_nodes - i.shape[0])) for i in labels_list
+            ]  # unify node size
+
+            logits = torch.cat(logits_list, dim=1)
+            labels = torch.cat(labels_list, dim=1)
+
+            all_loss = self.compute_loss(logits, labels)
+
+            # compat with older torchmetrics/dgl
+            if type(all_loss) == list:
+                all_loss = torch.stack(all_loss)
+
+            # log loss
+            self.log(
+                f"{mode}_loss",
+                all_loss.sum(),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                batch_size=len(labels),
+                sync_dist=True,
+            )
+            self.update_metrics(logits, labels, mode)
+
+            return all_loss.sum()
+    
+    # disable jit on top level function 
+    @torch.jit.ignore
+    def compiled_forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
         """
-        Forward pass
+        Forward pass with JIT compatibility
         """
-        feats = self.embedding(inputs)
+        with profiler.record_function("Embedding"):
+            feats = self.embedding(inputs)
 
         for ind, conv in enumerate(self.conv_layers):
-
-            # if ind == 0:
-            #    feats = conv(graph, inputs)
-            # else:
             feats = conv(graph, feats)
 
             if self.hparams.conv_fn == "GATConv":
-                if ind < self.hparams.n_conv_layers - 1:
-                    for k, v in feats.items():
-                        # print(k)
-                        # print("feats shape", v.shape)
-                        # print("conv ind", ind)
-
-                        feats[k] = v.reshape(
-                            -1, self.hparams.num_heads * self.hparams.hidden_size
-                        )
-                else:
-                    for k, v in feats.items():
-                        # print(k)
-                        # print("feats shape", v.shape)
-                        # print("conv ind", ind)
-                        feats[k] = v.reshape(-1, len(self.target_dict[k]))
+                for k in list(feats.keys()):
+                    v = feats[k]
+                    reshape_dim = (
+                        self.hparams.num_heads * self.hparams.hidden_size
+                        if ind < self.hparams.n_conv_layers - 1
+                        else len(self.target_dict[k])
+                    )
+                    feats[k] = v.reshape(-1, reshape_dim)
 
         # filter features if output is None for one of the node types
-        for k, v in self.hparams.target_dict.items():
-            if v == [None]:
-                del feats[k]
+        feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
 
         return feats
 
@@ -327,7 +432,6 @@ class GCNNodePred(pl.LightningModule):
         Forward pass
         """
         return self.forward_fn(graph, inputs)
-
 
     def feature_at_each_layer(model, graph, feats):
         """

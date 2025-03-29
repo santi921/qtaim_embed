@@ -266,7 +266,7 @@ class GCNLinkPred(pl.LightningModule):
         self.loss = self.loss_function()
 
         self.forward_fn = (
-            torch.compile(self.compiled_forward)
+            torch.compile(self.compiled_forward, dynamic=True)
             if compiled
             else self.compiled_forward
         )
@@ -277,8 +277,10 @@ class GCNLinkPred(pl.LightningModule):
         Forward pass
         """
         feats_embed = self.embedding(inputs)
+        feats_pos, feats_neg = feats_embed, feats_embed  # Initialize for compatibility
+
         for ind, conv in enumerate(self.conv_layers):
-            # print("conv ind: ", ind)
+            # Explicitly handle the first layer
             if ind == 0:
                 feats_pos = conv(pos_graph, feats_embed)
                 feats_neg = conv(neg_graph, feats_embed)
@@ -286,20 +288,20 @@ class GCNLinkPred(pl.LightningModule):
                 feats_pos = conv(pos_graph, feats_pos)
                 feats_neg = conv(neg_graph, feats_neg)
 
+            # Handle GATConv-specific reshaping explicitly
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
-                    # for k, v in feats.items():
-                    feats_pos = feats_pos.reshape(
+                    feats_pos = feats_pos.view(
                         -1, self.hparams.num_heads * self.hparams.hidden_size
                     )
-                    feats_neg = feats_neg.reshape(
+                    feats_neg = feats_neg.view(
                         -1, self.hparams.num_heads * self.hparams.hidden_size
                     )
                 else:
-                    # for k, v in feats.items():
-                    feats_pos = feats_pos.reshape(-1, self.hparams.hidden_size)
-                    feats_neg = feats_neg.reshape(-1, self.hparams.hidden_size)
-        # print("predictor!")
+                    feats_pos = feats_pos.view(-1, self.hparams.hidden_size)
+                    feats_neg = feats_neg.view(-1, self.hparams.hidden_size)
+
+        # Ensure predictor compatibility
         pos_pred = self.predictor(pos_graph, feats_pos)
         neg_pred = self.predictor(neg_graph, feats_neg)
 

@@ -415,11 +415,10 @@ class GCNGraphPred(pl.LightningModule):
         )
 
         self.forward_fn = (
-            torch.compile(self.compiled_forward)
+            torch.compile(self.compiled_forward, dynamic=True)
             if compiled
             else self.compiled_forward
         )
-
 
     def compiled_forward(self, graph, feat, eweight=None):
         feats = self.embedding(feat)
@@ -427,20 +426,22 @@ class GCNGraphPred(pl.LightningModule):
             feats = conv(graph, feats)
 
             if self.hparams.conv_fn == "GATConv":
-                if ind < self.hparams.n_conv_layers - 1:
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(
-                            -1, self.hparams.num_heads * self.hparams.hidden_size
+                reshaped_feats = {}
+                for k, v in feats.items():
+                    if ind < self.hparams.n_conv_layers - 1:
+                        reshaped_feats[k] = v.view(
+                            v.size(0), -1, self.hparams.num_heads * self.hparams.hidden_size
                         )
-                else:
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.input_size[k])
+                    else:
+                        reshaped_feats[k] = v.view(
+                            v.size(0), -1, self.hparams.input_size[k]
+                        )
+                feats = reshaped_feats
 
         readout_feats = self.readout(graph, feats)
-        for ind, layer in enumerate(self.fc_layers):
+        for layer in self.fc_layers:
             readout_feats = layer(readout_feats)
 
-        # print("preds shape:", readout_feats.shape)
         return readout_feats
 
 
