@@ -130,6 +130,7 @@ class TestNodePred:
             enable_progress_bar=True,
             enable_checkpointing=False,
             strategy="auto",
+            precision="bf16",
         )
 
         trainer.fit(model, self.dm)

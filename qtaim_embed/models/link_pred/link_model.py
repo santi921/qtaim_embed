@@ -183,12 +183,9 @@ class GCNLinkPred(pl.LightningModule):
                     embedding_in=True,
                     activation=self.activation,
                 )
-                # print("layer args: ", block_args)
-                # print(layer_tracker)
-
+                
                 input_block = False
                 if layer_tracker == 0:
-                    # print("input block!")
                     input_block = True
 
                 block_args["input_block"] = input_block

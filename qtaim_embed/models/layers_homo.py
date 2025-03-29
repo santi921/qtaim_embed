@@ -200,26 +200,57 @@ class ResidualBlockHomo(nn.Module):
         self.input_block = input_block
 
         for i in range(resid_n_graph_convs):
-            if input_block:
-                layer_arg_copy = deepcopy(layer_args)
-
+            layer_arg_copy = deepcopy(layer_args)
+            layer_arg_copy = self.pad_args_graph_conv(layer_arg_copy)
+            
+            if input_block:    
                 if i == 0:
                     layer_arg_copy["in_feats"] = layer_args["embedding_size"]
-                    print("layer arg copy:", layer_arg_copy)
+                    
                     self.layers.append(
-                        GraphConvDropoutBatch(**layer_arg_copy),
+                        GraphConvDropoutBatch(
+                            in_feats=layer_arg_copy["in_feats"],
+                            out_feats=layer_arg_copy["out_feats"],
+                            norm=layer_arg_copy["norm"],
+                            weight=layer_arg_copy["weight"],
+                            bias=layer_arg_copy["bias"],
+                            activation=layer_arg_copy["activation"],
+                            allow_zero_in_degree=layer_arg_copy["allow_zero_in_degree"],
+                            dropout=layer_arg_copy["dropout"],
+                            batch_norm_tf=layer_arg_copy["batch_norm_tf"],
+                        ),
                     )
 
                 else:
                     layer_arg_copy["in_feats"] = layer_args["out_feats"]
                     # print("layer arg copy:", layer_arg_copy)
                     self.layers.append(
-                        GraphConvDropoutBatch(**layer_arg_copy),
+                        GraphConvDropoutBatch(
+                            in_feats=layer_arg_copy["in_feats"],
+                            out_feats=layer_arg_copy["out_feats"],
+                            norm=layer_arg_copy["norm"],
+                            weight=layer_arg_copy["weight"],
+                            bias=layer_arg_copy["bias"],
+                            activation=layer_arg_copy["activation"],
+                            allow_zero_in_degree=layer_arg_copy["allow_zero_in_degree"],
+                            dropout=layer_arg_copy["dropout"],
+                            batch_norm_tf=layer_arg_copy["batch_norm_tf"],
+                        ),
                     )
             else:
                 # print("layer args:", layer_args)
                 self.layers.append(
-                    GraphConvDropoutBatch(**layer_args),
+                    GraphConvDropoutBatch(
+                        in_feats=layer_arg_copy["in_feats"],
+                        out_feats=layer_arg_copy["out_feats"],
+                        norm=layer_arg_copy["norm"],
+                        weight=layer_arg_copy["weight"],
+                        bias=layer_arg_copy["bias"],
+                        activation=layer_arg_copy["activation"],
+                        allow_zero_in_degree=layer_arg_copy["allow_zero_in_degree"],
+                        dropout=layer_arg_copy["dropout"],
+                        batch_norm_tf=layer_arg_copy["batch_norm_tf"],
+                    ),
                 )
 
         self.layers = nn.ModuleList(self.layers)
@@ -244,3 +275,32 @@ class ResidualBlockHomo(nn.Module):
             feat = feat + input_feats
 
         return feat
+
+
+    def pad_args_graph_conv(self, layer_args):
+        """
+        Pad the arguments for the graph convolutional layer.
+
+        Args:
+            layer_args (dict): The arguments for the graph convolutional layer.
+
+        Returns:
+            dict: The padded arguments.
+        """
+        if "activation" not in layer_args:
+            layer_args["activation"] = None
+        if "allow_zero_in_degree" not in layer_args:
+            layer_args["allow_zero_in_degree"] = False
+        if "batch_norm_tf" not in layer_args:
+            layer_args["batch_norm_tf"] = True
+        if "weight" not in layer_args:
+            layer_args["weight"] = True
+        if "bias" not in layer_args:
+            layer_args["bias"] = True
+        if "norm" not in layer_args:
+            layer_args["norm"] = "both"
+        if "dropout" not in layer_args:
+            layer_args["dropout"] = 0.1
+
+
+        return layer_args

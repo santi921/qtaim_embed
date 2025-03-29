@@ -52,9 +52,8 @@ class UnifySize(nn.Module):
         """
         output = {}
         with profiler.record_function("Unify"):
-            with torch.cuda.amp.autocast():  # Enable mixed precision
-                for i, node_type in enumerate(self.node_types):
-                    output[node_type] = self.linears[i](feats[node_type])
+            for i, node_type in enumerate(self.node_types):
+                output[node_type] = self.linears[i](feats[node_type])
             return output
             #return {k: self.linears[k](x) for k, x in feats.items()}
 
@@ -69,7 +68,7 @@ class GraphConvDropoutBatch(nn.Module):
         bias: bool = True,
         activation: Optional[nn.Module] = None,
         allow_zero_in_degree: bool = False,
-        dropout: float = 0.5,
+        dropout: float = 0.1,
         batch_norm_tf: bool = True,
     ):
         super(GraphConvDropoutBatch, self).__init__()
