@@ -1,9 +1,13 @@
+from typing import List, Tuple, Dict, Optional
+
 import torch
 import torch.nn as nn
 from torch.optim import lr_scheduler
 import pytorch_lightning as pl
+
 from dgl.nn.pytorch import GATConv
 from dgl.nn import SAGEConv
+from dgl.heterograph import DGLGraph
 
 from qtaim_embed.utils.models import get_layer_args_homo, _split_batched_output
 
@@ -52,35 +56,35 @@ class GCNLinkPred(pl.LightningModule):
         predictor_param_dict: dict, dictionary of predictor parameters
 
     """
-
     def __init__(
         self,
-        input_size=12,
-        n_conv_layers=3,
-        conv_fn="GraphConvDropoutBatch",
-        resid_n_graph_convs=None,
-        num_heads_gat=2,
-        dropout_feat_gat=0.2,
-        dropout_attn_gat=0.2,
-        residual_gat=True,
-        hidden_size=128,
-        dropout=0.2,
-        batch_norm=True,
-        activation="ReLU",
-        bias=True,
-        norm="both",
-        lr=1e-3,
-        scheduler_name="reduce_on_plateau",
-        weight_decay=0.0,
-        lr_plateau_patience=5,
-        lr_scale_factor=0.5,
-        loss_fn="cross_entropy",
-        embedding_size=128,
-        predictor="Dot",
-        predictor_param_dict={},
-        aggregator_type="mean",
-        compiled=None
+        input_size: int = 12,
+        n_conv_layers: int = 3,
+        conv_fn: str = "GraphConvDropoutBatch",
+        resid_n_graph_convs: Optional[int] = None,
+        num_heads_gat: int = 2,
+        dropout_feat_gat: float = 0.2,
+        dropout_attn_gat: float = 0.2,
+        residual_gat: bool = True,
+        hidden_size: int = 128,
+        dropout: float = 0.2,
+        batch_norm: bool = True,
+        activation: str = "ReLU",
+        bias: bool = True,
+        norm: str = "both",
+        lr: float = 1e-3,
+        scheduler_name: str = "reduce_on_plateau",
+        weight_decay: float = 0.0,
+        lr_plateau_patience: int = 5,
+        lr_scale_factor: float = 0.5,
+        loss_fn: str = "cross_entropy",
+        embedding_size: int = 128,
+        predictor: str = "Dot",
+        predictor_param_dict: Dict[str, List[int]] = {},
+        aggregator_type: str = "mean",
+        compiled: Optional[bool] = None,
     ):
+
         super().__init__()
         self.learning_rate = lr
 
@@ -269,10 +273,19 @@ class GCNLinkPred(pl.LightningModule):
         )
 
 
-    def compiled_forward(self, pos_graph, neg_graph, inputs):
+    def compiled_forward(
+            self, 
+            pos_graph: DGLGraph,
+            neg_graph: DGLGraph,
+            inputs: torch.Tensor
+        ):
         """
         Forward pass
         """
+        #print("type of inputs", type(inputs))
+        #print("pos graph", type(pos_graph))
+        #print("neg graph", type(neg_graph))
+
         feats_embed = self.embedding(inputs)
         feats_pos, feats_neg = feats_embed, feats_embed  # Initialize for compatibility
 
@@ -304,14 +317,17 @@ class GCNLinkPred(pl.LightningModule):
 
         return pos_pred, neg_pred
 
-    def forward(self, pos_graph, neg_graph, inputs):
+    def forward(
+        self, 
+        pos_graph: DGLGraph,
+        neg_graph: DGLGraph,
+        inputs: torch.Tensor
+        ):
         """
         Forward pass
         """
         # just use the compiled forward function
         return self.forward_fn(pos_graph, neg_graph, inputs)
-
-
 
     def loss_function(self):
         """
@@ -340,10 +356,16 @@ class GCNLinkPred(pl.LightningModule):
 
         return loss_fn
 
-    def compute_loss(self, target, pred):
+    def compute_loss(
+            self, 
+            target: torch.Tensor, 
+            pred: torch.Tensor
+            ):
         """
         Compute loss
         """
+        #print("target type", type(target))
+        #print("pred type", type(pred))
         # print("target device", target.device)
         # print("pred device", pred.device)
         # print("loss device", self.loss.device)
@@ -384,8 +406,13 @@ class GCNLinkPred(pl.LightningModule):
             )
             layer_idx += 1
 
-    def shared_step(self, batch, mode):
-
+    def shared_step(
+        self, 
+        batch: tuple, 
+        mode: str
+    ):
+        #print("batch type", type(batch))
+        #print("mode", mode)
         # if mode == "train":
         positive_graph, negative_graph, feat = batch
         # else:
@@ -414,15 +441,25 @@ class GCNLinkPred(pl.LightningModule):
 
         return all_loss
 
-    def training_step(self, batch, batch_idx):
+    def training_step(
+            self, 
+            batch: tuple, 
+            batch_idx: int
+        ):
         """
         Train step
         """
+        #print("batch type", type(batch))
+        #print("batch index", type(batch_idx))
         loss = self.shared_step(batch, mode="train")
         
         return {"train_loss": loss, "loss": loss}
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self, 
+        batch: tuple, 
+        batch_idx: int
+    ):
         """
         Val step
         """
@@ -464,11 +501,15 @@ class GCNLinkPred(pl.LightningModule):
         self.log("test_auc", auc, prog_bar=False, sync_dist=True)
         self.log("test_accuracy", acc, prog_bar=False, sync_dist=True)
 
-    def update_metrics(self, pred, target, mode):
+    def update_metrics(
+            self, 
+            pred: torch.Tensor, 
+            target: torch.Tensor, 
+            mode: str
+        ):
         """
         Update metrics using torchmetrics interfaces
         """
-
         if mode == "train":
             self.train_accuracy.update(pred, target)
             self.train_f1.update(pred, target)

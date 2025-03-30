@@ -10,6 +10,7 @@ import dgl.nn.pytorch as dglnn
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
 from dgl.nn.pytorch import GATConv
+from dgl import DGLHeteroGraph
 
 from qtaim_embed.utils.models import (
     get_layer_args,
@@ -29,6 +30,7 @@ from qtaim_embed.models.layers import (
     WeightAndMeanThenCat,
 )
 
+from typing import List, Tuple, Dict, Optional
 
 class GCNGraphPred(pl.LightningModule):
     """
@@ -61,40 +63,40 @@ class GCNGraphPred(pl.LightningModule):
 
     def __init__(
         self,
-        atom_input_size=12,
-        bond_input_size=8,
-        global_input_size=3,
-        n_conv_layers=3,
-        target_dict={"atom": "E"},
-        conv_fn="GraphConvDropoutBatch",
-        global_pooling="WeightAndSumThenCat",
-        resid_n_graph_convs=None,
-        num_heads_gat=2,
-        dropout_feat_gat=0.2,
-        dropout_attn_gat=0.2,
-        hidden_size=128,
-        residual_gat=True,
-        dropout=0.2,
-        batch_norm=True,
-        activation="ReLU",
-        bias=True,
-        norm="both",
-        aggregate="sum",
-        lr=1e-3,
-        scheduler_name="reduce_on_plateau",
-        weight_decay=0.0,
-        lr_plateau_patience=5,
-        lr_scale_factor=0.5,
-        loss_fn="mse",
-        embedding_size=128,
-        fc_layer_size=[128, 64],
-        fc_dropout=0.0,
-        fc_batch_norm=True,
-        lstm_iters=3,
-        lstm_layers=1,
-        pooling_ntypes=["atom", "bond"],
-        pooling_ntypes_direct=["global"],
-        compiled=None
+        atom_input_size: int = 12,
+        bond_input_size: int = 8,
+        global_input_size: int = 3,
+        n_conv_layers: int = 3,
+        target_dict: dict = {"atom": "E"},
+        conv_fn: str = "GraphConvDropoutBatch",
+        global_pooling: str = "WeightAndSumThenCat",
+        resid_n_graph_convs: int = None,
+        num_heads_gat: int = 2,
+        dropout_feat_gat: float = 0.2,
+        dropout_attn_gat: float = 0.2,
+        hidden_size: int = 128,
+        residual_gat: bool = True,
+        dropout: float = 0.2,
+        batch_norm: bool = True,
+        activation: str = "ReLU",
+        bias: bool = True,
+        norm: str = "both",
+        aggregate: str = "sum",
+        lr: float = 1e-3,
+        scheduler_name: str = "reduce_on_plateau",
+        weight_decay: float = 0.0,
+        lr_plateau_patience: int = 5,
+        lr_scale_factor: float = 0.5,
+        loss_fn: str = "mse",
+        embedding_size: int = 128,
+        fc_layer_size: List[int] = [128, 64],
+        fc_dropout: float = 0.0,
+        fc_batch_norm: bool = True,
+        lstm_iters: int = 3,
+        lstm_layers: int = 1,
+        pooling_ntypes: List[str] = ["atom", "bond"],
+        pooling_ntypes_direct: List[str] = ["global"],
+        compiled: bool = False,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -420,7 +422,15 @@ class GCNGraphPred(pl.LightningModule):
             else self.compiled_forward
         )
 
-    def compiled_forward(self, graph, feat, eweight=None):
+    def compiled_forward(
+            self, 
+            graph: DGLHeteroGraph, 
+            feat: dict, 
+            eweight: str = None
+        ):
+        #print("graph type: ", type(graph))
+        #print("feat type: ", type(feat))
+
         feats = self.embedding(feat)
         for ind, conv in enumerate(self.conv_layers):
             feats = conv(graph, feats)
@@ -444,14 +454,19 @@ class GCNGraphPred(pl.LightningModule):
 
         return readout_feats
 
-
-    def forward(self, graph, feat, eweight=None):
+    def forward(
+        self, 
+        graph: DGLHeteroGraph, 
+        feat: dict, 
+        eweight: str = None
+    ):
         """
         Forward pass
         """
         # just use the compiled forward function
+        #print("graph type: ", type(graph))
+        #print("feat type: ", type(feat))
         return self.forward_fn(graph, feat, eweight)
-
 
     def loss_function(self):
         """
@@ -482,10 +497,16 @@ class GCNGraphPred(pl.LightningModule):
 
         return loss_fn
 
-    def compute_loss(self, target, pred):
+    def compute_loss(
+        self, 
+        target: torch.Tensor, 
+        pred: torch.Tensor
+    ):
         """
         Compute loss
         """
+        print("target type: ", type(target))
+        print("pred type: ", type(pred))
         if self.hparams.ntasks > 1:
             loss = 0
             # print("target shape", target.shape)
@@ -494,7 +515,7 @@ class GCNGraphPred(pl.LightningModule):
             return loss
         return self.loss(target, pred)
 
-    def feature_at_each_layer(model, graph, feats):
+    def feature_at_each_layer(self, graph, feats):
         """
         Get the features at each layer before the final fully-connected layer.
 
@@ -507,7 +528,7 @@ class GCNGraphPred(pl.LightningModule):
         layer_idx = 0
         atom_feats, bond_feats, global_feats = {}, {}, {}
 
-        feats = model.embedding(feats)
+        feats = self.embedding(feats)
         bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
         atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
         global_feats[layer_idx] = _split_batched_output(
@@ -517,7 +538,7 @@ class GCNGraphPred(pl.LightningModule):
         layer_idx += 1
 
         # gated layer
-        for layer in model.conv_layers[:-1]:
+        for layer in self.conv_layers[:-1]:
             feats = layer(graph, feats)
             # store bond feature of each molecule
             bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
@@ -529,7 +550,11 @@ class GCNGraphPred(pl.LightningModule):
             )
             layer_idx += 1
 
-    def shared_step(self, batch, mode, scalers=None):
+    def shared_step(self, batch: tuple, mode: str, scalers: Optional[list] = None):
+        
+        #print("batch type: ", type(batch))
+        #print("batch graph type: ", type(batch[0]))
+
         batch_graph, batch_label = batch
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
@@ -554,14 +579,22 @@ class GCNGraphPred(pl.LightningModule):
 
         return all_loss
 
-    def training_step(self, batch, batch_idx):
+    def training_step(
+        self, 
+        batch: tuple, 
+        batch_idx: int
+    ):
         """
         Train step
         """
         loss = self.shared_step(batch, mode="train")
         return {"train_loss": loss, "loss": loss}
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self, 
+        batch: tuple, 
+        batch_idx: int
+    ):
         """
         Val step
         """
@@ -622,7 +655,12 @@ class GCNGraphPred(pl.LightningModule):
         self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
 
-    def update_metrics(self, pred, target, mode):
+    def update_metrics(
+        self, 
+        pred: torch.Tensor, 
+        target: torch.Tensor, 
+        mode: str
+    ):
         """
         Update metrics using torchmetrics interfaces
         """
@@ -641,7 +679,7 @@ class GCNGraphPred(pl.LightningModule):
             self.test_torch_l1.update(pred, target)
             self.test_torch_mse.update(pred, target)
 
-    def compute_metrics(self, mode):
+    def compute_metrics(self, mode: str):
         """
         Compute metrics using torchmetrics interfaces
         """

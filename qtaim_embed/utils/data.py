@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 from qtaim_embed.core.dataset import Subset
+from typing import Optional, Any
 
 
 def get_default_link_level_config():
@@ -303,7 +304,6 @@ def get_default_graph_level_config():
         },
     }
 
-
 def get_default_graph_level_config_classif():
     root = Path(__file__).parent.parent.parent
     # to string
@@ -431,7 +431,13 @@ def get_default_graph_level_config_classif():
     }
 
 
-def train_validation_test_split(dataset, validation=0.1, test=0.1, random_seed=None):
+#def train_validation_test_split(dataset, validation=0.1, test=0.1, random_seed=None):
+def train_validation_test_split(
+        dataset: Any,
+        validation: float = 0.1,
+        test: float = 0.1,
+        random_seed: Optional[int] = 35,
+) -> list:
     """
     Split a dataset into training, validation, and test set.
 

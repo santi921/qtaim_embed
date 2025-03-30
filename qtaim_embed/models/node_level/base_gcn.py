@@ -18,6 +18,9 @@ from dgl.nn.pytorch import GATConv
 import torch.autograd.profiler as profiler
 import dgl
 
+from typing import List, Tuple, Dict, Optional
+
+
 class GCNNodePred(pl.LightningModule):
     """
     Basic GNN model for node-level regression
@@ -47,32 +50,32 @@ class GCNNodePred(pl.LightningModule):
 
     def __init__(
         self,
-        atom_input_size=12,
-        bond_input_size=8,
-        global_input_size=3,
-        n_conv_layers=3,
-        target_dict={"atom": "extra_feat_bond_esp_total"},
-        conv_fn="GraphConvDropoutBatch",
-        resid_n_graph_convs=None,
-        dropout=0.2,
-        batch_norm=True,
-        activation=None,
-        bias=True,
-        norm="both",
-        aggregate="sum",
-        lr=1e-3,
-        embedding_size=16,
-        hidden_size=128,
-        num_heads_gat=4,
-        dropout_feat_gat=0.2,
-        dropout_attn_gat=0.2,
-        residual_gat=True,
-        scheduler_name="reduce_on_plateau",
-        weight_decay=0.0,
-        lr_plateau_patience=5,
-        lr_scale_factor=0.5,
-        loss_fn="mse",
-        compiled=None
+        atom_input_size: int = 12,
+        bond_input_size: int = 8,
+        global_input_size: int = 3,
+        n_conv_layers: int = 3,
+        target_dict: Dict[str, List[str]] = {"atom": "extra_feat_bond_esp_total"},
+        conv_fn: str = "GraphConvDropoutBatch",
+        resid_n_graph_convs: Optional[int] = None,
+        dropout: float = 0.2,
+        batch_norm: bool = True,
+        activation: Optional[str] = None,
+        bias: bool = True,
+        norm: str = "both",
+        aggregate: str = "sum",
+        lr: float = 1e-3,
+        embedding_size: int = 16,
+        hidden_size: int = 128,
+        num_heads_gat: int = 4,
+        dropout_feat_gat: float = 0.2,
+        dropout_attn_gat: float = 0.2,
+        residual_gat: bool = True,
+        scheduler_name: str = "reduce_on_plateau",
+        weight_decay: float = 0.0,
+        lr_plateau_patience: int = 5,
+        lr_scale_factor: float = 0.5,
+        loss_fn: str = "mse",
+        compiled: bool = False,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -285,120 +288,6 @@ class GCNNodePred(pl.LightningModule):
             if compiled
             else self.compiled_forward
         )
-        def compiled_forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
-            """
-            Forward pass
-            """
-            with profiler.record_function("Embedding"):
-                feats = self.embedding(inputs)
-
-            for ind, conv in enumerate(self.conv_layers):
-                feats = conv(graph, feats)
-
-                if self.hparams.conv_fn == "GATConv":
-                    for k, v in feats.items():
-                        reshape_dim = (
-                            self.hparams.num_heads * self.hparams.hidden_size
-                            if ind < self.hparams.n_conv_layers - 1
-                            else len(self.target_dict[k])
-                        )
-                        feats[k] = v.reshape(-1, reshape_dim)
-
-            # filter features if output is None for one of the node types
-            feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
-
-            return feats
-
-        def forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
-            """
-            Forward pass
-            """
-            return self.forward_fn(graph, inputs)
-
-        def feature_at_each_layer(
-            model: "GCNNodePred", graph: dgl.DGLHeteroGraph, feats: dict
-        ) -> tuple[dict, dict, dict]:
-            """
-            Get the features at each layer before the final fully-connected layer.
-
-            This is used for feature visualization to see how the model learns.
-
-            Returns:
-                tuple: (bond_feats, atom_feats, global_feats), each is a dictionary
-            """
-            layer_idx = 0
-            atom_feats, bond_feats, global_feats = {}, {}, {}
-
-            feats = model.embedding(feats)
-            bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
-            atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
-            global_feats[layer_idx] = _split_batched_output(
-                graph, feats["global"], "global"
-            )
-
-            layer_idx += 1
-
-            # gated layer
-            for layer in model.conv_layers[:-1]:
-                feats = layer(graph, feats)
-                # store bond feature of each molecule
-                bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
-
-                atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
-
-                global_feats[layer_idx] = _split_batched_output(
-                    graph, feats["global"], "global"
-                )
-                layer_idx += 1
-
-            return bond_feats, atom_feats, global_feats
-
-        def shared_step(self, batch: tuple, mode: str) -> torch.Tensor:
-            batch_graph, batch_label = batch
-            logits_list = []
-            labels_list = []
-            logits = self.forward(
-                batch_graph, batch_graph.ndata["feat"]
-            )  # returns a dict of node types
-            max_nodes = -1
-
-            for target_type, target_list in self.hparams.target_dict.items():
-                if target_list != [None] and len(target_list) > 0:
-                    labels = batch_label[target_type]
-                    logits_temp = logits[target_type]
-                    if max_nodes < logits_temp.shape[0]:
-                        max_nodes = logits_temp.shape[0]
-                    logits_list.append(logits_temp)
-                    labels_list.append(labels)
-            logits_list = [
-                F.pad(i, (0, 0, max_nodes - i.shape[0])) for i in logits_list
-            ]  # unify node size
-            labels_list = [
-                F.pad(i, (0, 0, max_nodes - i.shape[0])) for i in labels_list
-            ]  # unify node size
-
-            logits = torch.cat(logits_list, dim=1)
-            labels = torch.cat(labels_list, dim=1)
-
-            all_loss = self.compute_loss(logits, labels)
-
-            # compat with older torchmetrics/dgl
-            if type(all_loss) == list:
-                all_loss = torch.stack(all_loss)
-
-            # log loss
-            self.log(
-                f"{mode}_loss",
-                all_loss.sum(),
-                on_step=False,
-                on_epoch=True,
-                prog_bar=True,
-                batch_size=len(labels),
-                sync_dist=True,
-            )
-            self.update_metrics(logits, labels, mode)
-
-            return all_loss.sum()
     
     # disable jit on top level function 
     @torch.jit.ignore
@@ -427,7 +316,7 @@ class GCNNodePred(pl.LightningModule):
 
         return feats
 
-    def forward(self, graph, inputs):
+    def forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
         """
         Forward pass
         """
@@ -470,7 +359,11 @@ class GCNNodePred(pl.LightningModule):
 
         return bond_feats, atom_feats, global_feats
 
-    def shared_step(self, batch, mode):
+    def shared_step(
+        self, 
+        batch: tuple, 
+        mode: str
+    ):
         batch_graph, batch_label = batch
         logits_list = []
         labels_list = []
@@ -546,25 +439,41 @@ class GCNNodePred(pl.LightningModule):
         loss_fn = loss_multi
         return loss_fn
 
-    def compute_loss(self, target, pred):
+    def compute_loss(
+        self, 
+        target: torch.Tensor, 
+        pred: torch.Tensor
+    ):
         """
         Compute loss
         """
         return self.loss(target, pred)
 
-    def training_step(self, batch, batch_idx):
+    def training_step(
+        self, 
+        batch: tuple, 
+        batch_idx: int
+    ):
         """
         Train step
         """
         return self.shared_step(batch, mode="train")
 
-    def validation_step(self, batch, batch_idx):
+    def validation_step(
+        self, 
+        batch: tuple, 
+        batch_idx: int
+    ):
         """
         Val step
         """
         return self.shared_step(batch, mode="val")
 
-    def test_step(self, batch, batch_idx):
+    def test_step(
+        self, 
+        batch: tuple, 
+        batch_idx: int
+    ):
         # Todo
         return self.shared_step(batch, mode="test")
 
@@ -674,7 +583,12 @@ class GCNNodePred(pl.LightningModule):
                         sync_dist=True,
                     )
 
-    def update_metrics(self, pred, target, mode):
+    def update_metrics(
+        self, 
+        pred: torch.Tensor, 
+        target: torch.Tensor, 
+        mode: str
+    ):
         """
         Update metrics using torchmetrics interfaces
         """

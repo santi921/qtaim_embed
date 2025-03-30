@@ -78,7 +78,6 @@ def gather_atom_level_stats(dataset_dev):
 
     return feat_dict, feat_dict_complete, feat_dict_summary
 
-
 def gather_bond_level_stats(dataset_dev):
     bond_feats_qtaim = [
         i for i in dataset_dev.include_names["bond"] if "extra_feat_bond_" in i

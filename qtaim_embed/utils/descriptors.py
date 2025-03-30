@@ -3,6 +3,7 @@ import networkx as nx
 import numpy as np
 import torch
 from e3nn.o3._spherical_harmonics import _spherical_harmonics
+from pandas import DataFrame
 
 def get_global_features(row, global_keys):
     """
@@ -36,7 +37,7 @@ def get_atom_feats(row, atom_keys):
 @torch.jit.script
 def get_node_direction_expansion(
     distance_vec: torch.Tensor, lmax: int 
-):
+)-> torch.Tensor:
     """
     Calculate Bond-Orientational Order (BOO) for each node in the graph.
     Ref: Steinhardt, et al. "Bond-orientational order in liquids and glasses." Physical Review B 28.2 (1983): 784.
@@ -55,11 +56,11 @@ def get_node_direction_expansion(
 
 
 def get_bond_features(
-        row, 
-        map_key, 
-        bond_key=None, 
-        keys=None
-    ):
+        row: DataFrame,
+        map_key: str,
+        bond_key: str = None, 
+        keys: list = None
+    ) -> dict:
     """
     Takes the mappings in the map_key and returns the features for the bonds
     in the form of a dictionary
@@ -111,7 +112,12 @@ def get_bond_features(
     return bond_features
 
 
-def find_rings(atom_num, bond_list, allowed_ring_size=[], edges=True):
+def find_rings(
+        atom_num: int,
+        bond_list: list,
+        allowed_ring_size: list = [], 
+        edges: bool = False
+    ):
     cycle_graphs, cycle_list = [], []
     nx_graph = nx.Graph()
     [nx_graph.add_node(i) for i in range(atom_num)]

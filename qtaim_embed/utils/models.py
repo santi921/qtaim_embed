@@ -1,6 +1,6 @@
 import torch
 from typing import Optional, Dict, Any
-from dgl import Batch
+from dgl import batch
 
 def get_layer_args(
         hparams: Any,
@@ -687,7 +687,7 @@ def link_fmt_to_node_fmt(
 
 
 def _split_batched_output(
-        graph: Batch,
+        graph: batch,
         value: torch.Tensor,
         key: str = "global"
     ):

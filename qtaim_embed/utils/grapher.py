@@ -1,6 +1,7 @@
 import torch
 import dgl
 import numpy as np
+from typing import Optional, Dict, Any
 
 from qtaim_embed.data.grapher import HeteroCompleteGraphFromMolWrapper
 from qtaim_embed.data.featurizer import (
@@ -10,9 +11,10 @@ from qtaim_embed.data.featurizer import (
 )
 
 
+
 def get_grapher(
     element_set,
-    atom_keys=[],
+    atom_keys,
     bond_keys=[],
     global_keys=[],
     allowed_ring_size=[],
