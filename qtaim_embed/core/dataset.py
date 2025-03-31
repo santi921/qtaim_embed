@@ -7,7 +7,7 @@ import lmdb
 from copy import deepcopy
 from torch.utils.data import Dataset
 from pathlib import Path
-
+import bisect
 
 from qtaim_embed.utils.grapher import get_grapher
 from qtaim_embed.data.molwrapper import mol_wrappers_from_df
@@ -1081,7 +1081,7 @@ class LMDBBaseDataset(Dataset):
 
     """
     Dataset class to
-    1. write Reaction networks objecs to lmdb
+    1. write Molecule Objects to lmdb
     2. load lmdb files
     """
 
@@ -1216,41 +1216,59 @@ class LMDBMoleculeDataset(LMDBBaseDataset):
     def __init__(self, config, transform=None):
         super(LMDBMoleculeDataset, self).__init__(config=config, transform=transform)
         if not self.path.is_file():
-            self.env_ = self.envs[0]
-            raise ("Not Implemented Yet")
-
-        else:
-            self.env_ = self.env
-
-    @property
-    def charges(self):
-        charges = self.env_.begin().get("charges".encode("ascii"))
-        return pickle.loads(charges)
+            self.single_file = False
+                
+        elif self.path.is_file():
+            #self.env = self.env
+            self.single_file = True
 
     @property
-    def ring_sizes(self):
-        ring_sizes = self.env_.begin().get("ring_sizes".encode("ascii"))
-        return pickle.loads(ring_sizes)
+    def allowed_charges(self):
+        if not self.single_file:
+            return pickle.loads(self.envs[0].begin().get("allowed_charges".encode("ascii")))
+        return pickle.loads(self.env.begin().get("allowed_charges".encode("ascii")))
 
     @property
-    def elements(self):
-        elements = self.env_.begin().get("element_set".encode("ascii"))
-        return pickle.loads(elements)
+    def allowed_spins(self):
+        if not self.single_file:
+            return pickle.loads(self.envs[0].begin().get("allowed_spins".encode("ascii")))
+        return pickle.loads(self.env.begin().get("allowed_spins".encode("ascii")))
+
+    @property
+    def ring_size_set(self):
+        if not self.single_file:
+            return pickle.loads(self.envs[0].begin().get("ring_size_set".encode("ascii")))
+        return pickle.loads(self.env.begin().get("ring_size_set".encode("ascii")))
+
+    @property
+    def element_set(self):
+        if not self.single_file:
+            return pickle.loads(self.envs[0].begin().get("element_set".encode("ascii")))
+        return pickle.loads(self.env.begin().get("element_set".encode("ascii")))
 
     @property
     def feature_names(self):
-        feature_names = self.env_.begin().get("feature_names".encode("ascii"))
+        if not self.single_file:
+            feature_names = self.envs[0].begin().get("feature_names".encode("ascii"))
+        else:
+            feature_names = self.env.begin().get("feature_names".encode("ascii"))
         return pickle.loads(feature_names)
 
     @property
     def feature_size(self):
-        feature_size = self.env_.begin().get("feature_size".encode("ascii"))
+        if not self.single_file:
+            feature_size = self.envs[0].begin().get("feature_size".encode("ascii"))
+        else:
+            feature_size = self.env.begin().get("feature_size".encode("ascii"))
         return pickle.loads(feature_size)
 
     @property
-    def feature_info(self):
-        feature_info = self.env_.begin().get("feature_info".encode("ascii"))
-        return pickle.loads(feature_info)
+    def target_dict(self):
+        if not self.single_file:
+            target_dict = self.envs[0].begin().get("target_dict".encode("ascii"))
+        else:
+            target_dict = self.env.begin().get("target_dict".encode("ascii"))
+        return pickle.loads(target_dict)
 
 
 class Subset(Dataset):

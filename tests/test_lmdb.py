@@ -8,7 +8,7 @@ from qtaim_embed.core.datamodule import (
 from qtaim_embed.utils.data import (
     get_default_graph_level_config,
 )
-from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset
+from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset, TransformMol
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 from qtaim_embed.core.dataset import LMDBMoleculeDataset
 
@@ -39,11 +39,30 @@ def test_write():
     train_lmdb = LMDBMoleculeDataset({"src": config["dataset"]["train_lmdb"]})
     val_lmdb = LMDBMoleculeDataset({"src": config["dataset"]["val_lmdb"]})
     test_lmdb = LMDBMoleculeDataset({"src": config["dataset"]["test_lmdb"]})
-
+    # print global properties 
+    #print(train_lmdb._keys, len(train_lmdb), train_lmdb.allowed_charges)
+    #print(train_lmdb.keys)
     assert train_lmdb.__len__() == train_dl_size
     assert val_lmdb.__len__() == val_dl_size
     assert test_lmdb.__len__() == test_dl_size
 
+def test_write_chunked():
+    config_w_test = get_default_graph_level_config()
+
+    dm = QTAIMGraphTaskDataModule(config=config_w_test)
+    feature_size, feat_name = dm.prepare_data("fit")
+    dm.setup("fit")
+
+    train_dl_size = len(dm.train_dataset)
+
+
+    
+    construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb/train_chunk/", chunk=25)
+    train_lmdb = LMDBMoleculeDataset({"src": "./data/lmdb/train_chunk/"})
+    assert train_lmdb.__len__() == train_dl_size
+    assert TransformMol(train_lmdb.__getitem__(27)).ndata["labels"] == dm.train_dataset[27].ndata["labels"]
+    assert TransformMol(train_lmdb.__getitem__(2)).ndata["labels"] == dm.train_dataset[2].ndata["labels"]
+    assert TransformMol(train_lmdb.__getitem__(40)).ndata["labels"] == dm.train_dataset[40].ndata["labels"]
 
 def test_multi_out():
 

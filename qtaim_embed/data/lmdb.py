@@ -53,47 +53,106 @@ def load_dgl_graph_from_serialized(serialized_graph):
     return graphs[0]  # Assuming there's only one graph
 
 
-def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values):
+def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int = -1):
+    """
+    Write the molecule graphs to lmdb
+    Takes: 
+        graphs: list of molecule graphs
+        lmdb_dir: directory to save the lmdb
+        lmdb_name: name of the lmdb
+        global_values: dictionary of global values
+        chunk: chunk size(default of -1 means no chunking)
+    Returns:
+        None
+    """
+
     os.makedirs(lmdb_dir, exist_ok=True)
-
+    
     key_template = ["molecule_graph"]
+    
     dataset = [{k: v for k, v in zip(key_template, values)} for values in zip(graphs)]
+    
+    if chunk > 0:
+        dataset_chunk = []
+        for i in range(0, len(dataset), chunk):
+            dataset_chunk.append(dataset[i : i + chunk])
 
-    db = lmdb.open(
-        lmdb_dir + lmdb_name,
-        map_size=int(1099511627776 * 2),
-        subdir=False,
-        meminit=False,
-        map_async=True,
-    )
+        for ind, chunk in enumerate(dataset_chunk):
+            # create lmdb for each chunk
+            lmdb_chunk_name = f"{lmdb_name}_{ind}.lmdb"
+            lmdb_chunk_dir = os.path.join(lmdb_dir, lmdb_chunk_name)
+            db = lmdb.open(
+                lmdb_chunk_dir,
+                map_size=int(1099511627776 * 2),
+                subdir=False,
+                meminit=False,
+                map_async=True,
+            )
+            # write samples
+            for ind, sample in enumerate(chunk):
+                # sample_index = sample["molecule_index"]
+                sample_index = ind
+                txn = db.begin(write=True)
+                txn.put(
+                    # let index of molecule identical to index of sample
+                    f"{sample_index}".encode("ascii"),
+                    pickle.dumps(sample, protocol=-1),
+                )
+                txn.commit()
+            # write properties.
+            txn = db.begin(write=True)
+            txn.put("length".encode("ascii"), pickle.dumps(len(chunk), protocol=-1))
+            txn.commit()
 
-    # write samples
-    for ind, sample in enumerate(dataset):
-        # sample_index = sample["molecule_index"]
-        sample_index = ind
-        txn = db.begin(write=True)
-        txn.put(
-            # let index of molecule identical to index of sample
-            f"{sample_index}".encode("ascii"),
-            pickle.dumps(sample, protocol=-1),
+            for key, value in global_values.items():
+                #print(key, value)
+                txn = db.begin(write=True)
+                txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
+                txn.commit()
+            # write the chunk size
+            txn = db.begin(write=True)
+            txn.put("length_chunk".encode("ascii"), pickle.dumps(len(chunk), protocol=-1))
+            txn.commit()
+            db.sync()
+            db.close()
+
+    else: 
+        db = lmdb.open(
+            lmdb_dir + lmdb_name,
+            map_size=int(1099511627776 * 2),
+            subdir=False,
+            meminit=False,
+            map_async=True,
         )
-        txn.commit()
 
-    # write properties.
-    txn = db.begin(write=True)
-    txn.put("length".encode("ascii"), pickle.dumps(len(dataset), protocol=-1))
-    txn.commit()
+        # write samples
+        for ind, sample in enumerate(dataset):
+            # sample_index = sample["molecule_index"]
+            sample_index = ind
+            txn = db.begin(write=True)
+            txn.put(
+                # let index of molecule identical to index of sample
+                f"{sample_index}".encode("ascii"),
+                pickle.dumps(sample, protocol=-1),
+            )
+            txn.commit()
 
-    for key, value in global_values.items():
+        # write properties.
         txn = db.begin(write=True)
-        txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
+        txn.put("length".encode("ascii"), pickle.dumps(len(dataset), protocol=-1))
         txn.commit()
 
-    db.sync()
-    db.close()
+        for key, value in global_values.items():
+            #print(key, value)
+            txn = db.begin(write=True)
+            txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
+            txn.commit()
+
+        db.sync()
+        db.close()
 
 
-def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str):
+def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1):
     """
     Converts dataset to lmdb and saves it to the specified directory
     Takes:
@@ -105,7 +164,7 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str):
 
     if type(dataset) == Subset:
         feature_size = dataset.dataset.feature_size
-        feature_name = dataset.dataset.feature_names
+        feature_names = dataset.dataset.feature_names
         element_set = dataset.dataset.element_set
         log_scale_features = dataset.dataset.log_scale_features
         allowed_charges = dataset.dataset.allowed_charges
@@ -120,7 +179,7 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str):
 
     else:
         feature_size = dataset.feature_size
-        feature_name = dataset.feature_names
+        feature_names = dataset.feature_names
         element_set = dataset.element_set
         log_scale_features = dataset.log_scale_features
         allowed_charges = dataset.allowed_charges
@@ -133,13 +192,14 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str):
 
     global_dict = {
         "feature_size": feature_size,
-        "feature_names": feature_name,
+        "feature_names": feature_names,
         "element_set": element_set,
-        "ring_size_set": allowed_ring_size,
+        "allowed_ring_size": allowed_ring_size,
         "allowed_charges": allowed_charges,
         "allowed_spins": allowed_spins,
         "target_dict": target_dict,
         "extra_dataset_info": extra_dataset_info,
+        "log_scale_features": log_scale_features,
     }
 
     print("...> writing molecules to lmdb")
@@ -149,10 +209,8 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str):
         lmdb_dir=lmdb_dir,
         lmdb_name="molecule.lmdb",
         global_values=global_dict,
+        chunk=chunk,
     )
-
-
-#def omol_read_lmdbs(chunked: bool):
 
 
 def combined_mean_std(mean_list, std_list, count_list):
