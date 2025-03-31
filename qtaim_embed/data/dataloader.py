@@ -206,7 +206,10 @@ def get_negative_graph_explicit(graph_pos):
             all_edges.append((i, j))
     # remove positive edges
     for i in range(num_edges):
-        all_edges.remove((source[i].item(), dest[i].item()))
+        all_edges.remove((int(source[i]), int(dest[i])))
+        #all_edges.remove((source[i].item(), dest[i].item()))
+        # TODO: remove item call 
+
     # get negative edges
     negative_edges = all_edges[:num_edges]
     # get negative graph

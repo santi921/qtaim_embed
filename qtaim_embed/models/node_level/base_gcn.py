@@ -290,7 +290,8 @@ class GCNNodePred(pl.LightningModule):
         )
     
     # disable jit on top level function 
-    @torch.compiler.disable(recursive=False)
+    #@torch.compiler.disable(recursive=False)
+    #@torch.jit.export  # Decorate the forward method for TorchScript
     def compiled_forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
         """
         Forward pass with JIT compatibility
@@ -310,9 +311,14 @@ class GCNNodePred(pl.LightningModule):
                         else len(self.target_dict[k])
                     )
                     feats[k] = v.reshape(-1, reshape_dim)
-
-        # filter features if output is None for one of the node types
-        feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
+        
+        #feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
+        
+        filtered_feats = {}
+        for k, v in feats.items():
+            if self.hparams.target_dict[k] != [None]:
+                filtered_feats[k] = v
+        feats = filtered_feats
 
         return feats
 
