@@ -12,8 +12,6 @@ import torch.autograd.profiler as profiler
         
         
     
-
-
 class UnifySize(nn.Module):
     """
     A layer to unify the feature size of nodes of different types.
@@ -37,7 +35,7 @@ class UnifySize(nn.Module):
             [nn.Linear(input_dim[k], output_dim, bias=False) for k in self.node_types]
         )
     
-    @torch.jit.export  # Decorate the forward method for TorchScript
+    #@torch.jit.export  # Decorate the forward method for TorchScript
     def forward(self, feats: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Args:
@@ -401,7 +399,8 @@ class SumPoolingThenCat(nn.Module):
         # for nt, sz in zip(ntypes, in_feats):
         #    if nt not in ntypes_direct_cat:
         #        self.layers[nt] = dgl.SumPooling(ntype=nt)
-
+    
+    @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -453,6 +452,7 @@ class WeightAndSumThenCat(nn.Module):
         # for ntype, size in zip(ntypes, in_feats):
         #    self.layers[ntype] = WeightAndSum(in_feats=size)
 
+    @torch.jit.export  # Decorate the forward method for TorchScrip
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -511,6 +511,7 @@ class MeanPoolingThenCat(nn.Module):
         #    if nt not in ntypes_direct_cat:
         #        self.layers[nt] = dgl.SumPooling(ntype=nt)
 
+    @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -561,7 +562,8 @@ class WeightAndMeanThenCat(nn.Module):
 
         # for ntype, size in zip(ntypes, in_feats):
         #    self.layers[ntype] = WeightAndSum(in_feats=size)
-
+    
+    @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -618,7 +620,8 @@ class GlobalAttentionPoolingThenCat(nn.Module):
         self.gate_nn = nn.ModuleDict()
         for ntype, in_feat in zip(ntypes, in_feats):
             self.gate_nn[ntype] = nn.Linear(in_feat, 1)
-
+    
+    @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(self, graph, feats, get_attention=False):
         with profiler.record_function("GAT Global"):
 
@@ -670,20 +673,29 @@ class MultitaskLinearSoftmax(nn.Module):
 
      Args:
         n_tasks: number of tasks
+        in_feats: input feature size
+        out_feats: output feature size
     """
 
     def __init__(self, n_tasks, in_feats, out_feats):
         super(MultitaskLinearSoftmax, self).__init__()
         self.n_tasks = n_tasks
+        """     
         self.layers_dict = nn.ModuleDict()
+
         for i in range(n_tasks):
             self.layers_dict[str(i)] = nn.ModuleList()
             self.layers_dict[str(i)].append(nn.Linear(in_feats, out_feats))
             self.layers_dict[str(i)].append(nn.Softmax(dim=1))
+        """
 
-    def forward(self, x):
-        
-        ret_dict = {}
+        # Create a single linear layer for each task
+        self.linear_layers = nn.Linear(in_feats, out_feats * n_tasks, bias=True)
+        self.out_feats = out_feats
+    
+    @torch.jit.export  # Decorate the forward method for TorchScript
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """ret_dict = {}
         for i in range(self.n_tasks):
             x_temp = x
             task_layers = self.layers_dict[str(i)]  # Store in a local variable
@@ -691,4 +703,15 @@ class MultitaskLinearSoftmax(nn.Module):
                 x_temp = layer(x_temp)
             ret_dict[str(i)] = x_temp
         out_dict_as_tensor = torch.stack([ret_dict[k] for k in ret_dict.keys()], dim=1)
-        return out_dict_as_tensor
+        return out_dict_as_tensor"""
+
+        # Apply the linear layer to produce (batch_size, n_tasks * out_feats)
+        linear_output = self.linear_layers(x)
+
+        # Reshape to (batch_size, n_tasks, out_feats)
+        reshaped_output = linear_output.view(x.size(0), self.n_tasks, self.out_feats)
+
+        # Apply softmax along the last dimension (out_feats)
+        softmax_output = torch.softmax(reshaped_output, dim=-1)
+
+        return softmax_output

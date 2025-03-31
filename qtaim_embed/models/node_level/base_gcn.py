@@ -290,7 +290,7 @@ class GCNNodePred(pl.LightningModule):
         )
     
     # disable jit on top level function 
-    @torch.jit.ignore
+    @torch.compiler.disable(recursive=False)
     def compiled_forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
         """
         Forward pass with JIT compatibility
