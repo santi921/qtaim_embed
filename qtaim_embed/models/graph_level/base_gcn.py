@@ -505,11 +505,12 @@ class GCNGraphPred(pl.LightningModule):
         """
         Compute loss
         """
-        print("target type: ", type(target))
-        print("pred type: ", type(pred))
+        #print("target type: ", type(target))
+        #print("pred type: ", type(pred))
         if self.hparams.ntasks > 1:
             loss = 0
-            # print("target shape", target.shape)
+            #print("target shape", target.shape)
+            #print("pred shape", pred.shape)
             for i in range(self.hparams.ntasks):
                 loss += self.loss[i](target[:, i], pred[:, i])
             return loss
@@ -552,15 +553,18 @@ class GCNGraphPred(pl.LightningModule):
 
     def shared_step(self, batch: tuple, mode: str, scalers: Optional[list] = None):
         
-        #print("batch type: ", type(batch))
-        #print("batch graph type: ", type(batch[0]))
-
         batch_graph, batch_label = batch
+        #print("batch label: ", batch_label)
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
         labels = batch_label["global"]
-        all_loss = self.compute_loss(logits, labels)
+        #print("labels shape: ", labels.shape)
+        #print("logits shape: ", logits.shape)
+        all_loss = self.compute_loss(
+            pred=logits, 
+            target=labels
+        )
         logits = logits.view(-1, self.hparams.ntasks)
         labels = labels.view(-1, self.hparams.ntasks)
         if type(all_loss) == list: 

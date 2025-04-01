@@ -41,6 +41,7 @@ ckpt*
 *npy
 *xyz
 *sdf
+*smi
 *pkl
 *gzip
 *json

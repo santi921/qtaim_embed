@@ -755,22 +755,34 @@ class LMDBDataModule(pl.LightningDataModule):
                 self.transforms = None
 
     def prepare_data(self, stage=None):
+        
         if "test_lmdb" in self.config["dataset"]:
+            # check if there is a single lmdb, if so use it, else leave the folder
+            check_file = os.path.join(self.test_lmdb_loc, "molecule.lmdb")
+            if not os.path.exists(check_file):
+                check_file = self.test_lmdb_loc
 
             self.test_dataset = LMDBMoleculeDataset(
-                config={"src": os.path.join(self.test_lmdb_loc, "molecule.lmdb")},
+                config={"src": check_file},
                 transform=TransformMol,
             )
 
         if "val_lmdb" in self.config["dataset"]:
+            check_file = os.path.join(self.val_lmdb_loc, "molecule.lmdb")
+            if not os.path.exists(check_file):
+                check_file = self.val_lmdb_loc
 
             self.val_dataset = LMDBMoleculeDataset(
-                config={"src": os.path.join(self.val_lmdb_loc, "molecule.lmdb")},
+                config={"src": check_file},
                 transform=TransformMol,
             )
+        
+        check_file = os.path.join(self.train_lmdb_loc, "molecule.lmdb")
+        if not os.path.exists(check_file):
+            check_file = self.train_lmdb_loc
 
         self.train_dataset = LMDBMoleculeDataset(
-            config={"src": os.path.join(self.train_lmdb_loc, "molecule.lmdb")},
+            config={"src": check_file},
             transform=TransformMol,
         )
 
@@ -843,24 +855,34 @@ class LMDBLinkDataModule(pl.LightningDataModule):
 
     def prepare_data(self, stage=None):
         if "test_lmdb" in self.config["dataset"]:
+            # check if there is a single lmdb, if so use it, else leave the folder
+            check_file = os.path.join(self.test_lmdb_loc, "molecule.lmdb")
+            if not os.path.exists(check_file):
+                check_file = self.test_lmdb_loc
 
             self.test_dataset = LMDBMoleculeDataset(
-                config={"src": os.path.join(self.test_lmdb_loc, "molecule.lmdb")},
+                config={"src": check_file},
                 transform=TransformMol,
             )
 
         if "val_lmdb" in self.config["dataset"]:
+            check_file = os.path.join(self.val_lmdb_loc, "molecule.lmdb")
+            if not os.path.exists(check_file):
+                check_file = self.val_lmdb_loc
 
             self.val_dataset = LMDBMoleculeDataset(
-                config={"src": os.path.join(self.val_lmdb_loc, "molecule.lmdb")},
+                config={"src": check_file},
                 transform=TransformMol,
             )
+        
+        check_file = os.path.join(self.train_lmdb_loc, "molecule.lmdb")
+        if not os.path.exists(check_file):
+            check_file = self.train_lmdb_loc
 
-        if "train_lmdb" in self.config["dataset"]:
-            self.train_dataset = LMDBMoleculeDataset(
-                config={"src": os.path.join(self.train_lmdb_loc, "molecule.lmdb")},
-                transform=TransformMol,
-            )
+        self.train_dataset = LMDBMoleculeDataset(
+            config={"src": check_file},
+            transform=TransformMol,
+        )
 
         return self.train_dataset.feature_names, self.train_dataset.feature_size
 

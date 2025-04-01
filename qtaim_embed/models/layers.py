@@ -242,6 +242,9 @@ class ResidualBlock(nn.Module):
                     feat[k].add_(input_feats[k])
             return feat
         
+#class AttentionBlock(nn.Module):
+# TODO
+        
         
 class Set2Set(nn.Module):
     r"""
@@ -683,6 +686,10 @@ class GlobalAttentionPoolingThenCat(nn.Module):
             else:
                 return rst
 
+
+#class GlobalTransformerPoolingThenCat(nn.Module):
+# TODO
+        
 
 class MultitaskLinearSoftmax(nn.Module):
     """

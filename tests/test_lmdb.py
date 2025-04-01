@@ -15,9 +15,20 @@ from qtaim_embed.core.dataset import LMDBMoleculeDataset
 
 def test_write():
     config_w_test = get_default_graph_level_config()
+    config_w_test["dataset"]['target_list'] = ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"]
+    
+    config_w_test["dataset"]['extra_keys'] = {
+        "atom": ["extra_feat_atom_esp_total"],
+        "bond": [
+            "extra_feat_bond_esp_total",
+            "bond_length",
+        ],
+        "global": ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"],
+    }
 
     dm = QTAIMGraphTaskDataModule(config=config_w_test)
     feature_size, feat_name = dm.prepare_data("fit")
+    print(feature_size, feat_name)
     dm.setup("fit")
 
     train_dl_size = len(dm.train_dataset)
@@ -33,36 +44,50 @@ def test_write():
             "train_lmdb": "./data/lmdb/train/molecule.lmdb",
             "val_lmdb": "./data/lmdb/val/molecule.lmdb",
             "test_lmdb": "./data/lmdb/test/molecule.lmdb",
+            "target_dict": {
+                "global": ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"]
+            },
         }
     }
-
+    
     train_lmdb = LMDBMoleculeDataset({"src": config["dataset"]["train_lmdb"]})
     val_lmdb = LMDBMoleculeDataset({"src": config["dataset"]["val_lmdb"]})
     test_lmdb = LMDBMoleculeDataset({"src": config["dataset"]["test_lmdb"]})
     # print global properties 
-    #print(train_lmdb._keys, len(train_lmdb), train_lmdb.allowed_charges)
-    #print(train_lmdb.keys)
+    
     assert train_lmdb.__len__() == train_dl_size
     assert val_lmdb.__len__() == val_dl_size
     assert test_lmdb.__len__() == test_dl_size
+    
 
 def test_write_chunked():
     config_w_test = get_default_graph_level_config()
+    config_w_test["dataset"]['target_list'] = ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"]
+
+    config_w_test["dataset"]['extra_keys'] = {
+        "atom": ["extra_feat_atom_esp_total"],
+        "bond": [
+            "extra_feat_bond_esp_total",
+            "bond_length",
+        ],
+        "global": ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"],
+    }
 
     dm = QTAIMGraphTaskDataModule(config=config_w_test)
+    
     feature_size, feat_name = dm.prepare_data("fit")
+    print(feature_size, feat_name)
     dm.setup("fit")
-
     train_dl_size = len(dm.train_dataset)
 
-
-    
     construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb/train_chunk/", chunk=25)
     train_lmdb = LMDBMoleculeDataset({"src": "./data/lmdb/train_chunk/"})
+    # compare tensors 
+    assert torch.equal(TransformMol(train_lmdb.__getitem__(27)).ndata["labels"]['global'], dm.train_dataset[27].ndata["labels"]['global'])
+    assert torch.equal(TransformMol(train_lmdb.__getitem__(2)).ndata["labels"]['global'], dm.train_dataset[2].ndata["labels"]['global'])
+    assert torch.equal(TransformMol(train_lmdb.__getitem__(40)).ndata["labels"]['global'], dm.train_dataset[40].ndata["labels"]['global'])
     assert train_lmdb.__len__() == train_dl_size
-    assert TransformMol(train_lmdb.__getitem__(27)).ndata["labels"] == dm.train_dataset[27].ndata["labels"]
-    assert TransformMol(train_lmdb.__getitem__(2)).ndata["labels"] == dm.train_dataset[2].ndata["labels"]
-    assert TransformMol(train_lmdb.__getitem__(40)).ndata["labels"] == dm.train_dataset[40].ndata["labels"]
+
 
 def test_multi_out():
 
@@ -132,14 +157,16 @@ def test_model_lmdb():
     }
 
     # check that the folders have been created with the correct number of files
+    config["optim"]["train_batch_size"] = 4
     dm_lmdb = LMDBDataModule(config=config)
     feat_name, feature_size = dm_lmdb.prepare_data()
-    print(feature_size)
+    #print(feature_size)
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
     config["model"]["target_dict"] = config["dataset"]["target_dict"]
-    print(config["model"])
+    #print(config["model"])
+    
     model = load_graph_level_model_from_config(config["model"])
     dm_lmdb.setup("fit")
     dl = dm_lmdb.train_dataloader()
@@ -158,4 +185,43 @@ def test_model_lmdb():
     trainer.fit(model, dl)
 
 
-#
+def test_model_lmdb_multi_file():
+    config = get_default_graph_level_config()
+
+    config["dataset"] = {
+        "train_lmdb": "./data/lmdb/train_chunk/",
+        "val_lmdb": "./data/lmdb/train_chunk/",
+        "test_lmdb": "./data/lmdb/train_chunk/",
+        "target_dict": {
+            "global": ["extra_feat_global_E1_CAM", "extra_feat_global_E2_CAM"]
+        },
+    }
+
+    # check that the folders have been created with the correct number of files
+    config["optim"]["train_batch_size"] = 4
+    dm_lmdb = LMDBDataModule(config=config)
+    feat_name, feature_size = dm_lmdb.prepare_data()
+    print(feature_size, feat_name)
+    config["model"]["atom_feature_size"] = feature_size["atom"]
+    config["model"]["bond_feature_size"] = feature_size["bond"]
+    config["model"]["global_feature_size"] = feature_size["global"]
+    config["model"]["target_dict"] = config["dataset"]["target_dict"]
+    
+    #print(config["model"])
+    model = load_graph_level_model_from_config(config["model"])
+    dm_lmdb.setup("fit")
+    dl = dm_lmdb.train_dataloader()
+    
+    trainer = pl.Trainer(
+        max_epochs=1,
+        accelerator="gpu",
+        enable_progress_bar=True,
+        devices=1,
+        strategy="auto",
+        enable_checkpointing=True,
+        default_root_dir="./test_save_load/",
+        precision=16,
+    )
+
+    trainer.fit(model, dl)
+
