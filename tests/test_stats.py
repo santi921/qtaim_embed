@@ -3,7 +3,6 @@ from qtaim_embed.models.link_pred.losses import (
     CrossEntropyMetric,
     AUCMetric,
     MarginMetric,
-    F1Metric,
     AccuracyMetric,
     compute_loss_hinge,
     compute_loss_margin,

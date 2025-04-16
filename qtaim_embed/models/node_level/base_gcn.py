@@ -296,8 +296,8 @@ class GCNNodePred(pl.LightningModule):
         """
         Forward pass with JIT compatibility
         """
-        with profiler.record_function("Embedding"):
-            feats = self.embedding(inputs)
+        
+        feats = self.embedding(inputs)
 
         for ind, conv in enumerate(self.conv_layers):
             feats = conv(graph, feats)
@@ -377,32 +377,33 @@ class GCNNodePred(pl.LightningModule):
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
         #print("lmdb batch", batch_graph, batch_label.keys())
-        max_nodes = -1
+        with profiler.record_function("Post Forward"):
+            max_nodes = -1
 
-        for target_type, target_list in self.hparams.target_dict.items():
-            if target_list != [None] and len(target_list) > 0:
-                labels = batch_label[target_type]
-                logits_temp = logits[target_type]
-                if max_nodes < logits_temp.shape[0]:
-                    max_nodes = logits_temp.shape[0]
-                logits_list.append(logits_temp)
-                labels_list.append(labels)
-        logits_list = [
-            F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in logits_list
-        ]  # unify node size
-        labels_list = [
-            F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in labels_list
-        ]  # unify node size
+            for target_type, target_list in self.hparams.target_dict.items():
+                if target_list != [None] and len(target_list) > 0:
+                    labels = batch_label[target_type]
+                    logits_temp = logits[target_type]
+                    if max_nodes < logits_temp.shape[0]:
+                        max_nodes = logits_temp.shape[0]
+                    logits_list.append(logits_temp)
+                    labels_list.append(labels)
+            logits_list = [
+                F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in logits_list
+            ]  # unify node size
+            labels_list = [
+                F.pad(i, (0, 0, 0, max_nodes - i.shape[0])) for i in labels_list
+            ]  # unify node size
 
-        logits = torch.cat(logits_list, dim=1)
-        labels = torch.cat(labels_list, dim=1)
+            logits = torch.cat(logits_list, dim=1)
+            labels = torch.cat(labels_list, dim=1)
 
-         
-        all_loss = self.compute_loss(logits, labels)
+            # compute loss
+            all_loss = self.compute_loss(logits, labels)
         
-        # compat with older torchmetrics/dgl 
-        if type(all_loss) == list: 
-            all_loss = torch.stack(all_loss)
+            # compat with older torchmetrics/dgl 
+            if type(all_loss) == list: 
+                all_loss = torch.stack(all_loss)
 
 
         # log loss
@@ -463,7 +464,22 @@ class GCNNodePred(pl.LightningModule):
         """
         Train step
         """
-        return self.shared_step(batch, mode="train")
+        with torch.profiler.record_function("Forward Train Step"):
+            return self.shared_step(batch, mode="train")
+
+    def optimizer_step(
+        self,
+        epoch: int,
+        batch_idx: int,
+        optimizer: torch.optim.Optimizer,
+        optimizer_idx: int,
+
+    ): 
+        """
+        Optimizer step
+        """
+        with torch.profiler.record_function("Optimizer Step"):
+            super().optimizer_step(epoch, batch_idx, optimizer, optimizer_idx)
 
     def validation_step(
         self, 
@@ -473,15 +489,20 @@ class GCNNodePred(pl.LightningModule):
         """
         Val step
         """
-        return self.shared_step(batch, mode="val")
+        with torch.profiler.record_function("Forward Val Step"):
+            return self.shared_step(batch, mode="val")
 
     def test_step(
         self, 
         batch: tuple, 
         batch_idx: int
     ):
-        # Todo
-        return self.shared_step(batch, mode="test")
+        with torch.profiler.record_function("Forward Test Step"):
+            return self.shared_step(batch, mode="test")
+
+    def backward(self, loss):
+        with torch.profiler.record_function("Backward Pass"):
+            super().backward(loss)
 
     def on_train_epoch_end(self):
         """
@@ -598,20 +619,20 @@ class GCNNodePred(pl.LightningModule):
         """
         Update metrics using torchmetrics interfaces
         """
+        with torch.profiler.record_function("update metrics"):
+            if mode == "train":
+                self.train_r2.update(pred, target)
+                self.train_torch_l1.update(pred, target)
+                self.train_torch_mse.update(pred, target)
+            elif mode == "val":
+                self.val_r2.update(pred, target)
+                self.val_torch_l1.update(pred, target)
+                self.val_torch_mse.update(pred, target)
 
-        if mode == "train":
-            self.train_r2.update(pred, target)
-            self.train_torch_l1.update(pred, target)
-            self.train_torch_mse.update(pred, target)
-        elif mode == "val":
-            self.val_r2.update(pred, target)
-            self.val_torch_l1.update(pred, target)
-            self.val_torch_mse.update(pred, target)
-
-        elif mode == "test":
-            self.test_r2.update(pred, target)
-            self.test_torch_l1.update(pred, target)
-            self.test_torch_mse.update(pred, target)
+            elif mode == "test":
+                self.test_r2.update(pred, target)
+                self.test_torch_l1.update(pred, target)
+                self.test_torch_mse.update(pred, target)
 
     def compute_metrics(self, mode):
         """

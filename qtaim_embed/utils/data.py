@@ -304,6 +304,7 @@ def get_default_graph_level_config():
         },
     }
 
+
 def get_default_graph_level_config_classif():
     root = Path(__file__).parent.parent.parent
     # to string

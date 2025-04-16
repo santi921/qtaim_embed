@@ -5,6 +5,20 @@ from sklearn.preprocessing import StandardScaler as sk_StandardScaler
 import numpy as np
 import dgl
 
+def compute_running_average(
+    old_avg: float, new_value: float, n: int, n_new: Optional[int] = 1
+) -> float:
+    """simple running average
+    Args:
+        old_avg (float): old average
+        new_value (float): new value
+        n (int): number of samples
+        n_new (Optional[int]): number of new samples
+    """
+    if n == 0:
+        return new_value
+    return old_avg + (new_value - old_avg) * n_new / n
+
 
 def _transform(X, copy, with_mean=True, with_std=True, threshold=1.0e-3, eta=1.0e-3):
     """
@@ -120,6 +134,7 @@ class HeteroGraphStandardScaler:
         return self._std
 
     def __call__(self, graphs) -> List[dgl.DGLGraph]:
+        #print("SCALLING CALL ON STANDARD CALLED")
         g = graphs[0]
         # node_types = g.ntypes
         node_feats = defaultdict(list)
@@ -227,6 +242,225 @@ class HeteroGraphStandardScaler:
                 feats_temp = node_feats_flat * self._std[nt] + self._mean[nt]
                 feats_ret[nt] = feats_temp
         return feats_ret
+
+
+class HeteroGraphStandardScalerIterative: 
+    """
+    Standardize hetero graph features by centering and normalization.
+    Only node features are standardized. This variant differs because it 
+    computes the mean and std iteratively. This is useful for large datasets
+    where the mean and std cannot be computed in one go.
+
+    The mean and std can be provided for standardization. If `None` they are computed
+    from the features of the graphs.
+
+    Args:
+        copy: whether to copy the values as used by sklearn.preprocessing.StandardScaler
+        mean: with node type as key and the mean value as the value
+        std: with node type as key and the std value as the value
+
+    Returns:
+        Graphs with their node features standardized. Note, these are the input graphs.
+    """
+
+    def __init__(
+        self,
+        copy: bool = True,
+        features_tf: bool = True,
+        mean: Optional[Dict[str, torch.Tensor]] = {},
+        std: Optional[Dict[str, torch.Tensor]] = {},
+    ):
+        self.copy = copy
+        self._mean = mean
+        self._std = std
+        self._sum_x2 = {}
+        self.features_tf = features_tf
+        self.dict_node_sizes = {}
+        self.finalized = False
+        
+    def update(self, graphs):
+        """
+        Update the class mean and std values from the given graphs.
+        Don't standardize the graphs in this pass 
+        Takes:
+            graphs: list of dgl graphs
+        """
+        g = graphs[0]
+        # node_types = g.ntypes
+        node_feats = defaultdict(list)
+        
+        if self.features_tf: # separate track for features and labels
+            graph_key = "feat"
+        else:
+            graph_key = "labels"
+        
+        node_types = list(g.ndata[graph_key].keys())
+        # obtain feats from ALL graphs
+        
+        for g in graphs:
+            for nt in node_types:
+                data = g.nodes[nt].data[graph_key]
+                node_feats[nt].append(data)
+                #node_feats_size[nt].append(len(data))
+
+        # standardize
+
+        dtype = node_feats[node_types[0]][0].dtype
+        
+        for nt in node_types:
+
+            # update running statistics for new node types
+            if nt not in self._mean:
+                self._mean[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=dtype)
+                self._sum_x2[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=dtype)
+                self._std[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=dtype)
+                self.dict_node_sizes[nt] = 0
+            
+            if torch.cat(node_feats[nt]).shape[1] > 0:
+                feats = torch.cat(node_feats[nt])
+                mean = torch.mean(feats, dim=0)
+                mean = torch.tensor(mean, dtype=dtype)
+                self._sum_x2[nt] += torch.sum(feats ** 2, dim=0)  # Accumulate sum of squares
+                # Update node size before calling compute_running_average
+                self.dict_node_sizes[nt] += feats.shape[0]
+                self._mean[nt] = compute_running_average(
+                    self._mean[nt], mean, self.dict_node_sizes[nt], feats.shape[0]
+                )
+
+    def finalize(self):
+        """
+        Finalize the scaler by computing the mean and std from the given graphs.
+        This is done by iterating over the graphs and computing the mean and std
+        for each node type. The mean and std are stored in the class.
+        """
+        # compute std from mean and sum_x2
+        print("...> finalizing scaler")
+        for nt in self._mean.keys():
+            if self.dict_node_sizes[nt] > 0:
+                # compute std from mean and sum_x2
+                self._std[nt] = torch.sqrt(self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2)
+            else:
+                self._std[nt] = torch.zeros_like(self._mean[nt])
+        self.finalized = True
+
+    def __call__(self, graphs) -> List[dgl.DGLGraph]:
+
+        # assert that the scaler is finalized 
+        assert self.finalized, "must finalize the scaler before using it"
+
+        g = graphs[0]
+        # node_types = g.ntypes
+        node_feats = defaultdict(list)
+        node_feats_size = defaultdict(list)
+        if self.features_tf:
+            graph_key = "feat"
+        else:
+            graph_key = "labels"
+        node_types = list(g.ndata[graph_key].keys())
+        # obtain feats from ALL graphs
+        for g in graphs:
+            for nt in node_types:
+                data = g.nodes[nt].data[graph_key]
+                node_feats[nt].append(data)
+                node_feats_size[nt].append(len(data))
+
+        # standardize
+        if self._mean is not {} and self._std is not {}:
+            for nt in node_types:
+                feats = (torch.cat(node_feats[nt]) - self._mean[nt]) / self._std[nt]
+                node_feats[nt] = feats
+
+        # assign data back
+        for nt in node_types:
+            feats = torch.split(node_feats[nt], node_feats_size[nt])
+            for g, ft in zip(graphs, feats):
+                g.nodes[nt].data[graph_key] = ft
+
+        return graphs
+
+
+    @property
+    def mean(self):
+        """
+        Returns the mean of the scaler.
+        """
+        return self._mean
+    
+    @property
+    def std(self):
+        """
+        Returns the std of the scaler.
+        """
+        return self._std
+    
+
+    def inverse(self, graphs):
+        """
+        Perform inverse standardization on the given features.
+        Takes:
+            graphs: list of dgl graphs
+        Returns:
+            graphs: list of dgl graphs with inverse standardized features
+        """
+        # check that mean and std are not None
+        assert (
+            self._mean is not None and self._std is not None
+        ), "must set up scaler first before inverting data"
+
+        assert self.finalized, "must finalize the scaler before using it"
+
+        g = graphs[0]
+
+        node_feats = defaultdict(list)
+        node_feats_size = defaultdict(list)
+        if self.features_tf:
+            graph_key = "feat"
+        else:
+            graph_key = "labels"
+        # print("graph key", graph_key)
+        node_types = list(g.ndata[graph_key].keys())
+        # print("node types", node_types)
+        for g in graphs:
+            for nt in node_types:
+                data = g.nodes[nt].data[graph_key]
+                node_feats[nt].append(data)
+                node_feats_size[nt].append(len(data))
+
+        for nt in node_types:
+            if len(node_feats[nt]) != 0:
+                node_feats_flat = torch.cat(node_feats[nt])
+                feats = node_feats_flat * self._std[nt] + self._mean[nt]
+                node_feats[nt] = feats
+
+        for nt in node_types:
+            # node_feats[nt]
+            # node_feats_size[nt]
+            feats = torch.split(node_feats[nt], node_feats_size[nt])
+            for g, ft in zip(graphs, feats):
+                g.nodes[nt].data[graph_key] = ft
+        print("... > standard scaler - inverse done")
+        return graphs
+
+    def inverse_feats(self, feats):
+        """
+        Perform inverse standardization on the given features.
+        Takes:
+            feats: list of dgl graphs
+        Returns:
+            feats: list of dgl graphs with inverse standardized features
+        """
+        # node_feats = defaultdict(list)
+        assert self.finalized, "must finalize the scaler before using it"
+
+        feats_ret = {}
+        for nt in feats.keys():
+            if len(feats[nt]) != 0:
+                # node_feats_flat = torch.cat(feats[nt])
+                node_feats_flat = feats[nt]
+                feats_temp = node_feats_flat * self._std[nt] + self._mean[nt]
+                feats_ret[nt] = feats_temp
+        return feats_ret
+
 
 
 class HeteroGraphLogMagnitudeScaler:
@@ -389,3 +623,4 @@ class HeteroGraphLogMagnitudeScaler:
                 feats_ret[nt] = feats_temp
 
         return feats_ret
+

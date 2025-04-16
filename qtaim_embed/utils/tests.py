@@ -39,7 +39,6 @@ def get_dataset(
 ):
     # get the root directory for this package
     # (i.e. the directory where setup.py is located)
-    root_dir = Path(__file__).parent.parent
     dataset = HeteroGraphNodeLabelDataset(
         file="./data/labelled_data.pkl",
         allowed_ring_size=[3, 4, 5, 6, 7],

@@ -256,8 +256,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             print("... > Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
-            # self.scaler_feat_mean = scaler.mean
-            # self.scaler_feat_std = scaler.std
             self.feature_scalers.append(scaler)
             print("... > Scaling features complete")
             print("... > feature mean(s): \n", scaler.mean)
@@ -267,7 +265,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             print("... > Log scaling targets")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
             self.graphs = log_scaler(self.graphs)
-            # self.log_label_scaler = log_scaler
             self.label_scalers.append(log_scaler)
             print("... > Log scaling targets complete")
 
@@ -275,9 +272,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             print("... > Scaling targets")
             scaler = HeteroGraphStandardScaler(features_tf=False)
             self.graphs = scaler(self.graphs)
-            # self.scaler_label_mean = scaler.mean
-            # self.scaler_label_std = scaler.std
-            # self.standard_label_scaler = scaler
             self.label_scalers.append(scaler)
             print("... > Scaling targets complete")
             print("... > feature mean(s): \n", scaler.mean)
