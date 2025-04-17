@@ -137,3 +137,6 @@ def test_graph_datamodule():
     assert train_dl_2_size == 75, "Train size mismatch"
     assert val_dl_size == 20, "Val size mismatch"
     assert val_dl_2_size == 25, "Val size mismatch"
+
+
+#test_node_datamodule()

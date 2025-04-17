@@ -1,7 +1,6 @@
 import torch
 import dgl
 import numpy as np
-from typing import Optional, Dict, Any
 
 from qtaim_embed.data.grapher import HeteroCompleteGraphFromMolWrapper
 from qtaim_embed.data.featurizer import (

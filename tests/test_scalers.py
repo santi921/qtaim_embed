@@ -268,15 +268,14 @@ def test_iterative_standard_scaler():
     # compute iteratively through list of graphs
     
     feature_scaler_iterative = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
+    label_scaler_iterative = HeteroGraphStandardScalerIterative(features_tf=False, mean={}, std={})    
+
     # read in 4 graphs at a time
     for i in range(0, len(dataset_raw_for_iterative.graphs), 25):
         feature_scaler_iterative.update(dataset_raw_for_iterative.graphs[i:i+25])
-    feature_scaler_iterative.finalize()
-    
-    label_scaler_iterative = HeteroGraphStandardScalerIterative(features_tf=False, mean={}, std={})    
-    # read in 4 graphs at a time
-    for i in range(0, len(dataset_raw_for_iterative.graphs), 25):
         label_scaler_iterative.update(dataset_raw_for_iterative.graphs[i:i+25])
+    
+    feature_scaler_iterative.finalize()
     label_scaler_iterative.finalize()
     
     

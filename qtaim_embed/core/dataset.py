@@ -172,12 +172,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         exclude_names = {}
 
         for node_type, value_list in self.feat_names.items():
-            # if node_type not in include_locs:
-            #    include_locs[node_type] = []
-            #    exclude_locs[node_type] = []
-            #    include_names[node_type] = []
-            #    exclude_names[node_type] = []
-
             for i, value in enumerate(value_list):
                 if node_type in target_locs.keys():
                     if i in target_locs[node_type]:
@@ -207,10 +201,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
         if self.verbose:
             print("included in labels")
-            # print(self.include_locs)
             print(self.include_names)
             print("included in graph features")
-            # print(self.exclude_locs)
             print(self.exclude_names)
 
     def load(self):
@@ -231,12 +223,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                     ]
 
                     features_new.update(graph_features)
-                    # if key == "global":
                     labels[key] = graph.ndata["feat"][key][:, self.include_locs[key]]
-                    # else:
-                    #    labels[key] = graph.ndata["feat"][key][
-                    #        :, self.include_locs[key]
-                    #    ]
                 graph.ndata["feat"] = features_new
                 graph.ndata["labels"] = labels
 

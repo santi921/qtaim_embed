@@ -304,7 +304,7 @@ class HeteroGraphStandardScalerIterative:
                 #node_feats_size[nt].append(len(data))
 
         # standardize
-
+        #print(node_feats)
         dtype = node_feats[node_types[0]][0].dtype
         
         for nt in node_types:
@@ -319,7 +319,7 @@ class HeteroGraphStandardScalerIterative:
             if torch.cat(node_feats[nt]).shape[1] > 0:
                 feats = torch.cat(node_feats[nt])
                 mean = torch.mean(feats, dim=0)
-                mean = torch.tensor(mean, dtype=dtype)
+                mean = torch.as_tensor(mean, dtype=dtype, device=feats.device)
                 self._sum_x2[nt] += torch.sum(feats ** 2, dim=0)  # Accumulate sum of squares
                 # Update node size before calling compute_running_average
                 self.dict_node_sizes[nt] += feats.shape[0]
@@ -462,7 +462,6 @@ class HeteroGraphStandardScalerIterative:
         return feats_ret
 
 
-
 class HeteroGraphLogMagnitudeScaler:
     """
     Standardize hetero graph features or labels by log scalling their magnitude.
@@ -484,6 +483,7 @@ class HeteroGraphLogMagnitudeScaler:
         self.copy = copy
         self.features_tf = features_tf
         self.shift = shift
+        
 
     def __call__(self, graphs) -> List[dgl.DGLGraph]:
         g = graphs[0]

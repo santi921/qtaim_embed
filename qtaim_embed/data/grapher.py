@@ -15,6 +15,8 @@ class HeteroCompleteGraphFromMolWrapper:
         self.atom_featurizer = atom_featurizer
         self.bond_featurizer = bond_featurizer
         self.global_featurizer = global_featurizer
+        self.feat_names = None
+        
 
     def build_graph(self, mol):
         bonds = list(mol.bonds.keys())
@@ -83,7 +85,7 @@ class HeteroCompleteGraphFromMolWrapper:
             feat_dict, globe_feat = self.global_featurizer(mol, **kwargs)
             g.nodes["global"].data.update(feat_dict)
 
-        if ret_feat_names:
+        if ret_feat_names or self.feat_names is None:
             feat_names = {}
             if self.atom_featurizer is not None:
                 feat_names["atom"] = feat_atom
@@ -91,6 +93,9 @@ class HeteroCompleteGraphFromMolWrapper:
                 feat_names["bond"] = feat_bond
             if self.global_featurizer is not None:
                 feat_names["global"] = globe_feat
-            return g, feat_names
+            self.feat_names = feat_names
+            if ret_feat_names:
+                return g, feat_names
+
 
         return g
