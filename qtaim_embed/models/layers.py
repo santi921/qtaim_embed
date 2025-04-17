@@ -4,14 +4,13 @@ from typing import List, Tuple, Dict, Optional
 import dgl.nn.pytorch as dglnn
 import dgl
 from dgl.readout import sum_nodes, softmax_nodes
-        
+
 import torch
 from torch import nn
 import torch.nn.functional as F
 import torch.autograd.profiler as profiler
-        
-        
-    
+
+
 class UnifySize(nn.Module):
     """
     A layer to unify the feature size of nodes of different types.
@@ -34,7 +33,7 @@ class UnifySize(nn.Module):
             [nn.Linear(input_dim[k], output_dim, bias=False) for k in self.node_types]
         )
 
-        ''''
+        """'
         self.node_types = list(input_dim.keys())
         self.max_size = max(input_dim.values())  # Find the largest input size across all node types
 
@@ -42,8 +41,8 @@ class UnifySize(nn.Module):
         self.linears = nn.ModuleList(
             [nn.Linear(self.max_size, output_dim, bias=False) for _ in self.node_types]
         )
-        '''
-    
+        """
+
     def forward(self, feats: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Args:
@@ -58,10 +57,10 @@ class UnifySize(nn.Module):
             for i, node_type in enumerate(self.node_types):
                 output[node_type] = self.linears[i](feats[node_type])
 
-            # option 2 
+            # option 2
             return output
-            #return {k: self.linears[k](x) for k, x in feats.items()}
-    
+            # return {k: self.linears[k](x) for k, x in feats.items()}
+
 
 class GraphConvDropoutBatch(nn.Module):
     def __init__(
@@ -91,9 +90,9 @@ class GraphConvDropoutBatch(nn.Module):
         self.batch_norm = nn.BatchNorm1d(out_feats) if batch_norm_tf else None
         self.out_feats = out_feats
 
-    #@torch.compiler.disable(recursive=False)
-    #@torch.jit.export  # Decorate the forward method for TorchScript
-    #@torch.compiler.disable(recursive=True)
+    # @torch.compiler.disable(recursive=False)
+    # @torch.jit.export  # Decorate the forward method for TorchScript
+    # @torch.compiler.disable(recursive=True)
     def forward(
         self,
         graph: dgl.DGLGraph,
@@ -115,16 +114,16 @@ class GraphConvDropoutBatch(nn.Module):
 
             # Apply graph convolutional layer
             feat = self.graph_conv(graph, feat, weight, edge_weight)
-            
+
             # Apply dropout to output features
             if self.dropout is not None:
                 feat = self.dropout(feat)
-            
+
             # Apply batch normalization
             if self.batch_norm is not None:
                 feat = self.batch_norm(feat)
-        
-        return feat        
+
+        return feat
 
 
 class ResidualBlock(nn.Module):
@@ -135,7 +134,6 @@ class ResidualBlock(nn.Module):
         resid_n_graph_convs: int = 2,
         output_block: bool = False,
     ):
-
         """
         Args:
             layer_args: A dictionary containing arguments for each graph convolution layer.
@@ -206,14 +204,10 @@ class ResidualBlock(nn.Module):
                 )
 
         self.layers = nn.ModuleList(self.layers)
-        
-        self.out_feats = {
-            k: v.out_feats for k, v in self.layers[-1].mods.items()
-        }
 
-        
+        self.out_feats = {k: v.out_feats for k, v in self.layers[-1].mods.items()}
 
-    #@torch.compiler.disable(recursive=True)
+    # @torch.compiler.disable(recursive=True)
     def forward(
         self,
         graph: dgl.DGLGraph,
@@ -241,11 +235,12 @@ class ResidualBlock(nn.Module):
                 for k in feat.keys():
                     feat[k].add_(input_feats[k])
             return feat
-        
-#class AttentionBlock(nn.Module):
+
+
+# class AttentionBlock(nn.Module):
 # TODO
-        
-        
+
+
 class Set2Set(nn.Module):
     r"""
     Compared to the Official dgl implementation, we allowed node type.
@@ -419,8 +414,8 @@ class SumPoolingThenCat(nn.Module):
         # for nt, sz in zip(ntypes, in_feats):
         #    if nt not in ntypes_direct_cat:
         #        self.layers[nt] = dgl.SumPooling(ntype=nt)
-    
-    #@torch.jit.export  # Decorate the forward method for TorchScript
+
+    # @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -472,7 +467,7 @@ class WeightAndSumThenCat(nn.Module):
         # for ntype, size in zip(ntypes, in_feats):
         #    self.layers[ntype] = WeightAndSum(in_feats=size)
 
-    #@torch.jit.export  # Decorate the forward method for TorchScrip
+    # @torch.jit.export  # Decorate the forward method for TorchScrip
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -486,8 +481,8 @@ class WeightAndSumThenCat(nn.Module):
                 if ntype not in self.ntypes_direct_cat:
                     weight_dict[ntype] = self.atom_weighting[ntype](feats[ntype])
 
-            #graph.ndata["h"] = feats
-            #graph.ndata["w"] = weight_dict
+            # graph.ndata["h"] = feats
+            # graph.ndata["w"] = weight_dict
             graph.ndata.update({"h": feats, "w": weight_dict})
 
             for ntype in self.ntypes:
@@ -496,7 +491,7 @@ class WeightAndSumThenCat(nn.Module):
                         dgl.readout_nodes(graph, "h", "w", ntype=ntype, op="sum")
                     )
 
-        #if self.ntypes_direct_cat is not None:
+        # if self.ntypes_direct_cat is not None:
         #    for ntype in self.ntypes_direct_cat:
         #        rst.append(feats[ntype])
         if self.ntypes_direct_cat:
@@ -531,7 +526,7 @@ class MeanPoolingThenCat(nn.Module):
         #    if nt not in ntypes_direct_cat:
         #        self.layers[nt] = dgl.SumPooling(ntype=nt)
 
-    #@torch.jit.export  # Decorate the forward method for TorchScript
+    # @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
@@ -582,15 +577,15 @@ class WeightAndMeanThenCat(nn.Module):
 
         # for ntype, size in zip(ntypes, in_feats):
         #    self.layers[ntype] = WeightAndSum(in_feats=size)
-    
-    #@torch.jit.export  # Decorate the forward method for TorchScript
+
+    # @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(
         self, graph: dgl.DGLGraph, feats: Dict[str, torch.Tensor]
     ) -> Dict[str, torch.Tensor]:
         """
         Compute the sumpooling of each node type and each graph in the batch.
         """
-        
+
         rst = []
         with graph.local_scope():
             weight_dict = {}
@@ -598,8 +593,8 @@ class WeightAndMeanThenCat(nn.Module):
                 if ntype not in self.ntypes_direct_cat:
                     weight_dict[ntype] = self.atom_weighting[ntype](feats[ntype])
 
-            #graph.ndata["h"] = feats
-            #graph.ndata["w"] = weight_dict
+            # graph.ndata["h"] = feats
+            # graph.ndata["w"] = weight_dict
             graph.ndata.update({"h": feats, "w": weight_dict})
 
             for ntype in self.ntypes:
@@ -640,13 +635,13 @@ class GlobalAttentionPoolingThenCat(nn.Module):
         self.gate_nn = nn.ModuleDict()
         for ntype, in_feat in zip(ntypes, in_feats):
             self.gate_nn[ntype] = nn.Linear(in_feat, 1)
-    
-    #@torch.jit.export  # Decorate the forward method for TorchScript
+
+    # @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(self, graph, feats, get_attention=False):
         with profiler.record_function("GAT Global"):
 
             rst = []
-            
+
             readout_dict = {}
             gate_dict = {}
             gated_feats = {}
@@ -654,7 +649,9 @@ class GlobalAttentionPoolingThenCat(nn.Module):
                 # gather, assign gate to graph
                 for ntype in self.ntypes:
                     if ntype not in self.ntypes_direct_cat:
-                        gate_dict[ntype] = F.leaky_relu(self.gate_nn[ntype](feats[ntype]))
+                        gate_dict[ntype] = F.leaky_relu(
+                            self.gate_nn[ntype](feats[ntype])
+                        )
 
                 graph.ndata["gate"] = gate_dict
                 graph.nodes["atom"].data["gate"]
@@ -687,9 +684,9 @@ class GlobalAttentionPoolingThenCat(nn.Module):
                 return rst
 
 
-#class GlobalTransformerPoolingThenCat(nn.Module):
+# class GlobalTransformerPoolingThenCat(nn.Module):
 # TODO
-        
+
 
 class MultitaskLinearSoftmax(nn.Module):
     """
@@ -716,7 +713,7 @@ class MultitaskLinearSoftmax(nn.Module):
         # Create a single linear layer for each task
         self.linear_layers = nn.Linear(in_feats, out_feats * n_tasks, bias=True)
         self.out_feats = out_feats
-    
+
     @torch.jit.export  # Decorate the forward method for TorchScript
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """ret_dict = {}

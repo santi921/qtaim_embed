@@ -32,6 +32,7 @@ from qtaim_embed.models.layers import (
 
 from typing import List, Tuple, Dict, Optional
 
+
 class GCNGraphPred(pl.LightningModule):
     """
     Basic GNN model for graph-level regression
@@ -422,14 +423,9 @@ class GCNGraphPred(pl.LightningModule):
             else self.compiled_forward
         )
 
-    def compiled_forward(
-            self, 
-            graph: DGLHeteroGraph, 
-            feat: dict, 
-            eweight: str = None
-        ):
-        #print("graph type: ", type(graph))
-        #print("feat type: ", type(feat))
+    def compiled_forward(self, graph: DGLHeteroGraph, feat: dict, eweight: str = None):
+        # print("graph type: ", type(graph))
+        # print("feat type: ", type(feat))
 
         feats = self.embedding(feat)
         for ind, conv in enumerate(self.conv_layers):
@@ -440,7 +436,9 @@ class GCNGraphPred(pl.LightningModule):
                 for k, v in feats.items():
                     if ind < self.hparams.n_conv_layers - 1:
                         reshaped_feats[k] = v.view(
-                            v.size(0), -1, self.hparams.num_heads * self.hparams.hidden_size
+                            v.size(0),
+                            -1,
+                            self.hparams.num_heads * self.hparams.hidden_size,
                         )
                     else:
                         reshaped_feats[k] = v.view(
@@ -454,18 +452,13 @@ class GCNGraphPred(pl.LightningModule):
 
         return readout_feats
 
-    def forward(
-        self, 
-        graph: DGLHeteroGraph, 
-        feat: dict, 
-        eweight: str = None
-    ):
+    def forward(self, graph: DGLHeteroGraph, feat: dict, eweight: str = None):
         """
         Forward pass
         """
         # just use the compiled forward function
-        #print("graph type: ", type(graph))
-        #print("feat type: ", type(feat))
+        # print("graph type: ", type(graph))
+        # print("feat type: ", type(feat))
         return self.forward_fn(graph, feat, eweight)
 
     def loss_function(self):
@@ -497,20 +490,16 @@ class GCNGraphPred(pl.LightningModule):
 
         return loss_fn
 
-    def compute_loss(
-        self, 
-        target: torch.Tensor, 
-        pred: torch.Tensor
-    ):
+    def compute_loss(self, target: torch.Tensor, pred: torch.Tensor):
         """
         Compute loss
         """
-        #print("target type: ", type(target))
-        #print("pred type: ", type(pred))
+        # print("target type: ", type(target))
+        # print("pred type: ", type(pred))
         if self.hparams.ntasks > 1:
             loss = 0
-            #print("target shape", target.shape)
-            #print("pred shape", pred.shape)
+            # print("target shape", target.shape)
+            # print("pred shape", pred.shape)
             for i in range(self.hparams.ntasks):
                 loss += self.loss[i](target[:, i], pred[:, i])
             return loss
@@ -552,22 +541,19 @@ class GCNGraphPred(pl.LightningModule):
             layer_idx += 1
 
     def shared_step(self, batch: tuple, mode: str, scalers: Optional[list] = None):
-        
+
         batch_graph, batch_label = batch
-        #print("batch label: ", batch_label)
+        # print("batch label: ", batch_label)
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
         labels = batch_label["global"]
-        #print("labels shape: ", labels.shape)
-        #print("logits shape: ", logits.shape)
-        all_loss = self.compute_loss(
-            pred=logits, 
-            target=labels
-        )
+        # print("labels shape: ", labels.shape)
+        # print("logits shape: ", logits.shape)
+        all_loss = self.compute_loss(pred=logits, target=labels)
         logits = logits.view(-1, self.hparams.ntasks)
         labels = labels.view(-1, self.hparams.ntasks)
-        if type(all_loss) == list: 
+        if type(all_loss) == list:
             all_loss = torch.stack(all_loss)
         # log loss
         self.log(
@@ -583,22 +569,14 @@ class GCNGraphPred(pl.LightningModule):
 
         return all_loss
 
-    def training_step(
-        self, 
-        batch: tuple, 
-        batch_idx: int
-    ):
+    def training_step(self, batch: tuple, batch_idx: int):
         """
         Train step
         """
         loss = self.shared_step(batch, mode="train")
         return {"train_loss": loss, "loss": loss}
 
-    def validation_step(
-        self, 
-        batch: tuple, 
-        batch_idx: int
-    ):
+    def validation_step(self, batch: tuple, batch_idx: int):
         """
         Val step
         """
@@ -613,9 +591,9 @@ class GCNGraphPred(pl.LightningModule):
         Training epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="train")
-        
+
         # get epoch number
-        if type(r2) == list: 
+        if type(r2) == list:
             r2 = torch.stack(r2)
         if type(mae) == list:
             mae = torch.stack(mae)
@@ -633,7 +611,7 @@ class GCNGraphPred(pl.LightningModule):
         Validation epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="val")
-        if type(r2) == list: 
+        if type(r2) == list:
             r2 = torch.stack(r2)
         if type(mae) == list:
             mae = torch.stack(mae)
@@ -649,22 +627,17 @@ class GCNGraphPred(pl.LightningModule):
         Test epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="test")
-        if type(r2) == list: 
+        if type(r2) == list:
             r2 = torch.stack(r2)
         if type(mae) == list:
             mae = torch.stack(mae)
         if type(mse) == list:
-            mse = torch.stack(mse)        
+            mse = torch.stack(mse)
         self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
         self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
         self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
 
-    def update_metrics(
-        self, 
-        pred: torch.Tensor, 
-        target: torch.Tensor, 
-        mode: str
-    ):
+    def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
         """
         Update metrics using torchmetrics interfaces
         """
@@ -801,9 +774,9 @@ class GCNGraphPred(pl.LightningModule):
             r2_manual = torchmetrics.functional.r2_score(y_pred, y)
             print("r2 manual", r2_manual)
             mae_per_atom = torch.mean(abs_diff / n_atom_list)
-            #mae_per_molecule = torch.mean(abs_diff)
+            # mae_per_molecule = torch.mean(abs_diff)
             ewt_prop = torch.sum(abs_diff < 0.043) / len(abs_diff)
-            #rmse_per_molecule = torch.mean(torch.sqrt(torch.mean(abs_diff**2)))
+            # rmse_per_molecule = torch.mean(torch.sqrt(torch.mean(abs_diff**2)))
             mse_per_atom = abs_diff**2 / n_atom_list
             mean_rmse_per_atom = torch.sqrt(torch.mean(mse_per_atom))
 

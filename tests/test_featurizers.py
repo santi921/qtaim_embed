@@ -115,8 +115,8 @@ class TestGrapher:
         bond_keys = [
             "extra_feat_bond_esp_total",
             "extra_feat_bond_esp_nuc",
-            "bond_length", 
-            "boo_2"
+            "bond_length",
+            "boo_2",
         ]
 
         mol_wrappers, element_set = mol_wrappers_from_df(
@@ -332,7 +332,3 @@ class TestGrapher:
                 graph_list_charge[ind].ndata["feat"]["global"].shape[1]
                 == graph_list_bare[ind].ndata["feat"]["global"].shape[1] + 3
             )
-
-
-test = TestGrapher()
-test.test_node_sizes()

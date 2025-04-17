@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler as sk_StandardScaler
 import numpy as np
 import dgl
 
+
 def compute_running_average(
     old_avg: float, new_value: float, n: int, n_new: Optional[int] = 1
 ) -> float:
@@ -134,7 +135,7 @@ class HeteroGraphStandardScaler:
         return self._std
 
     def __call__(self, graphs) -> List[dgl.DGLGraph]:
-        #print("SCALLING CALL ON STANDARD CALLED")
+        # print("SCALLING CALL ON STANDARD CALLED")
         g = graphs[0]
         # node_types = g.ntypes
         node_feats = defaultdict(list)
@@ -244,10 +245,10 @@ class HeteroGraphStandardScaler:
         return feats_ret
 
 
-class HeteroGraphStandardScalerIterative: 
+class HeteroGraphStandardScalerIterative:
     """
     Standardize hetero graph features by centering and normalization.
-    Only node features are standardized. This variant differs because it 
+    Only node features are standardized. This variant differs because it
     computes the mean and std iteratively. This is useful for large datasets
     where the mean and std cannot be computed in one go.
 
@@ -277,36 +278,36 @@ class HeteroGraphStandardScalerIterative:
         self.features_tf = features_tf
         self.dict_node_sizes = {}
         self.finalized = False
-        
+
     def update(self, graphs):
         """
         Update the class mean and std values from the given graphs.
-        Don't standardize the graphs in this pass 
+        Don't standardize the graphs in this pass
         Takes:
             graphs: list of dgl graphs
         """
         g = graphs[0]
         # node_types = g.ntypes
         node_feats = defaultdict(list)
-        
-        if self.features_tf: # separate track for features and labels
+
+        if self.features_tf:  # separate track for features and labels
             graph_key = "feat"
         else:
             graph_key = "labels"
-        
+
         node_types = list(g.ndata[graph_key].keys())
         # obtain feats from ALL graphs
-        
+
         for g in graphs:
             for nt in node_types:
                 data = g.nodes[nt].data[graph_key]
                 node_feats[nt].append(data)
-                #node_feats_size[nt].append(len(data))
+                # node_feats_size[nt].append(len(data))
 
         # standardize
-        #print(node_feats)
+        # print(node_feats)
         dtype = node_feats[node_types[0]][0].dtype
-        
+
         for nt in node_types:
 
             # update running statistics for new node types
@@ -315,12 +316,14 @@ class HeteroGraphStandardScalerIterative:
                 self._sum_x2[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=dtype)
                 self._std[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=dtype)
                 self.dict_node_sizes[nt] = 0
-            
+
             if torch.cat(node_feats[nt]).shape[1] > 0:
                 feats = torch.cat(node_feats[nt])
                 mean = torch.mean(feats, dim=0)
                 mean = torch.as_tensor(mean, dtype=dtype, device=feats.device)
-                self._sum_x2[nt] += torch.sum(feats ** 2, dim=0)  # Accumulate sum of squares
+                self._sum_x2[nt] += torch.sum(
+                    feats**2, dim=0
+                )  # Accumulate sum of squares
                 # Update node size before calling compute_running_average
                 self.dict_node_sizes[nt] += feats.shape[0]
                 self._mean[nt] = compute_running_average(
@@ -338,14 +341,16 @@ class HeteroGraphStandardScalerIterative:
         for nt in self._mean.keys():
             if self.dict_node_sizes[nt] > 0:
                 # compute std from mean and sum_x2
-                self._std[nt] = torch.sqrt(self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2)
+                self._std[nt] = torch.sqrt(
+                    self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2
+                )
             else:
                 self._std[nt] = torch.zeros_like(self._mean[nt])
         self.finalized = True
 
     def __call__(self, graphs) -> List[dgl.DGLGraph]:
 
-        # assert that the scaler is finalized 
+        # assert that the scaler is finalized
         assert self.finalized, "must finalize the scaler before using it"
 
         g = graphs[0]
@@ -378,21 +383,19 @@ class HeteroGraphStandardScalerIterative:
 
         return graphs
 
-
     @property
     def mean(self):
         """
         Returns the mean of the scaler.
         """
         return self._mean
-    
+
     @property
     def std(self):
         """
         Returns the std of the scaler.
         """
         return self._std
-    
 
     def inverse(self, graphs):
         """
@@ -483,7 +486,6 @@ class HeteroGraphLogMagnitudeScaler:
         self.copy = copy
         self.features_tf = features_tf
         self.shift = shift
-        
 
     def __call__(self, graphs) -> List[dgl.DGLGraph]:
         g = graphs[0]
@@ -623,4 +625,3 @@ class HeteroGraphLogMagnitudeScaler:
                 feats_ret[nt] = feats_temp
 
         return feats_ret
-

@@ -86,7 +86,6 @@ if __name__ == "__main__":
         standard_scale_targets=config["dataset"]["standard_scale_targets"],
         bond_key=config["dataset"]["bond_key"],
         map_key=config["dataset"]["map_key"],
-        
     )
 
     if split == True:
@@ -102,7 +101,7 @@ if __name__ == "__main__":
             print("validation set size: ", len(val_dataset))
             print("test set size: ", len(test_dataset))
             print(dataset.feature_names)
-            #construct_lmdb_and_save_dataset(dataset, lmdb_dir)
+            # construct_lmdb_and_save_dataset(dataset, lmdb_dir)
             construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
             construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
             construct_lmdb_and_save_dataset(test_dataset, lmdb_dir + "/test/")
@@ -118,7 +117,7 @@ if __name__ == "__main__":
             print("training set size: ", len(train_dataset))
             print("validation set size: ", len(val_dataset))
 
-            #construct_lmdb_and_save_dataset(dataset, lmdb_dir)
+            # construct_lmdb_and_save_dataset(dataset, lmdb_dir)
             construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
             construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
 

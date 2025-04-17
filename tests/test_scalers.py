@@ -6,6 +6,7 @@ import torch
 from qtaim_embed.utils.tests import get_dataset
 from qtaim_embed.data.processing import HeteroGraphStandardScalerIterative
 
+
 def test_log_scaler():
     dataset_log = get_dataset(
         log_scale_features=True,
@@ -214,7 +215,7 @@ def test_standard_log_scaler():
             )
 
 
-def test_iterative_standard_scaler(): 
+def test_iterative_standard_scaler():
     nt_feats = ["atom", "bond", "global"]
     nt_labels = ["global"]
 
@@ -238,55 +239,82 @@ def test_iterative_standard_scaler():
         standard_scale_features=False,
         standard_scale_targets=False,
     )
-    #HeteroGraphStandardScalerIterative
+    # HeteroGraphStandardScalerIterative
 
-    
-    
     # compute in one go
-    #print(dataset_raw.label_scalers, dataset_raw.feature_scalers)
-    
-    feature_scaler = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
+    # print(dataset_raw.label_scalers, dataset_raw.feature_scalers)
+
+    feature_scaler = HeteroGraphStandardScalerIterative(
+        features_tf=True, mean={}, std={}
+    )
     feature_scaler.update(dataset_raw.graphs)
     feature_scaler.finalize()
 
-    label_scaler = HeteroGraphStandardScalerIterative(features_tf=False, mean={}, std={})
+    label_scaler = HeteroGraphStandardScalerIterative(
+        features_tf=False, mean={}, std={}
+    )
     label_scaler.update(dataset_raw.graphs)
     label_scaler.finalize()
 
     # assert that label mean, std are equal - for each node type
     for nt in nt_labels:
-        assert torch.allclose(label_scaler._mean[nt], dataset_standard.label_scalers[0]._mean[nt]), "label mean not equal"
-        assert torch.allclose(label_scaler._std[nt], dataset_standard.label_scalers[0]._std[nt]), "label std not equal"
-    
+        assert torch.allclose(
+            label_scaler._mean[nt], dataset_standard.label_scalers[0]._mean[nt]
+        ), "label mean not equal"
+        assert torch.allclose(
+            label_scaler._std[nt], dataset_standard.label_scalers[0]._std[nt]
+        ), "label std not equal"
+
     # assert that feature mean, std are equal
     for nt in nt_feats:
-        assert torch.allclose(feature_scaler._mean[nt], dataset_standard.feature_scalers[0]._mean[nt]), "feature mean not equal"
-        assert torch.allclose(feature_scaler._std[nt], dataset_standard.feature_scalers[0]._std[nt], atol=0.001), "feature std not equal"
+        assert torch.allclose(
+            feature_scaler._mean[nt], dataset_standard.feature_scalers[0]._mean[nt]
+        ), "feature mean not equal"
+        assert torch.allclose(
+            feature_scaler._std[nt],
+            dataset_standard.feature_scalers[0]._std[nt],
+            atol=0.001,
+        ), "feature std not equal"
 
-    
     print("iterative standard scaler!")
     # compute iteratively through list of graphs
-    
-    feature_scaler_iterative = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
-    label_scaler_iterative = HeteroGraphStandardScalerIterative(features_tf=False, mean={}, std={})    
+
+    feature_scaler_iterative = HeteroGraphStandardScalerIterative(
+        features_tf=True, mean={}, std={}
+    )
+    label_scaler_iterative = HeteroGraphStandardScalerIterative(
+        features_tf=False, mean={}, std={}
+    )
 
     # read in 4 graphs at a time
     for i in range(0, len(dataset_raw_for_iterative.graphs), 25):
-        feature_scaler_iterative.update(dataset_raw_for_iterative.graphs[i:i+25])
-        label_scaler_iterative.update(dataset_raw_for_iterative.graphs[i:i+25])
-    
+        feature_scaler_iterative.update(dataset_raw_for_iterative.graphs[i : i + 25])
+        label_scaler_iterative.update(dataset_raw_for_iterative.graphs[i : i + 25])
+
     feature_scaler_iterative.finalize()
     label_scaler_iterative.finalize()
-    
-    
+
     # assert that label mean, std are equal - for each node type
     for nt in nt_labels:
-         assert torch.allclose(label_scaler_iterative._mean[nt], dataset_standard.label_scalers[0]._mean[nt]), "label mean not equal"
-         assert torch.allclose(label_scaler_iterative._std[nt], dataset_standard.label_scalers[0]._std[nt]), "label std not equal"
+        assert torch.allclose(
+            label_scaler_iterative._mean[nt],
+            dataset_standard.label_scalers[0]._mean[nt],
+        ), "label mean not equal"
+        assert torch.allclose(
+            label_scaler_iterative._std[nt], dataset_standard.label_scalers[0]._std[nt]
+        ), "label std not equal"
 
     # assert that feature mean, std are equal
     for nt in nt_feats:
-        assert torch.allclose(feature_scaler_iterative._mean[nt], dataset_standard.feature_scalers[0]._mean[nt]), "feature mean not equal"
-        assert torch.allclose(feature_scaler_iterative._std[nt], dataset_standard.feature_scalers[0]._std[nt], atol=0.001), "feature std not equal"
+        assert torch.allclose(
+            feature_scaler_iterative._mean[nt],
+            dataset_standard.feature_scalers[0]._mean[nt],
+        ), "feature mean not equal"
+        assert torch.allclose(
+            feature_scaler_iterative._std[nt],
+            dataset_standard.feature_scalers[0]._std[nt],
+            atol=0.001,
+        ), "feature std not equal"
+
 
 test_iterative_standard_scaler()

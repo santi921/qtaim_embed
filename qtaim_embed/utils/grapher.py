@@ -10,7 +10,6 @@ from qtaim_embed.data.featurizer import (
 )
 
 
-
 def get_grapher(
     element_set,
     atom_keys,

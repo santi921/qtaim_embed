@@ -56,6 +56,7 @@ class GCNLinkPred(pl.LightningModule):
         predictor_param_dict: dict, dictionary of predictor parameters
 
     """
+
     def __init__(
         self,
         input_size: int = 12,
@@ -187,7 +188,7 @@ class GCNLinkPred(pl.LightningModule):
                     embedding_in=True,
                     activation=self.activation,
                 )
-                
+
                 input_block = False
                 if layer_tracker == 0:
                     input_block = True
@@ -272,19 +273,15 @@ class GCNLinkPred(pl.LightningModule):
             else self.compiled_forward
         )
 
-
     def compiled_forward(
-            self, 
-            pos_graph: DGLGraph,
-            neg_graph: DGLGraph,
-            inputs: torch.Tensor
-        ):
+        self, pos_graph: DGLGraph, neg_graph: DGLGraph, inputs: torch.Tensor
+    ):
         """
         Forward pass
         """
-        #print("type of inputs", type(inputs))
-        #print("pos graph", type(pos_graph))
-        #print("neg graph", type(neg_graph))
+        # print("type of inputs", type(inputs))
+        # print("pos graph", type(pos_graph))
+        # print("neg graph", type(neg_graph))
 
         feats_embed = self.embedding(inputs)
         feats_pos, feats_neg = feats_embed, feats_embed  # Initialize for compatibility
@@ -317,12 +314,7 @@ class GCNLinkPred(pl.LightningModule):
 
         return pos_pred, neg_pred
 
-    def forward(
-        self, 
-        pos_graph: DGLGraph,
-        neg_graph: DGLGraph,
-        inputs: torch.Tensor
-        ):
+    def forward(self, pos_graph: DGLGraph, neg_graph: DGLGraph, inputs: torch.Tensor):
         """
         Forward pass
         """
@@ -356,16 +348,12 @@ class GCNLinkPred(pl.LightningModule):
 
         return loss_fn
 
-    def compute_loss(
-            self, 
-            target: torch.Tensor, 
-            pred: torch.Tensor
-            ):
+    def compute_loss(self, target: torch.Tensor, pred: torch.Tensor):
         """
         Compute loss
         """
-        #print("target type", type(target))
-        #print("pred type", type(pred))
+        # print("target type", type(target))
+        # print("pred type", type(pred))
         # print("target device", target.device)
         # print("pred device", pred.device)
         # print("loss device", self.loss.device)
@@ -406,13 +394,9 @@ class GCNLinkPred(pl.LightningModule):
             )
             layer_idx += 1
 
-    def shared_step(
-        self, 
-        batch: tuple, 
-        mode: str
-    ):
-        #print("batch type", type(batch))
-        #print("mode", mode)
+    def shared_step(self, batch: tuple, mode: str):
+        # print("batch type", type(batch))
+        # print("mode", mode)
         # if mode == "train":
         positive_graph, negative_graph, feat = batch
         # else:
@@ -441,25 +425,17 @@ class GCNLinkPred(pl.LightningModule):
 
         return all_loss
 
-    def training_step(
-            self, 
-            batch: tuple, 
-            batch_idx: int
-        ):
+    def training_step(self, batch: tuple, batch_idx: int):
         """
         Train step
         """
-        #print("batch type", type(batch))
-        #print("batch index", type(batch_idx))
+        # print("batch type", type(batch))
+        # print("batch index", type(batch_idx))
         loss = self.shared_step(batch, mode="train")
-        
+
         return {"train_loss": loss, "loss": loss}
 
-    def validation_step(
-        self, 
-        batch: tuple, 
-        batch_idx: int
-    ):
+    def validation_step(self, batch: tuple, batch_idx: int):
         """
         Val step
         """
@@ -501,12 +477,7 @@ class GCNLinkPred(pl.LightningModule):
         self.log("test_auc", auc, prog_bar=False, sync_dist=True)
         self.log("test_accuracy", acc, prog_bar=False, sync_dist=True)
 
-    def update_metrics(
-            self, 
-            pred: torch.Tensor, 
-            target: torch.Tensor, 
-            mode: str
-        ):
+    def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
         """
         Update metrics using torchmetrics interfaces
         """

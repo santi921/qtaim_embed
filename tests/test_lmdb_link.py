@@ -97,9 +97,9 @@ def test_model_lmdb():
     dm_lmdb = LMDBLinkDataModule(config=config)
     feat_name, feature_size = dm_lmdb.prepare_data()
     dm_lmdb.setup("fit")
-    #print(config["model"])
+    # print(config["model"])
     config["model"]["input_size"] = dm_lmdb.node_len
-    model = load_link_model_from_config(config["model"]) # error here
+    model = load_link_model_from_config(config["model"])  # error here
 
     dl = dm_lmdb.train_dataloader()
 

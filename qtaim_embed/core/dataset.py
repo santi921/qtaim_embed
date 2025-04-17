@@ -350,7 +350,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         filter_self_bonds=True,
         size=None,
         bond_key="bonds",
-        map_key=None, 
+        map_key=None,
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -688,7 +688,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             "global": ["NR-AR"],
         },
         bond_key="bonds",
-        map_key=None, 
+        map_key=None,
         target_list=["NR-AR"],
         extra_dataset_info={},
         impute=False,
@@ -1059,7 +1059,6 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
 
 
 class LMDBBaseDataset(Dataset):
-
     """
     Dataset class to
     1. write Molecule Objects to lmdb
@@ -1198,27 +1197,33 @@ class LMDBMoleculeDataset(LMDBBaseDataset):
         super(LMDBMoleculeDataset, self).__init__(config=config, transform=transform)
         if not self.path.is_file():
             self.single_file = False
-                
+
         elif self.path.is_file():
-            #self.env = self.env
+            # self.env = self.env
             self.single_file = True
 
     @property
     def allowed_charges(self):
         if not self.single_file:
-            return pickle.loads(self.envs[0].begin().get("allowed_charges".encode("ascii")))
+            return pickle.loads(
+                self.envs[0].begin().get("allowed_charges".encode("ascii"))
+            )
         return pickle.loads(self.env.begin().get("allowed_charges".encode("ascii")))
 
     @property
     def allowed_spins(self):
         if not self.single_file:
-            return pickle.loads(self.envs[0].begin().get("allowed_spins".encode("ascii")))
+            return pickle.loads(
+                self.envs[0].begin().get("allowed_spins".encode("ascii"))
+            )
         return pickle.loads(self.env.begin().get("allowed_spins".encode("ascii")))
 
     @property
     def ring_size_set(self):
         if not self.single_file:
-            return pickle.loads(self.envs[0].begin().get("ring_size_set".encode("ascii")))
+            return pickle.loads(
+                self.envs[0].begin().get("ring_size_set".encode("ascii"))
+            )
         return pickle.loads(self.env.begin().get("ring_size_set".encode("ascii")))
 
     @property

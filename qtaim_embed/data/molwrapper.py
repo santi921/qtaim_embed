@@ -40,10 +40,8 @@ def mol_wrappers_from_df(
     print("... > creating MoleculeWrapper objects")
     bond_feats_error_count = 0
     atom_feats_error_count = 0
-    #print("... > bond_key: ", bond_key)
+    # print("... > bond_key: ", bond_key)
     for index, row in tqdm(df.iterrows(), total=len(df)):
-        charge = 0
-        free_energy = 0
         bonds = row[bond_key]
         # bonds = row.bonds
         if "names" not in row.index:
@@ -72,7 +70,6 @@ def mol_wrappers_from_df(
         pmg_mol = row.molecule
         elements = elements_from_pmg(pmg_mol)
         element_set.update(elements)
-
 
         if len(row[bond_key]) == 1:
             bonds = row[bond_key][0]
@@ -103,7 +100,7 @@ def mol_wrappers_from_df(
                 bond_feats_error_count += 1
             if atom_feats == -1:
                 atom_feats_error_count += 1
-                
+
     print("... > bond_feats_error_count: ", bond_feats_error_count)
     print("... > atom_feats_error_count: ", atom_feats_error_count)
     # sort element set

@@ -2,13 +2,13 @@ import torch
 from typing import Optional, Dict, Any
 from dgl import batch
 
+
 def get_layer_args(
-        hparams: Any,
-        layer_ind: Optional[int] = None,
-        embedding_in: bool = False,
-        activation: Optional[Any] = None
-    ) -> Dict[str, Dict[str, Any]]:
-            
+    hparams: Any,
+    layer_ind: Optional[int] = None,
+    embedding_in: bool = False,
+    activation: Optional[Any] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
     Converts hparam dictionary to a dictionary of arguments for a layer.
     Args:
@@ -530,11 +530,11 @@ def get_layer_args(
 
 
 def get_layer_args_homo(
-        hparams: Any,
-        layer_ind: Optional[int] = None,
-        embedding_in: bool = False,
-        activation: Optional[Any] = None
-    ) -> Dict[str, Dict[str, Any]]:        
+    hparams: Any,
+    layer_ind: Optional[int] = None,
+    embedding_in: bool = False,
+    activation: Optional[Any] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
     Converts hparam dictionary to a dictionary of arguments for a layer.
 
@@ -663,15 +663,15 @@ def get_layer_args_homo(
 
 def link_fmt_to_node_fmt(
     dict_feats: Dict[str, torch.Tensor],
-    ) -> Dict[str, Dict[str, Any]]:    
+) -> Dict[str, Dict[str, Any]]:
     """
     Converts a dictionary of features from link format to node format.
     The input dictionary should have keys ending with 'g', 'b', or 'a',
     representing global, bond, and atom features, respectively.
-    Args: 
+    Args:
         dict_feats (dict): Dictionary of features with keys ending with 'g', 'b', or 'a'.
     Returns:
-        dict: Dictionary with keys 'global', 'bond', and 'atom' containing the corresponding features.  
+        dict: Dictionary with keys 'global', 'bond', and 'atom' containing the corresponding features.
     """
     ret_dict = {}
     for k, v in dict_feats.items():
@@ -686,16 +686,12 @@ def link_fmt_to_node_fmt(
     return ret_dict
 
 
-def _split_batched_output(
-        graph: batch,
-        value: torch.Tensor,
-        key: str = "global"
-    ):
+def _split_batched_output(graph: batch, value: torch.Tensor, key: str = "global"):
     """
     Split a tensor into `num_graphs` chunks, the size of each chunk equals the
     number of bonds in the graph.
 
-    Args: 
+    Args:
         graph (dgl.DGLGraph): Batched graph.
         value (torch.Tensor): Tensor to be split.
         key (str): Key for the graph.

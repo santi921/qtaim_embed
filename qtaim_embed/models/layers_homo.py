@@ -202,11 +202,11 @@ class ResidualBlockHomo(nn.Module):
         for i in range(resid_n_graph_convs):
             layer_arg_copy = deepcopy(layer_args)
             layer_arg_copy = self.pad_args_graph_conv(layer_arg_copy)
-            
-            if input_block:    
+
+            if input_block:
                 if i == 0:
                     layer_arg_copy["in_feats"] = layer_args["embedding_size"]
-                    
+
                     self.layers.append(
                         GraphConvDropoutBatch(
                             in_feats=layer_arg_copy["in_feats"],
@@ -276,7 +276,6 @@ class ResidualBlockHomo(nn.Module):
 
         return feat
 
-
     def pad_args_graph_conv(self, layer_args):
         """
         Pad the arguments for the graph convolutional layer.
@@ -301,6 +300,5 @@ class ResidualBlockHomo(nn.Module):
             layer_args["norm"] = "both"
         if "dropout" not in layer_args:
             layer_args["dropout"] = 0.1
-
 
         return layer_args

@@ -15,6 +15,7 @@ class LinkPredMetric(BaseMetric):
     Args:
         k (int): The number of top-:math:`k` predictions to evaluate against.
     """
+
     is_differentiable: bool = False
     full_state_update: bool = False
     higher_is_better: Optional[bool] = None

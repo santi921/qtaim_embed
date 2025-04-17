@@ -15,14 +15,12 @@ class TestGrapher:
             "extra_feat_bond_esp_total",
         ]
         mol_wrappers, element_set = mol_wrappers_from_df(
-            self.df_test,
-            bond_key="bonds", 
-            map_key="extra_feat_bond_indices_qtaim"
+            self.df_test, bond_key="bonds", map_key="extra_feat_bond_indices_qtaim"
         )
-        
+
         list_atom_num = [mol.num_atoms for mol in mol_wrappers]
         list_bond_num = [len(mol.bonds) for mol in mol_wrappers]
-        
+
         grapher = get_grapher(
             element_set,
             atom_keys=atom_keys,
@@ -48,5 +46,5 @@ class TestGrapher:
             assert num_bonds_mol_wrapper == num_bonds
 
 
-#tester = TestGrapher()
-#tester.test_graph_nodes()
+# tester = TestGrapher()
+# tester.test_graph_nodes()

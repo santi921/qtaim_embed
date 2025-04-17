@@ -54,7 +54,7 @@ def get_datasets_qm9(loc_dict):
         "pooling_ntypes": ["atom", "bond", "global"],
         "pooling_ntypes_direct": ["global"],
         "bond_key": "bonds",
-        "map_key": "extra_feat_bond_indices_qtaim"
+        "map_key": "extra_feat_bond_indices_qtaim",
     }
 
     qtaim_model_dict = deepcopy(qtaim_model_bl_dict)
@@ -883,7 +883,7 @@ def get_datasets_tmqm_low(loc_dict):
         "dropout": 0.1,
         "batch_norm_tf": True,
         "activation": "ReLU",
-        "bond_key": "bonds", 
+        "bond_key": "bonds",
         "map_key": "extra_feat_bond_indices_qtaim",
         "bias": True,
         "norm": "both",
@@ -1240,7 +1240,7 @@ def get_datasets_tmqm_high(loc_dict):
         "batch_norm_tf": True,
         "activation": "ReLU",
         "bond_key": "bonds",
-        "map_key": "extra_feat_bond_indices_qtaim", 
+        "map_key": "extra_feat_bond_indices_qtaim",
         "bias": True,
         "norm": "both",
         "aggregate": "sum",

@@ -755,7 +755,7 @@ class LMDBDataModule(pl.LightningDataModule):
                 self.transforms = None
 
     def prepare_data(self, stage=None):
-        
+
         if "test_lmdb" in self.config["dataset"]:
             # check if there is a single lmdb, if so use it, else leave the folder
             check_file = os.path.join(self.test_lmdb_loc, "molecule.lmdb")
@@ -776,7 +776,7 @@ class LMDBDataModule(pl.LightningDataModule):
                 config={"src": check_file},
                 transform=TransformMol,
             )
-        
+
         check_file = os.path.join(self.train_lmdb_loc, "molecule.lmdb")
         if not os.path.exists(check_file):
             check_file = self.train_lmdb_loc
@@ -874,7 +874,7 @@ class LMDBLinkDataModule(pl.LightningDataModule):
                 config={"src": check_file},
                 transform=TransformMol,
             )
-        
+
         check_file = os.path.join(self.train_lmdb_loc, "molecule.lmdb")
         if not os.path.exists(check_file):
             check_file = self.train_lmdb_loc

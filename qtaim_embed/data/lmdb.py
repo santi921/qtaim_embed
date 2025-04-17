@@ -56,7 +56,7 @@ def load_dgl_graph_from_serialized(serialized_graph):
 def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int = -1):
     """
     Write the molecule graphs to lmdb
-    Takes: 
+    Takes:
         graphs: list of molecule graphs
         lmdb_dir: directory to save the lmdb
         lmdb_name: name of the lmdb
@@ -67,11 +67,11 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
     """
 
     os.makedirs(lmdb_dir, exist_ok=True)
-    
+
     key_template = ["molecule_graph"]
-    
+
     dataset = [{k: v for k, v in zip(key_template, values)} for values in zip(graphs)]
-    
+
     if chunk > 0:
         dataset_chunk = []
         for i in range(0, len(dataset), chunk):
@@ -105,18 +105,20 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
             txn.commit()
 
             for key, value in global_values.items():
-                #print(key, value)
+                # print(key, value)
                 txn = db.begin(write=True)
                 txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
                 txn.commit()
             # write the chunk size
             txn = db.begin(write=True)
-            txn.put("length_chunk".encode("ascii"), pickle.dumps(len(chunk), protocol=-1))
+            txn.put(
+                "length_chunk".encode("ascii"), pickle.dumps(len(chunk), protocol=-1)
+            )
             txn.commit()
             db.sync()
             db.close()
 
-    else: 
+    else:
         db = lmdb.open(
             lmdb_dir + lmdb_name,
             map_size=int(1099511627776 * 2),
@@ -143,7 +145,7 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
         txn.commit()
 
         for key, value in global_values.items():
-            #print(key, value)
+            # print(key, value)
             txn = db.begin(write=True)
             txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
             txn.commit()
@@ -226,14 +228,19 @@ def combined_mean_std(mean_list, std_list, count_list):
     total_count = sum(count_list)
 
     # Calculate combined mean
-    combined_mean = sum(mean * count for mean, count in zip(mean_list, count_list)) / total_count
+    combined_mean = (
+        sum(mean * count for mean, count in zip(mean_list, count_list)) / total_count
+    )
 
     # Calculate combined variance
     combined_variance = sum(
-        ((std ** 2) * (count - 1) + count * (mean - combined_mean) ** 2 for mean, std, count in zip(mean_list, std_list, count_list))
+        (
+            (std**2) * (count - 1) + count * (mean - combined_mean) ** 2
+            for mean, std, count in zip(mean_list, std_list, count_list)
+        )
     ) / (total_count - len(mean_list))
 
     # Calculate combined standard deviation
-    combined_std = (combined_variance ** 0.5)
+    combined_std = combined_variance**0.5
 
     return combined_mean, combined_std

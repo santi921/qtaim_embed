@@ -44,7 +44,7 @@ def get_default_link_level_config():
         },
         "model": {
             "classifier": False,
-            "compiled": False, 
+            "compiled": False,
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
             # "target_dict": {"global": "extra_feat_global_E1_CAM"},
@@ -149,7 +149,7 @@ def get_default_node_level_config():
         "model": {
             "classifier": False,
             "n_conv_layers": 8,
-            "compiled": False, 
+            "compiled": False,
             "resid_n_graph_convs": 2,
             "target_dict": {
                 "atom": ["extra_feat_atom_esp_total"],
@@ -252,7 +252,7 @@ def get_default_graph_level_config():
         "model": {
             "classifier": False,
             "n_conv_layers": 8,
-            "compiled": False, 
+            "compiled": False,
             "resid_n_graph_convs": 2,
             "target_dict": {"global": "extra_feat_global_E1_CAM"},
             "conv_fn": "ResidualBlock",
@@ -370,7 +370,7 @@ def get_default_graph_level_config_classif():
             "classifier": True,
             "n_conv_layers": 8,
             "resid_n_graph_convs": 2,
-            "compiled": False, 
+            "compiled": False,
             "target_dict": {
                 "global": [
                     "NR-AR",
@@ -432,12 +432,12 @@ def get_default_graph_level_config_classif():
     }
 
 
-#def train_validation_test_split(dataset, validation=0.1, test=0.1, random_seed=None):
+# def train_validation_test_split(dataset, validation=0.1, test=0.1, random_seed=None):
 def train_validation_test_split(
-        dataset: Any,
-        validation: float = 0.1,
-        test: float = 0.1,
-        random_seed: Optional[int] = 35,
+    dataset: Any,
+    validation: float = 0.1,
+    test: float = 0.1,
+    random_seed: Optional[int] = 35,
 ) -> list:
     """
     Split a dataset into training, validation, and test set.

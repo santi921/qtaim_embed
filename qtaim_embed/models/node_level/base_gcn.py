@@ -282,21 +282,20 @@ class GCNNodePred(pl.LightningModule):
             torchmetrics.MeanSquaredError(squared=False), num_outputs=output_dims
         )
 
-
         self.forward_fn = (
             torch.compile(self.compiled_forward, dynamic=True)
             if compiled
             else self.compiled_forward
         )
-    
-    # disable jit on top level function 
-    #@torch.compiler.disable(recursive=False)
-    #@torch.jit.export  # Decorate the forward method for TorchScript
+
+    # disable jit on top level function
+    # @torch.compiler.disable(recursive=False)
+    # @torch.jit.export  # Decorate the forward method for TorchScript
     def compiled_forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
         """
         Forward pass with JIT compatibility
         """
-        
+
         feats = self.embedding(inputs)
 
         for ind, conv in enumerate(self.conv_layers):
@@ -311,9 +310,9 @@ class GCNNodePred(pl.LightningModule):
                         else len(self.target_dict[k])
                     )
                     feats[k] = v.reshape(-1, reshape_dim)
-        
-        #feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
-        
+
+        # feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
+
         filtered_feats = {}
         for k, v in feats.items():
             if self.hparams.target_dict[k] != [None]:
@@ -365,18 +364,14 @@ class GCNNodePred(pl.LightningModule):
 
         return bond_feats, atom_feats, global_feats
 
-    def shared_step(
-        self, 
-        batch: tuple, 
-        mode: str
-    ):
+    def shared_step(self, batch: tuple, mode: str):
         batch_graph, batch_label = batch
         logits_list = []
         labels_list = []
         logits = self.forward(
             batch_graph, batch_graph.ndata["feat"]
         )  # returns a dict of node types
-        #print("lmdb batch", batch_graph, batch_label.keys())
+        # print("lmdb batch", batch_graph, batch_label.keys())
         with profiler.record_function("Post Forward"):
             max_nodes = -1
 
@@ -400,11 +395,10 @@ class GCNNodePred(pl.LightningModule):
 
             # compute loss
             all_loss = self.compute_loss(logits, labels)
-        
-            # compat with older torchmetrics/dgl 
-            if type(all_loss) == list: 
-                all_loss = torch.stack(all_loss)
 
+            # compat with older torchmetrics/dgl
+            if type(all_loss) == list:
+                all_loss = torch.stack(all_loss)
 
         # log loss
         self.log(
@@ -446,21 +440,13 @@ class GCNNodePred(pl.LightningModule):
         loss_fn = loss_multi
         return loss_fn
 
-    def compute_loss(
-        self, 
-        target: torch.Tensor, 
-        pred: torch.Tensor
-    ):
+    def compute_loss(self, target: torch.Tensor, pred: torch.Tensor):
         """
         Compute loss
         """
         return self.loss(target, pred)
 
-    def training_step(
-        self, 
-        batch: tuple, 
-        batch_idx: int
-    ):
+    def training_step(self, batch: tuple, batch_idx: int):
         """
         Train step
         """
@@ -473,30 +459,21 @@ class GCNNodePred(pl.LightningModule):
         batch_idx: int,
         optimizer: torch.optim.Optimizer,
         optimizer_idx: int,
-
-    ): 
+    ):
         """
         Optimizer step
         """
         with torch.profiler.record_function("Optimizer Step"):
             super().optimizer_step(epoch, batch_idx, optimizer, optimizer_idx)
 
-    def validation_step(
-        self, 
-        batch: tuple, 
-        batch_idx: int
-    ):
+    def validation_step(self, batch: tuple, batch_idx: int):
         """
         Val step
         """
         with torch.profiler.record_function("Forward Val Step"):
             return self.shared_step(batch, mode="val")
 
-    def test_step(
-        self, 
-        batch: tuple, 
-        batch_idx: int
-    ):
+    def test_step(self, batch: tuple, batch_idx: int):
         with torch.profiler.record_function("Forward Test Step"):
             return self.shared_step(batch, mode="test")
 
@@ -509,8 +486,8 @@ class GCNNodePred(pl.LightningModule):
         Training epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="train")
-        
-        if type(r2) == list: 
+
+        if type(r2) == list:
             r2 = torch.stack(r2)
         if type(mae) == list:
             mae = torch.stack(mae)
@@ -546,8 +523,8 @@ class GCNNodePred(pl.LightningModule):
         Validation epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="val")
-        
-        if type(r2) == list: 
+
+        if type(r2) == list:
             r2 = torch.stack(r2)
         if type(mae) == list:
             mae = torch.stack(mae)
@@ -581,9 +558,9 @@ class GCNNodePred(pl.LightningModule):
         Test epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="test")
-        
-        # compat with older torchmetrics/dgl 
-        if type(r2) == list: 
+
+        # compat with older torchmetrics/dgl
+        if type(r2) == list:
             r2 = torch.stack(r2)
         if type(mae) == list:
             mae = torch.stack(mae)
@@ -610,12 +587,7 @@ class GCNNodePred(pl.LightningModule):
                         sync_dist=True,
                     )
 
-    def update_metrics(
-        self, 
-        pred: torch.Tensor, 
-        target: torch.Tensor, 
-        mode: str
-    ):
+    def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
         """
         Update metrics using torchmetrics interfaces
         """

@@ -5,6 +5,7 @@ import torch
 from e3nn.o3._spherical_harmonics import _spherical_harmonics
 from pandas import DataFrame
 
+
 def get_global_features(row, global_keys):
     """
     Get global features from a row of a dataframe.
@@ -31,36 +32,13 @@ def get_atom_feats(row, atom_keys):
                 return -1
         for i, feat in enumerate(row[key]):
             atom_feats[i][key] = feat
+    # print("atom_feats: ", atom_feats)
     return atom_feats
 
 
-@torch.jit.script
-def get_node_direction_expansion(
-    distance_vec: torch.Tensor, lmax: int 
-)-> torch.Tensor:
-    """
-    Calculate Bond-Orientational Order (BOO) for each node in the graph.
-    Ref: Steinhardt, et al. "Bond-orientational order in liquids and glasses." Physical Review B 28.2 (1983): 784.
-    Return: (N, )
-    """
-    distance_vec = torch.nn.functional.normalize(distance_vec, dim=-1)
-    edge_sh = _spherical_harmonics(
-        lmax=lmax,
-        x=distance_vec[0],
-        y=distance_vec[1],
-        z=distance_vec[2],
-    )
-    
-    edge_sh = torch.abs(edge_sh)
-    return edge_sh
-
-
 def get_bond_features(
-        row: DataFrame,
-        map_key: str,
-        bond_key: str = None, 
-        keys: list = None
-    ) -> dict:
+    row: DataFrame, map_key: str, bond_key: str = None, keys: list = None
+) -> dict:
     """
     Takes the mappings in the map_key and returns the features for the bonds
     in the form of a dictionary
@@ -87,37 +65,48 @@ def get_bond_features(
     else:
         bonds = row[bond_key]
 
-    #print(bonds)
-    #print("len bonds: " + str(len(bonds)))
-
     for bond in bonds:
         if (bond[0], bond[1]) not in bond_features.keys():
             bond_features[(bond[0], bond[1])] = {}
-        
+
         try:
             bond_index_map = row[map_key][0].index(tuple(bond))
         except:
-            #print("Error in bond index map")
+            # print("Error in bond index map")
             bond_index_map = row[map_key].index(tuple(bond))
 
         for key in keys:
             if key != "bond_length" and "boo_" not in key:
-                if type(row[key][0]) == list: 
-                    bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map] 
-                else: 
+                if type(row[key][0]) == list:
+                    bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
+                else:
                     bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
-
-                    
- 
+    # print("bond_features: ", bond_features)
     return bond_features
 
 
+@torch.jit.script
+def get_node_direction_expansion(distance_vec: torch.Tensor, lmax: int) -> torch.Tensor:
+    """
+    Calculate Bond-Orientational Order (BOO) for each node in the graph.
+    Ref: Steinhardt, et al. "Bond-orientational order in liquids and glasses." Physical Review B 28.2 (1983): 784.
+    Return: (N, )
+    """
+    distance_vec = torch.nn.functional.normalize(distance_vec, dim=-1)
+    edge_sh = _spherical_harmonics(
+        lmax=lmax,
+        x=distance_vec[0],
+        y=distance_vec[1],
+        z=distance_vec[2],
+    )
+
+    edge_sh = torch.abs(edge_sh)
+    return edge_sh
+
+
 def find_rings(
-        atom_num: int,
-        bond_list: list,
-        allowed_ring_size: list = [], 
-        edges: bool = False
-    ):
+    atom_num: int, bond_list: list, allowed_ring_size: list = [], edges: bool = False
+):
     cycle_graphs, cycle_list = [], []
     nx_graph = nx.Graph()
     [nx_graph.add_node(i) for i in range(atom_num)]

@@ -18,6 +18,6 @@ setup(
         "./qtaim_embed/scripts/train/train_qtaim_graph_classifier.py",
         "./qtaim_embed/scripts/vis/data_summary.py",
         "./qtaim_embed/scripts/helpers/mol2lmdb.py",
-        "./qtaim_embed/scripts/helpers/mol2lmdb_node.py"
+        "./qtaim_embed/scripts/helpers/mol2lmdb_node.py",
     ],
 )
