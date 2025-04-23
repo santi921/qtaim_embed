@@ -11,7 +11,7 @@ from qtaim_embed.utils.descriptors import (
     ring_features_from_atom_full,
     ring_features_for_bonds_full,
     find_rings,
-    get_node_direction_expansion
+    get_node_direction_expansion,
 )
 
 from rdkit import RDLogger
@@ -82,6 +82,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             )
         print("selected bond keys", selected_keys)
 
+
 class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
     """BaseFeaturizer
     Featurize all bonds in a molecule.
@@ -130,13 +131,13 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         # count number of keys in features
         num_feats = len(self.selected_keys)
         num_feats += 7
-        
+
         bool_boo = False
         for key in self.selected_keys:
             if "boo_" in key:
                 bool_boo = True
                 l_order = int(key.split("_")[1])
-        
+
         if num_bonds == 0:
             ft = [0.0 for _ in range(num_feats)]
             feats = [ft]
@@ -178,9 +179,12 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                     ft.append(bond_len)
 
                 if bool_boo:
-                    dist = torch.abs(torch.tensor(xyz_coordinates[bond[0]]) - torch.tensor(xyz_coordinates[bond[1]]))
+                    dist = torch.abs(
+                        torch.tensor(xyz_coordinates[bond[0]])
+                        - torch.tensor(xyz_coordinates[bond[1]])
+                    )
                     boo_expansion = get_node_direction_expansion(dist, lmax=l_order)
-                    ft += boo_expansion                
+                    ft += boo_expansion
 
                 if self.selected_keys != None:
                     for key in self.selected_keys:
@@ -189,7 +193,6 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
                 feats.append(ft)
 
-        
         feats = torch.tensor(feats, dtype=getattr(torch, self.dtype))
 
         if self.allowed_ring_size != []:
@@ -200,10 +203,10 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
         if "bond_length" in self.selected_keys:
             self._feature_name += ["bond_length"]
-        
-        # check that "boo_" is not in subset of keystrings 
+
+        # check that "boo_" is not in subset of keystrings
         if bool_boo:
-            for l_num in range((l_order+1)**2):
+            for l_num in range((l_order + 1) ** 2):
                 self._feature_name += ["boo_{}_{}".format(l_order, l_num)]
 
         if self.selected_keys != []:
@@ -217,7 +220,6 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
 
 class AtomFeaturizerGraphGeneral(BaseFeaturizer):
-
     """
     Featurize atoms in a molecule.
 

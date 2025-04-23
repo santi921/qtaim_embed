@@ -16,7 +16,6 @@ class HeteroCompleteGraphFromMolWrapper:
         self.bond_featurizer = bond_featurizer
         self.global_featurizer = global_featurizer
         self.feat_names = None
-        
 
     def build_graph(self, mol):
         bonds = list(mol.bonds.keys())
@@ -26,7 +25,7 @@ class HeteroCompleteGraphFromMolWrapper:
         a2b = []
         b2a = []
         if num_bonds == 0:
-            #print("num bonds 1 examples!!!!!")
+            # print("num bonds 1 examples!!!!!")
             num_bonds = 1
             a2b = [(0, 0)]
             b2a = [(0, 0)]
@@ -96,6 +95,5 @@ class HeteroCompleteGraphFromMolWrapper:
             self.feat_names = feat_names
             if ret_feat_names:
                 return g, feat_names
-
 
         return g

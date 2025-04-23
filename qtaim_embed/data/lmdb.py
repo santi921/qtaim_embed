@@ -23,7 +23,7 @@ def TransformMol(data_object):
     return dgl_graph
 
 
-def serialize_dgl_graph(dgl_graph):
+def serialize_dgl_graph(dgl_graph, ret=True):
     # import pdb
     # pdb.set_trace()
     # Create a temporary file
@@ -33,10 +33,11 @@ def serialize_dgl_graph(dgl_graph):
         dgl.save_graphs(tmpfile.name, [dgl_graph])
 
         # Read the content of the file
-        tmpfile.seek(0)
-        serialized_data = tmpfile.read()
-
-    return serialized_data
+        if ret:
+            tmpfile.seek(0)
+            serialized_data = tmpfile.read()
+    if ret: 
+        return serialized_data
 
 
 def load_dgl_graph_from_serialized(serialized_graph):
