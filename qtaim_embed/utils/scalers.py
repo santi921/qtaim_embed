@@ -1,14 +1,11 @@
 from typing import Optional
-import numpy as np 
+import numpy as np
 from sklearn.preprocessing import StandardScaler as sk_StandardScaler
-import torch 
+import torch
 
 
 def compute_running_average(
-    old_avg: float, 
-    new_value: float, 
-    n: int, 
-    n_new: Optional[int] = 1
+    old_avg: float, new_value: float, n: int, n_new: Optional[int] = 1
 ) -> float:
     """simple running average
     Args:
@@ -21,18 +18,18 @@ def compute_running_average(
         return new_value
     if n_new == 0:
         return old_avg
-    
+
     return old_avg + (new_value - old_avg) * n_new / (n + n_new)
-    
+
 
 def _transform(
-        X: torch.Tensor, 
-        copy: bool, 
-        with_mean: bool=True, 
-        with_std: bool=True, 
-        threshold: float=1.0e-3, 
-        eta: float=1.0e-3
-    ):
+    X: torch.Tensor,
+    copy: bool,
+    with_mean: bool = True,
+    with_std: bool = True,
+    threshold: float = 1.0e-3,
+    eta: float = 1.0e-3,
+):
     """
     Args:
         X: a list of 1D tensor or a 2D tensor
@@ -63,8 +60,3 @@ def _transform(
     # rst = (rst - mean) / std
 
     return rst, mean, std
-
-
-
-
-

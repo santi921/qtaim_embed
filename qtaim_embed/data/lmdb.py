@@ -36,7 +36,7 @@ def serialize_dgl_graph(dgl_graph, ret=True):
         if ret:
             tmpfile.seek(0)
             serialized_data = tmpfile.read()
-    if ret: 
+    if ret:
         return serialized_data
 
 

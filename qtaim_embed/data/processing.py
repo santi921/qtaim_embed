@@ -190,25 +190,23 @@ class HeteroGraphStandardScalerIterative:
             self.copy = copy
             self._sum_x2 = {}
             self.features_tf = features_tf
-            
+
             if mean is None:
                 self._mean = {}
-            else: 
+            else:
                 self._mean = mean
-            
+
             if std is None:
                 self._std = {}
             else:
                 self._std = std
-            
+
             if dict_node_sizes is None:
                 self.dict_node_sizes = {}
             else:
                 self.dict_node_sizes = dict_node_sizes
-        
+
         self.finalized = finalized
-            
-            
 
     def update(self, graphs):
         """
@@ -242,20 +240,28 @@ class HeteroGraphStandardScalerIterative:
         for nt in node_types:
             # Update running statistics for new node types
             if nt not in self._mean:
-                self._mean[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=torch.float64)
-                self._sum_x2[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=torch.float64)
-                self._std[nt] = torch.zeros(node_feats[nt][0].shape[1], dtype=torch.float64)
+                self._mean[nt] = torch.zeros(
+                    node_feats[nt][0].shape[1], dtype=torch.float64
+                )
+                self._sum_x2[nt] = torch.zeros(
+                    node_feats[nt][0].shape[1], dtype=torch.float64
+                )
+                self._std[nt] = torch.zeros(
+                    node_feats[nt][0].shape[1], dtype=torch.float64
+                )
                 self.dict_node_sizes[nt] = 0
 
             if torch.cat(node_feats[nt]).shape[1] > 0:
-                feats = torch.cat(node_feats[nt]).to(torch.float64)  # Use higher precision
-                # clean nans 
+                feats = torch.cat(node_feats[nt]).to(
+                    torch.float64
+                )  # Use higher precision
+                # clean nans
                 feats = torch.nan_to_num(feats, nan=0.0, posinf=0.0, neginf=0.0)
-                #print("feats shape: ", feats.shape)
+                # print("feats shape: ", feats.shape)
                 mean = torch.mean(feats, dim=0)
-                #print("mean shape: ", mean.shape)
+                # print("mean shape: ", mean.shape)
                 mean = torch.as_tensor(mean, dtype=torch.float64, device=feats.device)
-                #if nt == "global": 
+                # if nt == "global":
                 #    print("mean", self._mean[nt])
                 #    print("mean", mean)
                 #    print("n", self.dict_node_sizes[nt])
@@ -264,13 +270,12 @@ class HeteroGraphStandardScalerIterative:
                     old_avg=self._mean[nt],
                     new_value=mean,
                     n=self.dict_node_sizes[nt],
-                    n_new=feats.shape[0]
+                    n_new=feats.shape[0],
                 )
-                #print("nan in sum_x2", torch.sum(feats**2, dim=0))
+                # print("nan in sum_x2", torch.sum(feats**2, dim=0))
                 self._sum_x2[nt] += torch.sum(feats**2, dim=0)
                 self.dict_node_sizes[nt] += feats.shape[0]
 
-    
     def finalize(self):
         """
         Finalize the scaler by computing the mean and std from the given graphs.
@@ -281,22 +286,21 @@ class HeteroGraphStandardScalerIterative:
         print("...> finalizing scaler")
         for nt in self._mean.keys():
             if self.dict_node_sizes[nt] > 0:
-                #print("mean", self._mean[nt], "sum_x2", self._sum_x2[nt])
-                # nan check 
-                #print("mean", torch.isnan(self._mean[nt]).any(), "sum_x2", torch.isnan(self._sum_x2[nt]).any())
-                #print("node size", self.dict_node_sizes[nt])
+                # print("mean", self._mean[nt], "sum_x2", self._sum_x2[nt])
+                # nan check
+                # print("mean", torch.isnan(self._mean[nt]).any(), "sum_x2", torch.isnan(self._sum_x2[nt]).any())
+                # print("node size", self.dict_node_sizes[nt])
                 # compute std from mean and sum_x2
                 self._std[nt] = torch.sqrt(
                     self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2
                 )
-                
-                #print("sum_x2", self._sum_x2[nt])
-                #print("self._std[nt]", self._std[nt])
-                #print("std", self._std[nt])
+
+                # print("sum_x2", self._sum_x2[nt])
+                # print("self._std[nt]", self._std[nt])
+                # print("std", self._std[nt])
             else:
                 self._std[nt] = torch.zeros_like(self._mean[nt])
         self.finalized = True
-        
 
     def __call__(self, graphs) -> List[dgl.DGLGraph]:
 
@@ -311,8 +315,7 @@ class HeteroGraphStandardScalerIterative:
         else:
             graph_key = "labels"
         node_types = list(g.ndata[graph_key].keys())
-        
-        
+
         # obtain feats from ALL graphs
         for g in graphs:
             for nt in node_types:
@@ -333,7 +336,6 @@ class HeteroGraphStandardScalerIterative:
                 g.nodes[nt].data[graph_key] = ft
 
         return graphs
-        
 
     @property
     def mean(self):
@@ -424,27 +426,30 @@ class HeteroGraphStandardScalerIterative:
         Returns:
             None
         """
-        torch.save({
-            'mean': self._mean,
-            'std': self._std, 
-            'sum_x2': self._sum_x2,
-            'dict_node_sizes': self.dict_node_sizes,
-            'finalized': self.finalized, 
-            'features_tf': self.features_tf,
-        }, path)
-        
+        torch.save(
+            {
+                "mean": self._mean,
+                "std": self._std,
+                "sum_x2": self._sum_x2,
+                "dict_node_sizes": self.dict_node_sizes,
+                "finalized": self.finalized,
+                "features_tf": self.features_tf,
+            },
+            path,
+        )
+
     def _load_scaler(self, load_path):
         """
         Load the scaler from a file.
         """
         # Load the scaler from the file
         data = torch.load(load_path)
-        self._mean = data['mean']
-        self._std = data['std']
-        self._sum_x2 = data['sum_x2']
-        self.dict_node_sizes = data['dict_node_sizes']
-        self.finalized = data['finalized']
-        self.features_tf = data['features_tf']
+        self._mean = data["mean"]
+        self._std = data["std"]
+        self._sum_x2 = data["sum_x2"]
+        self.dict_node_sizes = data["dict_node_sizes"]
+        self.finalized = data["finalized"]
+        self.features_tf = data["features_tf"]
 
 
 class HeteroGraphLogMagnitudeScaler:
@@ -610,10 +615,10 @@ class HeteroGraphLogMagnitudeScaler:
 
 
 def merge_scalers(
-        list_scalers: List[HeteroGraphStandardScalerIterative],
-        features_tf: bool = True,
-        finalize_merged: bool = False
-    ):
+    list_scalers: List[HeteroGraphStandardScalerIterative],
+    features_tf: bool = True,
+    finalize_merged: bool = False,
+):
     """
     Merge a list of scalers into one scaler.
     Takes:
@@ -625,7 +630,7 @@ def merge_scalers(
     dict_node_sizes_merged = {}
     mean_merged = {}
     std_merged = {}
-    #x2_merged = {}
+    # x2_merged = {}
     finalized_list = []
 
     for scaler in list_scalers:
@@ -636,10 +641,10 @@ def merge_scalers(
                 mean_merged[nt] = torch.zeros_like(scaler._mean[nt])
                 std_merged[nt] = torch.zeros_like(scaler._std[nt])
                 dict_node_sizes_merged[nt] = 0
-            
+
             # update the mean and std
             mean_merged[nt] += scaler._mean[nt] * scaler.dict_node_sizes[nt]
-            std_merged[nt] += scaler._std[nt]**2 * scaler.dict_node_sizes[nt]
+            std_merged[nt] += scaler._std[nt] ** 2 * scaler.dict_node_sizes[nt]
             dict_node_sizes_merged[nt] += scaler.dict_node_sizes[nt]
 
     # finalize the mean and std
@@ -647,22 +652,22 @@ def merge_scalers(
         if dict_node_sizes_merged[nt] > 0:
             mean_merged[nt] = mean_merged[nt] / dict_node_sizes_merged[nt]
             std_merged[nt] = torch.sqrt(std_merged[nt] / dict_node_sizes_merged[nt])
-    finalized = False            
-    
+    finalized = False
+
     if finalize_merged:
-        finalized=True
-    
+        finalized = True
+
     if all(finalized_list):
         finalized = True
-    
-    #print(std_merged)
+
+    # print(std_merged)
 
     merged_scaler = HeteroGraphStandardScalerIterative(
-        features_tf=features_tf, 
-        mean=mean_merged, 
+        features_tf=features_tf,
+        mean=mean_merged,
         std=std_merged,
-        dict_node_sizes=dict_node_sizes_merged, 
-        finalized=finalized
+        dict_node_sizes=dict_node_sizes_merged,
+        finalized=finalized,
     )
 
     return merged_scaler
@@ -712,10 +717,7 @@ def log_scale_from_dict(dict_params):
 
 
 def compute_running_average(
-    old_avg: float, 
-    new_value: float, 
-    n: int, 
-    n_new: Optional[int] = 0
+    old_avg: float, new_value: float, n: int, n_new: Optional[int] = 0
 ) -> float:
     """simple running average
     Args:
@@ -724,17 +726,17 @@ def compute_running_average(
         n (int): number of samples
         n_new (Optional[int]): number of new samples
     """
-    # assert shapes 
-    assert old_avg.shape == new_value.shape, "old_avg and new_value must have the same shape"
-    #print("new_value", new_value)
-    #print("old_avg", old_avg)
-    #print("n", n)
-    #print("n_new", n_new)
+    # assert shapes
+    assert (
+        old_avg.shape == new_value.shape
+    ), "old_avg and new_value must have the same shape"
+    # print("new_value", new_value)
+    # print("old_avg", old_avg)
+    # print("n", n)
+    # print("n_new", n_new)
     if n == 0:
         return new_value
     if n_new == 0:
         return old_avg
-    
-    return old_avg + (new_value - old_avg) * n_new / (n + n_new)
-    
 
+    return old_avg + (new_value - old_avg) * n_new / (n + n_new)
