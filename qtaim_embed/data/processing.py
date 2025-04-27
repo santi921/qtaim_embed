@@ -283,21 +283,14 @@ class HeteroGraphStandardScalerIterative:
         for each node type. The mean and std are stored in the class.
         """
         # compute std from mean and sum_x2
+        assert self.finalized == False, "scaler already finalized"
+        
         print("...> finalizing scaler")
         for nt in self._mean.keys():
             if self.dict_node_sizes[nt] > 0:
-                # print("mean", self._mean[nt], "sum_x2", self._sum_x2[nt])
-                # nan check
-                # print("mean", torch.isnan(self._mean[nt]).any(), "sum_x2", torch.isnan(self._sum_x2[nt]).any())
-                # print("node size", self.dict_node_sizes[nt])
-                # compute std from mean and sum_x2
                 self._std[nt] = torch.sqrt(
                     self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2
                 )
-
-                # print("sum_x2", self._sum_x2[nt])
-                # print("self._std[nt]", self._std[nt])
-                # print("std", self._std[nt])
             else:
                 self._std[nt] = torch.zeros_like(self._mean[nt])
         self.finalized = True
