@@ -37,7 +37,7 @@ def get_atom_feats(row, atom_keys):
 
 
 def get_bond_features(
-    row: DataFrame, map_key: str, bond_key: str = None, keys: list = None
+    row: DataFrame, map_key: str = "bonds", bond_key: str = "bonds", keys: list = None
 ) -> dict:
     """
     Takes the mappings in the map_key and returns the features for the bonds
@@ -49,8 +49,7 @@ def get_bond_features(
     Returns:
         bond_features: dictionary of bond features
     """
-    if bond_key is None:
-        bond_key = "bonds"
+    
 
     bond_features = {}
 
@@ -81,7 +80,7 @@ def get_bond_features(
                     bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
                 else:
                     bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
-    # print("bond_features: ", bond_features)
+    #print("bond_features: ", bond_features.keys())
     return bond_features
 
 

@@ -59,7 +59,7 @@ class GCNGraphPred(pl.LightningModule):
         scalers: list, list of scalers applied to each node type
         embedding_size: int, size of embedding layer
         global_pooling: str, type of global pooling
-
+        compiled: bool, whether the model is compiled
     """
 
     def __init__(

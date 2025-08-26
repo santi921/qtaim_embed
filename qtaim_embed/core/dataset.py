@@ -350,7 +350,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         filter_self_bonds=True,
         size=None,
         bond_key="bonds",
-        map_key=None,
+        map_key="bonds",
         extra_keys={
             "atom": [
                 "extra_feat_atom_esp_total",
@@ -409,7 +409,9 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         for key_check in ["atom", "bond", "global"]:
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
-
+        
+        print("pandas df dims: ", df.shape)
+        
         mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
             bond_key=bond_key,

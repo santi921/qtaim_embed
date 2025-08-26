@@ -1289,7 +1289,7 @@ def get_datasets_tmqm_high(loc_dict):
         "bond_feature_size": 7,
         "global_feature_size": 6,
         "conv_fn": "ResidualBlock",
-        "target_dict": {"global": ["shifted_rrho_ev_free_energy"]},
+        "target_dict": {"global": ["corrected_E"]},
         "dropout": 0.2,
         "batch_norm_tf": True,
         "activation": "ReLU",
