@@ -1,0 +1,160 @@
+{
+    "optim": {
+        "precision": "bf16-mixed",
+        "num_devices": 1,
+        "num_nodes": 0,
+        "accumulate_grad_batches": 1,
+        "strategy": "auto",
+        "gradient_clip_val": 10.0
+    },
+    "dataset": {
+        "allowed_ring_size": [
+            3,
+            4,
+            5,
+            6
+        ],
+        "allowed_charges": null,
+        "allowed_spins": null,
+        "bond_key": "bonds",
+        "self_loop": true,
+        "target_list": [
+            "corrected_E"
+        ],
+        "val_prop": 0.1,
+        "test_prop": 0.1,
+        "train_batch_size": 1024,
+        "seed": 42,
+        "debug": false,
+        "num_workers": 4,
+        "per_atom": true,
+        "extra_dataset_info": null,
+        "log_scale_features": false,
+        "log_scale_targets": false,
+        "standard_scale_features": true,
+        "standard_scale_targets": true,
+        "extra_keys": {
+            "atom": [
+                "extra_feat_atom_Hamiltonian_K",
+                "extra_feat_atom_e_density",
+                "extra_feat_atom_e_loc_func",
+                "extra_feat_atom_ave_loc_ion_E",
+                "extra_feat_atom_delta_g_promolecular",
+                "extra_feat_atom_delta_g_hirsh",
+                "extra_feat_atom_esp_nuc",
+                "extra_feat_atom_esp_e",
+                "extra_feat_atom_esp_total",
+                "extra_feat_atom_grad_norm",
+                "extra_feat_atom_lap_norm",
+                "extra_feat_atom_eig_hess",
+                "extra_feat_atom_det_hessian",
+                "extra_feat_atom_ellip_e_dens",
+                "extra_feat_atom_eta",
+                "extra_feat_atom_density_beta",
+                "extra_feat_atom_density_alpha",
+                "extra_feat_atom_spin_density",
+                "extra_feat_atom_lol"
+            ],
+            "bond": [
+                "extra_feat_bond_Lagrangian_K",
+                "extra_feat_bond_Hamiltonian_K",
+                "extra_feat_bond_e_density",
+                "extra_feat_bond_e_loc_func",
+                "extra_feat_bond_ave_loc_ion_E",
+                "extra_feat_bond_delta_g_promolecular",
+                "extra_feat_bond_delta_g_hirsh",
+                "extra_feat_bond_esp_nuc",
+                "extra_feat_bond_esp_e",
+                "extra_feat_bond_esp_total",
+                "extra_feat_bond_grad_norm",
+                "extra_feat_bond_lap_norm",
+                "extra_feat_bond_eig_hess",
+                "extra_feat_bond_det_hessian",
+                "extra_feat_bond_ellip_e_dens",
+                "extra_feat_bond_eta",
+                "extra_feat_bond_energy_density",
+                "extra_feat_bond_density_beta",
+                "extra_feat_bond_density_alpha",
+                "extra_feat_bond_spin_density",
+                "extra_feat_bond_lol"
+            ],
+            "global": [
+                "corrected_E"
+            ]
+        }
+    },
+    "model": {
+        "atom_feature_size": 32,
+        "bond_feature_size": 28,
+        "global_feature_size": 3,
+        "compile": false,
+        "conv_fn": "ResidualBlock",
+        "target_dict": {
+            "global": [
+                "homo",
+                "lumo",
+                "gap"
+            ]
+        },
+        "dropout": 0.2,
+        "batch_norm_tf": true,
+        "activation": "ReLU",
+        "bias": true,
+        "norm": "both",
+        "aggregate": "sum",
+        "n_conv_layers": 6,
+        "lr": 0.01,
+        "weight_decay": 5e-05,
+        "lr_plateau_patience": 25,
+        "lr_scale_factor": 0.5,
+        "scheduler_name": "reduce_on_plateau",
+        "loss_fn": "mse",
+        "resid_n_graph_convs": 3,
+        "embedding_size": 100,
+        "fc_layer_size": [
+            512,
+            512,
+            512
+        ],
+        "shape_fc": "flat",
+        "fc_dropout": 0.1,
+        "fc_batch_norm": true,
+        "n_fc_layers": 3,
+        "global_pooling_fn": "WeightedMeanPoolingThenCat",
+        "ntypes_pool": [
+            "atom",
+            "bond",
+            "global"
+        ],
+        "ntypes_pool_direct_cat": [
+            "global"
+        ],
+        "lstm_iters": 15,
+        "lstm_layers": 2,
+        "num_heads": 2,
+        "feat_drop": 0.1,
+        "attn_drop": 0.1,
+        "residual": true,
+        "ntasks": 1,
+        "num_heads_gat": 2,
+        "dropout_feat_gat": 0.1,
+        "dropout_attn_gat": 0.1,
+        "hidden_size_gat": 50,
+        "residual_gat": true,
+        "classifier": false,
+        "batch_norm": true,
+        "pooling_ntypes": [
+            "atom",
+            "bond",
+            "global"
+        ],
+        "pooling_ntypes_direct": [
+            "global"
+        ],
+        "fc_hidden_size_1": 1024,
+        "fc_num_layers": 2,
+        "restore": false,
+        "max_epochs": 1000,
+        "extra_stop_patience": 3
+    }
+}
