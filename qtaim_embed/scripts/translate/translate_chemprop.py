@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 This script qm9 or qm8 datasets into the format for training with chemprop with atomic qtaim features
 """
@@ -14,7 +16,7 @@ RDLogger.DisableLog("rdApp.*")
 from qtaim_embed.utils.translation import translate_qm8, translate_qm9
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("-dataset_loc", type=str, default="./qm9_test.json")
     parser.add_argument("-out_loc", type=str, default="./qm9_test_qtaim.json")

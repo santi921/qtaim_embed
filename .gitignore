@@ -62,3 +62,6 @@ ckpt*
 qtaim_embed.egg-info/not-zip-safe
 *lmdb-lock
 *png
+*pt
+*.lmdb-lock
+*.lmdb

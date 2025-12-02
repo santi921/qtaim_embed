@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
@@ -316,7 +318,7 @@ class TrainingObject:
         run.finish()
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("-method", type=str, default="bayes")
     parser.add_argument("--debug", default=False, action="store_true")

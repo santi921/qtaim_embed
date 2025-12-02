@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 This script qm9 or qm8 datasets into the format for training with dimenet, schnet, or painn
 """
@@ -10,7 +12,7 @@ from qtaim_embed.utils.translation import (
 )
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("-dataset_loc", type=str, default="./qm9.json")
     parser.add_argument("-out_loc", type=str, default="./qm9_dimenet.json")

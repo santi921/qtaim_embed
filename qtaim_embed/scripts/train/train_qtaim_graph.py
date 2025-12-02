@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import wandb, argparse, torch, json
 from copy import deepcopy
 import pandas as pd
@@ -18,7 +20,7 @@ torch.set_float32_matmul_precision("high")  # might have to disable on older GPU
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", default=False, action="store_true")
     parser.add_argument("-project_name", type=str, default="qtaim_embed_test")

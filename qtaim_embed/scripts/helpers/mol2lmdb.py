@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import torch
 import json
@@ -15,7 +16,7 @@ from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
 torch.set_float32_matmul_precision("high")  # might have to disable on older GPUs
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="convert dataset to lmdb for instant training"
     )

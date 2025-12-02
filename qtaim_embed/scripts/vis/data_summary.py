@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 from qtaim_embed.core.dataset import HeteroGraphNodeLabelDataset
 from qtaim_embed.utils.dataset import (
@@ -10,7 +12,7 @@ from qtaim_embed.utils.dataset import (
 )
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dataset_plot",
