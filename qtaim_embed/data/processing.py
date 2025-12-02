@@ -1,3 +1,4 @@
+from shutil import copy
 import dgl
 import torch
 from collections import defaultdict
@@ -29,11 +30,21 @@ class HeteroGraphStandardScaler:
         features_tf: bool = True,
         mean: Optional[Dict[str, torch.Tensor]] = None,
         std: Optional[Dict[str, torch.Tensor]] = None,
+        load_path: Optional[str] = None,
+        load: Optional[bool] = False,
+             
     ):
-        self.copy = copy
-        self._mean = mean
-        self._std = std
-        self.features_tf = features_tf
+
+    
+        if load:
+            self._load_scaler(load_path=load_path)
+        else:
+            self.copy = copy
+            self._mean = mean
+            self._std = std
+            self.features_tf = features_tf
+        
+        self.name = "standard"
 
     @property
     def mean(self):
@@ -153,6 +164,35 @@ class HeteroGraphStandardScaler:
                 feats_ret[nt] = feats_temp
         return feats_ret
 
+    def save_scaler(self, path):
+        """
+        Save the scaler to a file.
+        Takes:
+            path: the path to the file where the scaler will be saved
+        Returns:
+            None
+        """
+        torch.save(
+            {
+                "mean": self._mean,
+                "std": self._std,
+                "features_tf": self.features_tf, 
+                "copy": self.copy
+            },
+            path,
+        )
+
+    def _load_scaler(self, load_path):
+        """
+        Load the scaler from a file.
+        """
+        # Load the scaler from the file
+        data = torch.load(load_path)
+        self._mean = data["mean"]
+        self._std = data["std"]
+        self.features_tf = data["features_tf"]
+        self.copy = data["copy"]
+        
 
 class HeteroGraphStandardScalerIterative:
     """
@@ -207,6 +247,7 @@ class HeteroGraphStandardScalerIterative:
                 self.dict_node_sizes = dict_node_sizes
 
         self.finalized = finalized
+        self.name = "standard_iterative"
 
     def update(self, graphs):
         """
@@ -462,10 +503,17 @@ class HeteroGraphLogMagnitudeScaler:
         copy: bool = True,
         features_tf: bool = True,
         shift: float = None,
+        load_path: Optional[str] = None,
+        load: Optional[bool] = False,
     ):
-        self.copy = copy
-        self.features_tf = features_tf
-        self.shift = shift
+        if load:
+            self._load_scaler(load_path=load_path)
+        else: 
+            self.copy = copy
+            self.features_tf = features_tf
+            self.shift = shift
+        
+        self.name = "log"
 
     def __call__(self, graphs) -> List[dgl.DGLGraph]:
         g = graphs[0]
@@ -605,6 +653,37 @@ class HeteroGraphLogMagnitudeScaler:
                 feats_ret[nt] = feats_temp
 
         return feats_ret
+
+
+    def save_scaler(self, path):
+        """
+        Save the scaler to a file.
+        Takes:
+            path: the path to the file where the scaler will be saved
+        Returns:
+            None
+        """
+
+
+        torch.save(
+            {
+                "copy": self.copy,
+                "features_tf": self.features_tf,
+                "shift": self.shift,
+
+            },
+            path,
+        )
+
+    def _load_scaler(self, load_path):
+        """
+        Load the scaler from a file.
+        """
+        data = torch.load(load_path)
+        self.copy = data["copy"]
+        self.features_tf = data["features_tf"]
+        self.shift = data["shift"]
+
 
 
 def merge_scalers(

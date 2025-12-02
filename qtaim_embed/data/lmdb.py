@@ -6,6 +6,10 @@ import tempfile
 
 
 from qtaim_embed.core.dataset import Subset
+#from qtaim_embed.data.processing import (
+#    HeteroGraphStandardScaler,
+#    HeteroGraphLogMagnitudeScaler,
+#)
 
 scalar = 1 / 1024
 
@@ -155,7 +159,7 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
         db.close()
 
 
-def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1):
+def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1, save_scalers=False):
     """
     Converts dataset to lmdb and saves it to the specified directory
     Takes:
@@ -180,6 +184,10 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
             serialize_dgl_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices
         ]
 
+        if save_scalers: 
+            feature_scalers = dataset.dataset.feature_scalers
+            label_scalers = dataset.dataset.label_scalers
+
     else:
         feature_size = dataset.feature_size
         feature_names = dataset.feature_names
@@ -192,6 +200,10 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         extra_dataset_info = dataset.extra_dataset_info
         # List of Molecules
         dgl_graphs_serialized = [serialize_dgl_graph(g) for g in dataset.graphs]
+
+        if save_scalers: 
+            feature_scalers = dataset.feature_scalers
+            label_scalers = dataset.label_scalers
 
     global_dict = {
         "feature_size": feature_size,
@@ -212,9 +224,20 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         lmdb_dir=lmdb_dir,
         lmdb_name="molecule.lmdb",
         global_values=global_dict,
-        chunk=chunk,
+        chunk=chunk,    
     )
 
+    if save_scalers:
+        if feature_scalers == []: 
+            print("No feature scalers found in dataset. Skipping scaler save.")
+        else: 
+            for scaler in feature_scalers:
+                scaler.save_scaler(os.path.join(lmdb_dir, "feature_scaler_{}.pt".format(scaler.name)))
+        if label_scalers == []:
+            print("No label scalers found in dataset. Skipping label scaler save.")
+        else: 
+            for scaler in label_scalers:
+                scaler.save_scaler(os.path.join(lmdb_dir, "label_scaler_{}.pt".format(scaler.name)))
 
 def combined_mean_std(mean_list, std_list, count_list):
     """
