@@ -13,6 +13,7 @@ from qtaim_embed.utils.descriptors import (
     find_rings,
     get_node_direction_expansion,
 )
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from rdkit import RDLogger
 from e3nn.o3._spherical_harmonics import _spherical_harmonics
@@ -22,7 +23,7 @@ lg.setLevel(RDLogger.CRITICAL)
 
 
 class BaseFeaturizer:
-    def __init__(self, dtype="float32"):
+    def __init__(self, dtype: str = "float32"):
         if dtype not in ["float32", "float64"]:
             raise ValueError(
                 "`dtype` should be `float32` or `float64`, but got `{}`.".format(dtype)
@@ -32,7 +33,7 @@ class BaseFeaturizer:
         self._feature_name = []
 
     @property
-    def feature_size(self):
+    def feature_size(self) -> int:
         """
         Returns:
             an int of the feature size.
@@ -40,7 +41,7 @@ class BaseFeaturizer:
         return self._feature_size
 
     @property
-    def feature_name(self):
+    def feature_name(self) -> List[str]:
         """
         Returns:
             a list of the names of each feature. Should be of the same length as
@@ -49,7 +50,7 @@ class BaseFeaturizer:
 
         return self._feature_name
 
-    def __call__(self, mol, **kwargs):
+    def __call__(self, mol: Any, **kwargs) -> Dict[str, Any]:
         """
         Returns:
             A dictionary of the features.
@@ -69,7 +70,12 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         BondAsEdgeBidirectedFeaturizer
     """
 
-    def __init__(self, dtype="float32", selected_keys=[], allowed_ring_size=[]):
+    def __init__(
+        self,
+        dtype: str = "float32",
+        selected_keys: Optional[List[str]] = [],
+        allowed_ring_size: Optional[List[int]] = [],
+    ):
         super(BaseFeaturizer, self).__init__()
         self._feature_size = 0
         self._feature_name = []
@@ -82,33 +88,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             )
         print("selected bond keys", selected_keys)
 
-
-class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
-    """BaseFeaturizer
-    Featurize all bonds in a molecule.
-
-    The bond indices will be preserved, i.e. feature i corresponds to atom i.
-    The number of features will be equal to the number of bonds in the molecule,
-    so this is suitable for the case where we represent bond as graph nodes.
-
-    See Also:
-        BondAsEdgeBidirectedFeaturizer
-    """
-
-    def __init__(self, dtype="float32", selected_keys=[], allowed_ring_size=[]):
-        super(BaseFeaturizer, self).__init__()
-        self._feature_size = 0
-        self._feature_name = []
-        self.selected_keys = selected_keys
-        self.dtype = dtype
-        self.allowed_ring_size = allowed_ring_size
-        if allowed_ring_size == []:
-            print(
-                "NOTE: No ring size if no ring features are enabled, metal/nonmetal bonds are also off"
-            )
-        print("selected bond keys", selected_keys)
-
-    def __call__(self, mol, **kwargs):
+    def __call__(self, mol: Any, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
         Parameters
         ----------
@@ -228,10 +208,10 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
 
     def __init__(
         self,
-        element_set,
-        selected_keys=None,
-        allowed_ring_size=[],
-        dtype="float32",
+        element_set: List[str],
+        selected_keys: Optional[List[str]] = None,
+        allowed_ring_size: Optional[List[int]] = [],
+        dtype: str = "float32",
     ):
         if dtype not in ["float32", "float64"]:
             raise ValueError(
@@ -247,7 +227,7 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
         self.allowed_ring_size = allowed_ring_size
         self.element_set = element_set
 
-    def __call__(self, mol, **kwargs):
+    def __call__(self, mol: Any, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
         Args:
             mol: molecular wraper object w/electronic info
@@ -325,10 +305,10 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
 
     def __init__(
         self,
-        allowed_charges=[],
-        allowed_spins=[],
-        selected_keys=[],
-        dtype="float32",
+        allowed_charges: Optional[List[int]] = [],
+        allowed_spins: Optional[List[int]] = [],
+        selected_keys: Optional[List[str]] = [],
+        dtype: str = "float32",
     ):
         super(BaseFeaturizer, self).__init__()
         if dtype not in ["float32", "float64"]:
@@ -343,7 +323,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
         self._feature_name = []
         print("selected global keys", selected_keys)
 
-    def __call__(self, mol, **kwargs):
+    def __call__(self, mol: Any, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
         mol can either be an molwrapper object
         """

@@ -2,6 +2,7 @@ from rdkit import Chem
 import numpy as np
 import networkx as nx
 import copy
+from typing import Optional, Dict, Any, List, Tuple, Union
 
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.core.structure import Molecule
@@ -31,17 +32,17 @@ class MoleculeWrapper:
 
     def __init__(
         self,
-        mol_graph,
-        functional_group=None,
-        free_energy=None,
-        id=None,
-        bonds=None,
-        non_metal_bonds=None,
-        atom_features={},
-        bond_features={},
-        global_features={},
-        original_atom_ind=None,
-        original_bond_mapping=None,
+        mol_graph: MoleculeGraph,
+        functional_group: Optional[str] = None,
+        free_energy: Optional[float] = None,
+        id: Optional[str] = None,
+        bonds: Optional[List[Tuple[int, int]]] = None,
+        non_metal_bonds: Optional[List[Tuple[int, int]]] = None,
+        atom_features: Optional[Dict[str, Any]] = {},
+        bond_features: Optional[Dict[str, Any]] = {},
+        global_features: Optional[Dict[str, Any]] = {},
+        original_atom_ind: Optional[List[int]] = None,
+        original_bond_mapping: Optional[List[int]] = None,
     ):
         self.mol_graph = mol_graph
         self.pymatgen_mol = mol_graph.molecule
@@ -63,7 +64,7 @@ class MoleculeWrapper:
         self._isomorphic_bonds = None
 
     @property
-    def charge(self):
+    def charge(self) -> int:
         """
         Returns:
             int: charge of the molecule
@@ -71,7 +72,7 @@ class MoleculeWrapper:
         return self.pymatgen_mol.charge
 
     @property
-    def formula(self):
+    def formula(self) -> str:
         """
         Returns:
             str: chemical formula of the molecule, e.g. H2CO3.
@@ -79,7 +80,7 @@ class MoleculeWrapper:
         return self.pymatgen_mol.composition.alphabetical_formula.replace(" ", "")
 
     @property
-    def composition_dict(self):
+    def composition_dict(self) -> Dict[str, int]:
         """
         Returns:
             dict: with chemical species as key and number of the species as value.
@@ -88,7 +89,7 @@ class MoleculeWrapper:
         return {k: int(v) for k, v in d.items()}
 
     @property
-    def weight(self):
+    def weight(self) -> float:
         """
         Returns:
             int: molecule weight
@@ -96,7 +97,7 @@ class MoleculeWrapper:
         return self.pymatgen_mol.composition.weight
 
     @property
-    def num_atoms(self):
+    def num_atoms(self) -> int:
         """
         Returns:
             int: number of atoms in molecule
@@ -104,7 +105,7 @@ class MoleculeWrapper:
         return len(self.pymatgen_mol)
 
     @property
-    def species(self):
+    def species(self) -> List[str]:
         """
         Species of atoms. Order is the same as self.atoms.
         Returns:
@@ -113,7 +114,7 @@ class MoleculeWrapper:
         return [str(s) for s in self.pymatgen_mol.species]
 
     @property
-    def coords(self):
+    def coords(self) -> np.ndarray:
         """
         Returns:
             2D array: of shape (N, 3) where N is the number of atoms.
@@ -121,7 +122,7 @@ class MoleculeWrapper:
         return np.asarray(self.pymatgen_mol.cart_coords)
 
     @property
-    def bonds(self):
+    def bonds(self) -> Dict[Tuple[int, int], Any]:
         """
         Returns:
             dict: with bond index (a tuple of atom indices) as the key and and bond
@@ -137,14 +138,14 @@ class MoleculeWrapper:
             }
 
     @property
-    def graph(self):
+    def graph(self) -> nx.Graph:
         """
         Returns:
             networkx graph used by mol_graph
         """
         return self.mol_graph.graph
 
-    def is_atom_in_ring(self, atom):
+    def is_atom_in_ring(self, atom: int) -> bool:
         """
         Whether an atom in ring.
 
@@ -158,7 +159,7 @@ class MoleculeWrapper:
         ring_atoms = set([atom for ring in ring_info for bond in ring for atom in bond])
         return atom in ring_atoms
 
-    def is_bond_in_ring(self, bond):
+    def is_bond_in_ring(self, bond: Tuple[int, int]) -> bool:
         """
         Whether a bond in ring.
 
@@ -172,7 +173,7 @@ class MoleculeWrapper:
         ring_bonds = set([tuple(sorted(bond)) for ring in ring_info for bond in ring])
         return tuple(sorted(bond)) in ring_bonds
 
-    def get_sdf_bond_indices(self, zero_based=False, sdf=None):
+    def get_sdf_bond_indices(self, zero_based: bool = False, sdf: Optional[str] = None) -> List[Tuple[int, int]]:
         """
         Get the indices of bonds as specified in the sdf file.
 
@@ -202,7 +203,7 @@ class MoleculeWrapper:
 
         return bonds
 
-    def get_sdf_bond_indices_v2000(self, sdf=None):
+    def get_sdf_bond_indices_v2000(self, sdf: Optional[str] = None) -> List[Tuple[int, int]]:
         """
         Get the indices of bonds as specified in the sdf file.
 
@@ -219,7 +220,7 @@ class MoleculeWrapper:
             bonds.append(tuple(sorted([int(i) for i in line.split()[:2]])))
         return bonds
 
-    def subgraph_atom_mapping(self, bond):
+    def subgraph_atom_mapping(self, bond: Tuple[int, int]) -> Tuple[List[int], List[int]]:
         """
         Find the atoms in the two subgraphs by breaking a bond in a molecule.
 
@@ -243,7 +244,7 @@ class MoleculeWrapper:
                 raise Exception("Mol not split into two parts")
             return mapping
 
-    def find_ring(self, by_species=False):
+    def find_ring(self, by_species: bool = False) -> List[List[Union[int, str]]]:
         """
         Find all rings in the molecule.
 
@@ -271,7 +272,14 @@ class MoleculeWrapper:
 
         return rings_once_per_atom
 
-    def write(self, filename=None, name=None, format="sdf", kekulize=True, v3000=True):
+    def write(
+        self,
+        filename: Optional[str] = None,
+        name: Optional[str] = None,
+        format: str = "sdf",
+        kekulize: bool = True,
+        v3000: bool = True,
+    ) -> Optional[str]:
         """Write a molecule to file or as string using rdkit.
 
         Args:
@@ -311,7 +319,7 @@ class MoleculeWrapper:
         else:
             raise ValueError(f"format {format} currently not supported")
 
-    def write_custom(self, index):
+    def write_custom(self, index: int) -> str:
         bonds = self.bonds
         bond_count = len(bonds)
         atom_count = len(self.pymatgen_mol.sites)
@@ -374,7 +382,7 @@ class MoleculeWrapper:
 
         return sdf
 
-    def draw(self, filename=None, show_atom_idx=False):
+    def draw(self, filename: Optional[str] = None, show_atom_idx: bool = False) -> Any:
         """
         Draw the molecule.
 
@@ -397,7 +405,12 @@ class MoleculeWrapper:
             filename = str(to_path(filename))
             Draw.MolToFile(m, filename)
 
-    def draw_with_bond_note(self, bond_note, filename="mol.png", show_atom_idx=True):
+    def draw_with_bond_note(
+        self,
+        bond_note: Dict[Tuple[int, int], Any],
+        filename: str = "mol.png",
+        show_atom_idx: bool = True,
+    ) -> None:
         """
         Draw molecule using rdkit and show bond annotation, e.g. bond energy.
 
@@ -435,32 +448,32 @@ class MoleculeWrapper:
         with open(to_path(filename), "wb") as f:
             f.write(d.GetDrawingText())
 
-    def pack_features(self, broken_bond=None):
+    def pack_features(self, broken_bond: Optional[Tuple[int, int]] = None) -> Dict[str, Any]:
         feats = dict()
         feats["charge"] = self.charge
         return feats
 
-    def __expr__(self):
+    def __expr__(self) -> str:
         return f"{self.id}_{self.formula}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__expr__()
 
 
 def create_wrapper_mol_from_atoms_and_bonds(
-    species,
-    coords,
-    bonds,
-    charge=0,
-    free_energy=None,
-    functional_group=None,
-    identifier=None,
-    original_atom_ind=None,
-    original_bond_ind=None,
-    atom_features={},
-    bond_features={},
-    global_features={},
-):
+    species: List[str],
+    coords: Union[List[List[float]], np.ndarray],
+    bonds: List[Tuple[int, int]],
+    charge: int = 0,
+    free_energy: Optional[float] = None,
+    functional_group: Optional[str] = None,
+    identifier: Optional[str] = None,
+    original_atom_ind: Optional[List[int]] = None,
+    original_bond_ind: Optional[List[int]] = None,
+    atom_features: Optional[Dict[str, Any]] = {},
+    bond_features: Optional[Dict[str, Any]] = {},
+    global_features: Optional[Dict[str, Any]] = {},
+) -> MoleculeWrapper:
     """
     Create a :class:`MoleculeWrapper` from atoms and bonds.
 

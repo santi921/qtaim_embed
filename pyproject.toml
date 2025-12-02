@@ -1,0 +1,68 @@
+[project]
+name = "qtaim_embed"
+version = "0.0.0"
+description = "General GNN Package"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [ { name = "Santiago Vargas" } ]
+
+
+#dependencies = [
+#    "pymatgen>=2024.0.0",
+#    "lmdb>=1.4.0", 
+#    "scipy>=1.13.0",
+#    "tqdm>=4.65.0",
+#    "torchmetrics>=0.11.0",
+#    "bson",
+#    "h5py>=3.9.0",
+#    "e3nn>=0.5.0",
+#]
+
+
+# optional dependencies 
+[project.optional-dependencies]
+dev = ["pytest>=7.4.0", "pytest-cov>=7.0.0", "ruff>=0.0.285", "pytest-asyncio>=0.26.0"]
+generator = []
+
+[tool.setuptools]
+# Auto-discover packages in the repository
+packages = { find = {} }
+
+[project.scripts]
+qtaim-embed-train-graph = "qtaim_embed.scripts.train.train_qtaim_graph:main"
+qtaim-embed-bayes-opt-graph = "qtaim_embed.scripts.train.bayes_opt_graph:main"
+qtaim-embed-train-node = "qtaim_embed.scripts.train.train_qtaim_node:main"
+qtaim-embed-bayes-opt-node = "qtaim_embed.scripts.train.bayes_opt_node:main"
+qtaim-embed-train-graph-classifier = "qtaim_embed.scripts.train.train_qtaim_graph_classifier:main"
+qtaim-embed-bayes-opt-graph-classifier = "qtaim_embed.scripts.train.bayes_opt_graph_classifier:main"
+qtaim-embed-data-summary = "qtaim_embed.scripts.vis.data_summary:main"
+qtaim-embed-mol2lmdb = "qtaim_embed.scripts.helpers.mol2lmdb:main"
+qtaim-embed-mol2lmdb-node = "qtaim_embed.scripts.helpers.mol2lmdb_node:main"
+
+# Optional: add project URLs
+[project.urls]
+"Homepage" = "https://github.com/santi921/qtaim_embed"
+"Bug Tracker" = "https://github.com/santi921/qtaim_embed/issues"
+
+# Conda environment specification (informational). Use `environment.yml` to
+# create the recommended conda environment with RDKit from conda-forge.
+[tool.conda]
+# Channels to use when creating the environment
+channels = ["conda-forge", "defaults"]
+
+[tool.pip]
+# Custom pip dependencies or indexes can be specified here for documentation purposes.
+# To install with CUDA 12.4, use:
+# pip install torch==2.4.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu124
+# pip install dgl --index-url https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html
+dependencies = [
+    "torch==2.4.1",
+    "dgl"
+]
+# The following index URLs are informational; pip only supports one --index-url per install command.
+# Use the appropriate index URL for each package as needed.
+index-urls = [
+    "https://download.pytorch.org/whl/cu124",
+    "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html"
+]
+
