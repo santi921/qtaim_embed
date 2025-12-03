@@ -111,8 +111,10 @@ class MoleculeWrapper:
         Returns:
             list: Species string.
         """
+        #try:
         return [str(s) for s in self.pymatgen_mol.species]
-
+        #except: 
+        #    return [str(s._species)[:-1] for s in self.pymatgen_mol._sites]
     @property
     def coords(self) -> np.ndarray:
         """

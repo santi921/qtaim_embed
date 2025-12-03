@@ -13,6 +13,8 @@ from qtaim_embed.utils.descriptors import (
     find_rings,
     get_node_direction_expansion,
 )
+from qtaim_embed.core.molwrapper import MoleculeWrapper
+
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from rdkit import RDLogger
@@ -88,7 +90,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             )
         print("selected bond keys", selected_keys)
 
-    def __call__(self, mol: Any, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
+    def __call__(self, mol: MoleculeWrapper, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
         Parameters
         ----------
@@ -227,7 +229,7 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
         self.allowed_ring_size = allowed_ring_size
         self.element_set = element_set
 
-    def __call__(self, mol: Any, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
+    def __call__(self, mol: MoleculeWrapper, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
         Args:
             mol: molecular wraper object w/electronic info
@@ -323,7 +325,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
         self._feature_name = []
         print("selected global keys", selected_keys)
 
-    def __call__(self, mol: Any, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
+    def __call__(self, mol: MoleculeWrapper, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
         mol can either be an molwrapper object
         """
