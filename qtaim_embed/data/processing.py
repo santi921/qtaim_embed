@@ -32,6 +32,7 @@ class HeteroGraphStandardScaler:
         std: Optional[Dict[str, torch.Tensor]] = None,
         load_path: Optional[str] = None,
         load: Optional[bool] = False,
+        epsilon: Optional[float] = 1e-6,
              
     ):
 
@@ -45,6 +46,7 @@ class HeteroGraphStandardScaler:
             self.features_tf = features_tf
         
         self.name = "standard"
+        self.epsilon = epsilon
 
     @property
     def mean(self):
@@ -84,7 +86,7 @@ class HeteroGraphStandardScaler:
             dtype = node_feats[node_types[0]][0].dtype
             for nt in node_types:
                 if torch.cat(node_feats[nt]).shape[1] > 0:
-                    feats, mean, std = _transform(torch.cat(node_feats[nt]), self.copy)
+                    feats, mean, std = _transform(torch.cat(node_feats[nt]), self.copy, eta=self.epsilon)
                     node_feats[nt] = torch.tensor(feats, dtype=dtype)
                     mean = torch.tensor(mean, dtype=dtype)
                     std = torch.tensor(std, dtype=dtype)
@@ -223,6 +225,7 @@ class HeteroGraphStandardScalerIterative:
         load_path: Optional[str] = None,
         dict_node_sizes: Optional[Dict[str, int]] = None,
         finalized: Optional[bool] = False,
+        epsilon: Optional[float] = 1e-6,
     ):
         if load:
             self._load_scaler(load_path=load_path)
@@ -245,7 +248,7 @@ class HeteroGraphStandardScalerIterative:
                 self.dict_node_sizes = {}
             else:
                 self.dict_node_sizes = dict_node_sizes
-
+        self.epsilon = epsilon
         self.finalized = finalized
         self.name = "standard_iterative"
 
@@ -332,6 +335,8 @@ class HeteroGraphStandardScalerIterative:
                 self._std[nt] = torch.sqrt(
                     self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2
                 )
+                # update with epsilon to avoid division by zero
+                self._std[nt][self._std[nt] == 0] = self.epsilon
             else:
                 self._std[nt] = torch.zeros_like(self._mean[nt])
         self.finalized = True
@@ -360,6 +365,7 @@ class HeteroGraphStandardScalerIterative:
         # standardize
         if self._mean is not {} and self._std is not {}:
             for nt in node_types:
+                # safely handle the case where std is zeron
                 feats = (torch.cat(node_feats[nt]) - self._mean[nt]) / self._std[nt]
                 node_feats[nt] = feats
 
