@@ -18,6 +18,7 @@
 *.CHRG
 *tex
 *md
+!CLAUDE.md
 *pdf
 *postera*
 *xz
