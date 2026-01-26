@@ -159,7 +159,44 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
         db.close()
 
 
-def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1, save_scalers=False):
+def _serialize_graphs_parallel(graphs, num_workers):
+    """
+    Serialize DGL graphs in parallel (LMDB conversion only).
+
+    Args:
+        graphs: List of DGL graphs
+        num_workers: Number of parallel workers
+
+    Returns:
+        List of serialized graphs (bytes)
+    """
+    from multiprocessing import Pool
+    import multiprocessing as mp
+    from qtaim_embed.data.parallel_utils import serialize_graph_worker
+
+    actual_workers = min(num_workers, len(graphs), mp.cpu_count())
+    args_list = [(idx, graph) for idx, graph in enumerate(graphs)]
+    serialized = [None] * len(graphs)
+
+    with Pool(processes=actual_workers) as pool:
+        results = pool.imap_unordered(
+            serialize_graph_worker,
+            args_list,
+            chunksize=max(1, len(args_list) // (actual_workers * 4))
+        )
+
+        for idx, serialized_bytes in tqdm(
+            results,
+            total=len(graphs),
+            desc="Serializing graphs (parallel)"
+        ):
+            if serialized_bytes is not None:
+                serialized[idx] = serialized_bytes
+
+    return serialized
+
+
+def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1, save_scalers=False, num_workers: int = 1):
     """
     Converts dataset to lmdb and saves it to the specified directory
     Takes:
@@ -179,10 +216,16 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         allowed_ring_size = dataset.dataset.allowed_ring_size
         target_dict = dataset.dataset.target_dict
         extra_dataset_info = dataset.dataset.extra_dataset_info
-        # List of Molecules
-        dgl_graphs_serialized = [
-            serialize_dgl_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices
-        ]
+        # List of Molecules - serialize graphs
+        if num_workers > 1:
+            # Parallel serialization
+            graphs_to_serialize = [dataset.dataset.graphs[ind] for ind in dataset.indices]
+            dgl_graphs_serialized = _serialize_graphs_parallel(graphs_to_serialize, num_workers)
+        else:
+            # Serial serialization (original behavior)
+            dgl_graphs_serialized = [
+                serialize_dgl_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices
+            ]
 
         if save_scalers: 
             feature_scalers = dataset.dataset.feature_scalers
@@ -198,8 +241,13 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         allowed_ring_size = dataset.allowed_ring_size
         target_dict = dataset.target_dict
         extra_dataset_info = dataset.extra_dataset_info
-        # List of Molecules
-        dgl_graphs_serialized = [serialize_dgl_graph(g) for g in dataset.graphs]
+        # List of Molecules - serialize graphs
+        if num_workers > 1:
+            # Parallel serialization
+            dgl_graphs_serialized = _serialize_graphs_parallel(dataset.graphs, num_workers)
+        else:
+            # Serial serialization (original behavior)
+            dgl_graphs_serialized = [serialize_dgl_graph(g) for g in dataset.graphs]
 
         if save_scalers: 
             feature_scalers = dataset.feature_scalers

@@ -46,6 +46,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         bond_key: str = "bonds",
         map_key: Optional[str] = None,
         extra_dataset_info: Dict[str, Any] = {},
+        num_workers: int = 1,
         verbose: bool = True,
     ):
         """
@@ -115,12 +116,19 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             self_loop=self_loop,
         )
 
-        graph_list = []
-        print("... > Building graphs and featurizing")
-        for mol in tqdm(mol_wrappers):
-            graph = grapher.build_graph(mol)
-            graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
-            graph_list.append(graph)
+        # Build graphs - use parallel processing if num_workers > 1
+        if num_workers > 1 and len(mol_wrappers) > 1:
+            graph_list, names = self._build_graphs_parallel(
+                mol_wrappers, grapher, num_workers, verbose
+            )
+        else:
+            # Serial graph building (original behavior)
+            graph_list = []
+            print("... > Building graphs and featurizing")
+            for mol in tqdm(mol_wrappers):
+                graph = grapher.build_graph(mol)
+                graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
+                graph_list.append(graph)
 
         self.standard_scale_features = standard_scale_features
         self.log_scale_features = log_scale_features
@@ -150,6 +158,78 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> Any:
         # print(idx)
         return self.graphs[idx]  # , self.labels[idx]
+
+    def _build_graphs_parallel(
+        self, mol_wrappers, grapher, num_workers, verbose
+    ):
+        """
+        Build graphs in parallel using multiprocessing.Pool.
+
+        Args:
+            mol_wrappers: List of MoleculeWrapper objects
+            grapher: HeteroCompleteGraphFromMolWrapper instance
+            num_workers: Number of parallel workers
+            verbose: Whether to print progress information
+
+        Returns:
+            Tuple of (graph_list, feature_names)
+        """
+        from multiprocessing import Pool
+        import multiprocessing as mp
+        from qtaim_embed.data.parallel_utils import build_and_featurize_graph_worker
+
+        # Extract grapher config for workers to reconstruct in each process
+        grapher_config = {
+            'element_set': grapher.atom_featurizer.element_set,
+            'atom_keys': grapher.atom_featurizer.selected_keys,
+            'bond_keys': grapher.bond_featurizer.selected_keys,
+            'global_keys': grapher.global_featurizer.selected_keys,
+            'allowed_ring_size': grapher.atom_featurizer.allowed_ring_size,
+            'allowed_charges': grapher.global_featurizer.allowed_charges,
+            'allowed_spins': grapher.global_featurizer.allowed_spins,
+            'self_loop': grapher.self_loop,
+        }
+
+        # Clamp workers to reasonable bounds
+        actual_workers = min(num_workers, len(mol_wrappers), mp.cpu_count())
+
+        # Prepare arguments for workers
+        args_list = [
+            (mol, grapher_config, idx) for idx, mol in enumerate(mol_wrappers)
+        ]
+
+        # Pre-allocate results list
+        graph_list = [None] * len(mol_wrappers)
+        feat_names = None
+
+        # Process with progress bar
+        with Pool(processes=actual_workers) as pool:
+            results = pool.imap_unordered(
+                build_and_featurize_graph_worker,
+                args_list,
+                chunksize=max(1, len(args_list) // (actual_workers * 4))
+            )
+
+            if verbose:
+                print(
+                    f"... > Building graphs and featurizing (parallel, {actual_workers} workers)"
+                )
+
+            for idx, graph, names in tqdm(
+                results,
+                total=len(mol_wrappers),
+                desc="Building graphs (parallel)",
+                disable=not verbose
+            ):
+                if graph is not None:
+                    graph_list[idx] = graph
+                    if feat_names is None:  # Store feature names from first successful result
+                        feat_names = names
+                else:
+                    # Log error but continue (error already printed by worker)
+                    pass
+
+        return graph_list, feat_names
 
     def get_include_exclude_indices(self) -> None:
         target_locs = {}
@@ -354,6 +434,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         },
         target_list: List[str] = ["extra_feat_global_E1_CAM"],
         extra_dataset_info: Dict[str, Any] = {},
+        num_workers: int = 1,
         verbose: bool = True,
     ):
         """
@@ -432,12 +513,19 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             self_loop=self_loop,
         )
 
-        graph_list = []
-        print("... > Building graphs and featurizing")
-        for mol in tqdm(mol_wrappers):
-            graph = grapher.build_graph(mol)
-            graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
-            graph_list.append(graph)
+        # Build graphs - use parallel processing if num_workers > 1
+        if num_workers > 1 and len(mol_wrappers) > 1:
+            graph_list, names = self._build_graphs_parallel(
+                mol_wrappers, grapher, num_workers, verbose
+            )
+        else:
+            # Serial graph building (original behavior)
+            graph_list = []
+            print("... > Building graphs and featurizing")
+            for mol in tqdm(mol_wrappers):
+                graph = grapher.build_graph(mol)
+                graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
+                graph_list.append(graph)
 
         self.standard_scale_features = standard_scale_features
         self.log_scale_features = log_scale_features
@@ -467,6 +555,79 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> Any:
         # print(idx)
         return self.graphs[idx]  # , self.labels[idx]
+
+    def _build_graphs_parallel(
+        self, mol_wrappers, grapher, num_workers, verbose
+    ):
+        """
+        Build graphs in parallel using multiprocessing.Pool.
+
+        Args:
+            mol_wrappers: List of MoleculeWrapper objects
+            grapher: HeteroCompleteGraphFromMolWrapper instance
+            num_workers: Number of parallel workers
+            verbose: Whether to print progress information
+
+        Returns:
+            Tuple of (graph_list, feature_names)
+        """
+        from multiprocessing import Pool
+        import multiprocessing as mp
+        from qtaim_embed.data.parallel_utils import build_and_featurize_graph_worker
+
+        # Extract grapher config for workers to reconstruct in each process
+        grapher_config = {
+            'element_set': grapher.atom_featurizer.element_set,
+            'atom_keys': grapher.atom_featurizer.selected_keys,
+            'bond_keys': grapher.bond_featurizer.selected_keys,
+            'global_keys': grapher.global_featurizer.selected_keys,
+            'allowed_ring_size': grapher.atom_featurizer.allowed_ring_size,
+            'allowed_charges': grapher.global_featurizer.allowed_charges,
+            'allowed_spins': grapher.global_featurizer.allowed_spins,
+            'self_loop': grapher.self_loop,
+        }
+
+        # Clamp workers to reasonable bounds
+        actual_workers = min(num_workers, len(mol_wrappers), mp.cpu_count())
+
+        # Prepare arguments for workers
+        args_list = [
+            (mol, grapher_config, idx) for idx, mol in enumerate(mol_wrappers)
+        ]
+
+        # Pre-allocate results list
+        graph_list = [None] * len(mol_wrappers)
+        feat_names = None
+
+        # Process with progress bar
+        with Pool(processes=actual_workers) as pool:
+            results = pool.imap_unordered(
+                build_and_featurize_graph_worker,
+                args_list,
+                chunksize=max(1, len(args_list) // (actual_workers * 4))
+            )
+
+            if verbose:
+                print(
+                    f"... > Building graphs and featurizing (parallel, {actual_workers} workers)"
+                )
+
+            for idx, graph, names in tqdm(
+                results,
+                total=len(mol_wrappers),
+                desc="Building graphs (parallel)",
+                disable=not verbose
+            ):
+                if graph is not None:
+                    graph_list[idx] = graph
+                    if feat_names is None:  # Store feature names from first successful result
+                        feat_names = names
+                else:
+                    # Log error but continue (error already printed by worker)
+                    pass
+
+        return graph_list, feat_names
+
 
     def get_include_exclude_indices(self) -> None:
         target_locs = {}
