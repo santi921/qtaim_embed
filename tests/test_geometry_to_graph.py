@@ -5,7 +5,6 @@ Tests the conversion of molecular geometry (xyz coordinates + elements) to
 DGL heterographs for use in the iterative link-node prediction pipeline.
 """
 
-import pytest
 import numpy as np
 import torch
 
