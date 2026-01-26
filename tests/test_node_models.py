@@ -107,7 +107,7 @@ class TestNodePred:
 
         elif model == "GATConv":
             config["model"]["conv_fn"] = "GATConv"
-            config["model"]["n_conv_layers"] = 5
+            config["model"]["n_conv_layers"] = 3
 
         elif model == "GraphConvDropoutBatch":
             config["model"]["conv_fn"] = "GraphConvDropoutBatch"
@@ -123,14 +123,14 @@ class TestNodePred:
 
         trainer = pl.Trainer(
             max_epochs=2,
-            accelerator="gpu",
-            devices=[0],
+            accelerator="auto",
+            #devices=[0],
             gradient_clip_val=10.0,
             accumulate_grad_batches=1,
             enable_progress_bar=True,
             enable_checkpointing=False,
             strategy="auto",
-            precision="bf16",
+            precision="32",
         )
 
         trainer.fit(model, self.dm)
