@@ -174,8 +174,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         Returns:
             Tuple of (graph_list, feature_names)
         """
-        from multiprocessing import Pool
-        import multiprocessing as mp
+        from multiprocessing import Pool, cpu_count
         from qtaim_embed.data.parallel_utils import build_and_featurize_graph_worker
 
         # Extract grapher config for workers to reconstruct in each process
@@ -191,7 +190,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         }
 
         # Clamp workers to reasonable bounds
-        actual_workers = min(num_workers, len(mol_wrappers), mp.cpu_count())
+        actual_workers = min(num_workers, len(mol_wrappers), cpu_count())
 
         # Prepare arguments for workers
         args_list = [
@@ -626,6 +625,12 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                     # Log error but continue (error already printed by worker)
                     pass
 
+        if feat_names is None:  
+            raise RuntimeError(  
+                "No graphs were successfully built in parallel processing; "  
+                "feature names could not be determined."  
+            )  
+        
         return graph_list, feat_names
 
 
@@ -1020,7 +1025,12 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                     graph_list[idx] = graph
                     if feat_names is None:
                         feat_names = names
-
+        
+        if feat_names is None:  
+            raise RuntimeError(  
+                "Failed to build any graphs in parallel; no feature names were produced. "  
+                "Check the input data and grapher configuration."  
+            )  
         return graph_list, feat_names
 
     def get_include_exclude_indices(self) -> None:

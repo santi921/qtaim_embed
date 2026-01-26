@@ -3,7 +3,7 @@ import dgl
 import lmdb
 import pickle
 import tempfile
-
+from tqdm import tqdm
 
 from qtaim_embed.core.dataset import Subset
 #from qtaim_embed.data.processing import (
@@ -170,11 +170,10 @@ def _serialize_graphs_parallel(graphs, num_workers):
     Returns:
         List of serialized graphs (bytes)
     """
-    from multiprocessing import Pool
-    import multiprocessing as mp
+    from multiprocessing import Pool, cpu_count
     from qtaim_embed.data.parallel_utils import serialize_graph_worker
 
-    actual_workers = min(num_workers, len(graphs), mp.cpu_count())
+    actual_workers = min(num_workers, len(graphs), cpu_count())
     args_list = [(idx, graph) for idx, graph in enumerate(graphs)]
     serialized = [None] * len(graphs)
 

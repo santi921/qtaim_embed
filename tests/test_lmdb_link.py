@@ -107,7 +107,6 @@ def test_model_lmdb():
         max_epochs=1,
         accelerator="auto",
         enable_progress_bar=True,
-        devices=1,
         strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
