@@ -34,6 +34,12 @@ def main(argv=None):
     parser.add_argument("--project_name", type=str, default="qtaim_embed_test")
     parser.add_argument("--dataset_loc", type=str, default=None)
     parser.add_argument("--dataset_test_loc", type=str, default=None)
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=1,
+        help="number of parallel workers for dataset preprocessing (default: 1)",
+    )
 
     args = parser.parse_args()
 
@@ -64,6 +70,8 @@ def main(argv=None):
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
+    # set num_workers from CLI (overrides config file)
+    config["dataset"]["num_workers"] = args.num_workers
 
     print(">" * 40 + "config_settings" + "<" * 40)
 

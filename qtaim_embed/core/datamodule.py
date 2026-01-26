@@ -87,6 +87,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
                 validation = self.config["dataset"]["val_prop"]
                 test_size = self.config["dataset"]["test_prop"]
@@ -151,6 +152,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                     verbose=self.config["dataset"]["verbose"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
                 self.prepare_tf = True
                 if self.node_len is None:
@@ -271,6 +273,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     verbose=self.config["dataset"]["verbose"],
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -331,6 +334,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     verbose=self.config["dataset"]["verbose"],
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
                 self.prepare_tf = True
                 return (
@@ -434,6 +438,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                         "standard_scale_targets"
                     ],
                     verbose=self.config["dataset"]["verbose"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -501,6 +506,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
 
                 print("test set size: ", len(self.test_dataset))
@@ -612,6 +618,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -675,6 +682,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
+                num_workers=self.config["dataset"].get("num_workers", 1),
                 )
                 print("test set size: ", len(self.test_dataset))
 

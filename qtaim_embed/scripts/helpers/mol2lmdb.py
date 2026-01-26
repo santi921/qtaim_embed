@@ -50,6 +50,13 @@ def main(argv=None):
         help="debug mode",
     )
 
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=1,
+        help="number of parallel workers for preprocessing (default: 1)",
+    )
+
     args = parser.parse_args()
     config_loc = args.config
     dataset_loc = args.dataset_loc
@@ -57,6 +64,7 @@ def main(argv=None):
 
     debug = bool(args.debug)
     split = bool(args.split)
+    num_workers = args.num_workers
 
     # read json
     with open(config_loc) as f:
@@ -81,6 +89,7 @@ def main(argv=None):
         standard_scale_targets=config["dataset"]["standard_scale_targets"],
         bond_key=config["dataset"]["bond_key"],
         map_key=config["dataset"]["map_key"],
+        num_workers=num_workers,
     )
 
     if split == True:
@@ -96,10 +105,10 @@ def main(argv=None):
             print("validation set size: ", len(val_dataset))
             print("test set size: ", len(test_dataset))
 
-            construct_lmdb_and_save_dataset(dataset, lmdb_dir)
-            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
-            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
-            construct_lmdb_and_save_dataset(test_dataset, lmdb_dir + "/test/")
+            construct_lmdb_and_save_dataset(dataset, lmdb_dir, num_workers=num_workers)
+            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/", num_workers=num_workers)
+            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/", num_workers=num_workers)
+            construct_lmdb_and_save_dataset(test_dataset, lmdb_dir + "/test/", num_workers=num_workers)
 
         else:
 
@@ -112,9 +121,9 @@ def main(argv=None):
             print("training set size: ", len(train_dataset))
             print("validation set size: ", len(val_dataset))
 
-            construct_lmdb_and_save_dataset(dataset, lmdb_dir)
-            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/")
-            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/")
+            construct_lmdb_and_save_dataset(dataset, lmdb_dir, num_workers=num_workers)
+            construct_lmdb_and_save_dataset(val_dataset, lmdb_dir + "/val/", num_workers=num_workers)
+            construct_lmdb_and_save_dataset(train_dataset, lmdb_dir + "/train/", num_workers=num_workers)
 
     else:
-        construct_lmdb_and_save_dataset(dataset, lmdb_dir)
+        construct_lmdb_and_save_dataset(dataset, lmdb_dir, num_workers=num_workers)

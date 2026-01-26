@@ -38,6 +38,7 @@ def get_default_link_level_config():
             "val_prop": 0.15,
             "test_prop": 0.1,
             "seed": 42,
+            "num_workers": 1,
             "train_batch_size": 128,
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
@@ -142,6 +143,7 @@ def get_default_node_level_config():
             "val_prop": 0.15,
             "test_prop": 0.1,
             "seed": 42,
+            "num_workers": 1,
             "train_batch_size": 512,
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
@@ -246,6 +248,7 @@ def get_default_graph_level_config():
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
             "num_workers": 1,
+
             "impute": False,
             "verbose": False,
         },
@@ -365,6 +368,7 @@ def get_default_graph_level_config_classif():
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
             "num_workers": 1,
+
         },
         "model": {
             "classifier": True,

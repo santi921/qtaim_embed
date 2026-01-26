@@ -28,6 +28,12 @@ def main(argv=None):
     parser.add_argument("-dataset_loc", type=str, default=None)
     parser.add_argument("-log_save_dir", type=str, default="./test_logs/")
     parser.add_argument("-config", type=str, default=None)
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=1,
+        help="number of parallel workers for dataset preprocessing (default: 1)",
+    )
 
     args = parser.parse_args()
 
@@ -48,6 +54,8 @@ def main(argv=None):
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
+    # set num_workers from CLI (overrides config file)
+    config["dataset"]["num_workers"] = args.num_workers
 
     # dataset
     if dataset_loc is not None:

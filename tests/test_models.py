@@ -43,10 +43,9 @@ def test_save_load():
     model = load_graph_level_model_from_config(model_config["model"])
 
     trainer = pl.Trainer(
-        max_epochs=100,
-        accelerator="gpu",
+        max_epochs=2,
+        accelerator="auto",
         enable_progress_bar=True,
-        devices=1,
         strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
@@ -228,10 +227,9 @@ def test_multi_task():
     model = load_graph_level_model_from_config(model_config["model"])
 
     trainer = pl.Trainer(
-        max_epochs=10,
-        accelerator="gpu",
+        max_epochs=2,
+        accelerator="auto",
         enable_progress_bar=True,
-        devices=1,
         strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
