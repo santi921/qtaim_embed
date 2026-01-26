@@ -45,8 +45,8 @@ def test_save_load():
     trainer = pl.Trainer(
         max_epochs=2,
         accelerator="auto",
+        devices=1,
         enable_progress_bar=True,
-        strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
         precision=16,
@@ -229,8 +229,8 @@ def test_multi_task():
     trainer = pl.Trainer(
         max_epochs=2,
         accelerator="auto",
+        devices=1,
         enable_progress_bar=True,
-        strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
         precision=16,

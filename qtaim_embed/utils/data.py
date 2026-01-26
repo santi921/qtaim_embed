@@ -257,7 +257,7 @@ def get_default_graph_level_config():
             "n_conv_layers": 8,
             "compiled": False,
             "resid_n_graph_convs": 2,
-            "target_dict": {"global": "extra_feat_global_E1_CAM"},
+            "target_dict": {"global": ["extra_feat_global_E1_CAM"]},
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,

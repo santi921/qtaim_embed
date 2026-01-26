@@ -591,5 +591,3 @@ def test_iterative_standard_scaler_merge():
         ), "feature std not equal"
 
 
-# test_iterative_standard_scaler()
-# test_iterative_standard_scaler_merge()

@@ -134,11 +134,25 @@ config = get_default_graph_level_config()
 
 ## Development Workflow
 
+### Conda Environment Activation (Claude Code)
+
+When running commands that require conda environments, use this pattern:
+
+```bash
+# Correct pattern for activating conda and running commands
+source /home/santiagovargas/miniconda3/etc/profile.d/conda.sh && conda activate generator && <command>
+
+# Example: running tests
+source /home/santiagovargas/miniconda3/etc/profile.d/conda.sh && conda activate generator && pytest tests/
+```
+
+**Important**: The `generator` environment is the primary development environment for this project.
+
 ### Running Tests
 
 ```bash
-# Run all tests
-pytest tests/
+# Run all tests (with proper conda activation)
+source /home/santiagovargas/miniconda3/etc/profile.d/conda.sh && conda activate generator && pytest tests/
 
 # Run specific test file
 pytest tests/test_models.py

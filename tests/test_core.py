@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import torch
+from pathlib import Path
+
 
 from qtaim_embed.core.datamodule import (
     QTAIMNodeTaskDataModule,
@@ -13,6 +15,9 @@ from qtaim_embed.utils.data import (
     get_default_graph_level_config,
 )
 
+# get root dir for repo 
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+DATA_DIR = PROJECT_ROOT / "tests" / "data"
 
 def test_classifier_dataset():
     # test single class
@@ -36,8 +41,8 @@ def test_classifier_dataset():
         "SR-p53",
     ]
     target_multi = ["NR-AR", "SR-p53"]
-
-    df = pd.read_pickle("./data/test_classifier_labelled.pkl")
+    
+    df = pd.read_pickle(str(DATA_DIR / "test_classifier_labelled.pkl"))
     list_target_single = df[target_single].values.tolist()
     list_target_multi = df[target_multi].values.tolist()
     # find the number of classes
@@ -87,7 +92,7 @@ def test_node_datamodule():
     # print(config)
     config["dataset"]["allowed_charges"] = [0, 1, -1]
     config["dataset"]["allowed_spins"] = [1, 2, 3]
-    config["dataset"]["train_dataset_loc"] = "./data/labelled_spin_charge.pkl"
+    config["dataset"]["train_dataset_loc"] = str(DATA_DIR / "labelled_spin_charge.pkl")
     config["dataset"]["extra_keys"]["global"] = ["charge", "spin"]
     config["dataset"]["edge_dropout"] = None
     config["dataset"]["element_set"] = []

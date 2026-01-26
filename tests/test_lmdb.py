@@ -161,7 +161,8 @@ def test_multi_out():
         break
 
 
-def test_model_lmdb():
+def test_model_lmdb(device_config):
+    """Test LMDB model with automatic device selection (CPU or single GPU)."""
     config = get_default_graph_level_config()
 
     config["dataset"] = {
@@ -190,9 +191,8 @@ def test_model_lmdb():
 
     trainer = pl.Trainer(
         max_epochs=1,
-        accelerator="auto",
+        **device_config,
         enable_progress_bar=True,
-        strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
         precision=16,
@@ -201,7 +201,8 @@ def test_model_lmdb():
     trainer.fit(model, dl)
 
 
-def test_model_lmdb_multi_file():
+def test_model_lmdb_multi_file(device_config):
+    """Test LMDB model with multi-file dataset and automatic device selection."""
     config = get_default_graph_level_config()
 
     config["dataset"] = {
@@ -230,9 +231,8 @@ def test_model_lmdb_multi_file():
 
     trainer = pl.Trainer(
         max_epochs=1,
-        accelerator="auto",
+        **device_config,
         enable_progress_bar=True,
-        strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
         precision=16,

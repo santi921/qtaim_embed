@@ -44,7 +44,7 @@ def get_dataset(
     # get the root directory for this package
     # (i.e. the directory where setup.py is located)
     dataset = HeteroGraphNodeLabelDataset(
-        file="./data/labelled_data.pkl",
+        file=str(DATA_DIR / "labelled_data.pkl"),
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
         allowed_spins=None,
@@ -82,7 +82,7 @@ def get_dataset_graph_level(
     # (i.e. the directory where setup.py is located)
     root_dir = Path(__file__).parent.parent
     dataset = HeteroGraphGraphLabelDataset(
-        file="./data/labelled_data.pkl",
+        file=str(DATA_DIR / "labelled_data.pkl"),
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
         allowed_spins=None,
@@ -120,7 +120,7 @@ def get_dataset_graph_level_multitask(
     # (i.e. the directory where setup.py is located)
     root_dir = Path(__file__).parent.parent
     dataset = HeteroGraphGraphLabelDataset(
-        file="./data/labelled_data.pkl",
+        file=str(DATA_DIR / "labelled_data.pkl"),
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
         allowed_spins=None,
@@ -151,7 +151,7 @@ def get_dataset_graph_level_multitask(
 def get_datasets_graph_level_classifier(log_scale_features, standard_scale_features):
     root_dir = Path(__file__).parent.parent
     dataset_single = HeteroGraphGraphLabelClassifierDataset(
-        file="./data/test_classifier_labelled.pkl",
+        file=str(DATA_DIR / "test_classifier_labelled.pkl"),
         allowed_ring_size=[3, 4, 5, 6, 7],
         allowed_charges=None,
         allowed_spins=None,
@@ -174,7 +174,7 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
         map_key="extra_feat_bond_indices_qtaim",
     )
     dataset_multi = HeteroGraphGraphLabelClassifierDataset(
-        file="./data/test_classifier_labelled.pkl",
+        file=str(DATA_DIR / "test_classifier_labelled.pkl"),
         standard_scale_features=True,
         log_scale_features=True,
         allowed_ring_size=[3, 4, 5, 6, 7],

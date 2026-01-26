@@ -187,11 +187,11 @@ class TestLinkPred:
         trainer = pl.Trainer(
             max_epochs=2,
             accelerator="auto",
+            devices=1,
             gradient_clip_val=10.0,
             accumulate_grad_batches=1,
             enable_progress_bar=True,
             enable_checkpointing=False,
-            strategy="auto",
         )
 
         trainer.fit(model, self.dataloader, self.dataloader)
