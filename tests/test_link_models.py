@@ -3,6 +3,7 @@
 import torch
 import torch.nn.functional as F
 import json
+from pathlib import Path
 
 import pytorch_lightning as pl
 
@@ -13,10 +14,15 @@ from qtaim_embed.models.link_pred.link_model import GCNLinkPred
 torch.set_float32_matmul_precision("medium")
 torch.multiprocessing.set_sharing_strategy("file_system")
 
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+DATA_DIR = PROJECT_ROOT / "tests" / "data"
 
 class TestLinkPred:
+
+    path_data = str(DATA_DIR / "low_train_50.pkl")
+
     dataset = HeteroGraphNodeLabelDataset(
-        file="./data/low_train_50.pkl",
+        file= path_data,
         allowed_ring_size=[4, 5, 6, 7],
         # allowed_charges=[-1, 0, 1],
         # allowed_spins=[1, 2, 3],

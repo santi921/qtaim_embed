@@ -14,6 +14,10 @@ from qtaim_embed.core.dataset import (
     HeteroGraphGraphLabelClassifierDataset,
 )
 
+# Project root directory (qtaim_embed/../ from this file's location)
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
+DATA_DIR = PROJECT_ROOT / "tests" / "data"
+
 
 class hyperparams:
     def __init__(self, config):
@@ -24,11 +28,11 @@ class hyperparams:
 
 
 def get_data():
-    return pd.read_pickle("./data/qm8_test.pkl")
+    return pd.read_pickle(DATA_DIR / "qm8_test.pkl")
 
 
 def get_data_spin_charge():
-    return pd.read_pickle("./data/labelled_spin_charge.pkl")
+    return pd.read_pickle(DATA_DIR / "labelled_spin_charge.pkl")
 
 
 def get_dataset(
