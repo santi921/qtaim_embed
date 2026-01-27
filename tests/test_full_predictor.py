@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import dgl
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 
 from qtaim_embed.data.geometry_to_graph import GeometryToGraph, update_graph_topology
 from qtaim_embed.models.full_predictor.full import (
