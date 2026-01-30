@@ -192,6 +192,7 @@ class TestLinkPred:
             accumulate_grad_batches=1,
             enable_progress_bar=True,
             enable_checkpointing=False,
+            log_every_n_steps=1,
         )
 
         trainer.fit(model, self.dataloader, self.dataloader)

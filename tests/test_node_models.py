@@ -130,6 +130,7 @@ class TestNodePred:
             enable_progress_bar=True,
             enable_checkpointing=False,
             precision="32",
+            log_every_n_steps=1,
         )
 
         trainer.fit(model, self.dm)
