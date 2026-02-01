@@ -62,6 +62,10 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             extra_keys (dict): dictionary of keys to grab from the data file
             target_dict (dict): dictionary of keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
+            num_workers (int): number of parallel workers to use for graph building
+            bond_key (str): key in dataframe corresponding to bond information
+            map_key (str): key in dataframe corresponding to mapping information
+            verbose (bool): whether to print progress information
         """
         # check if file ends in pkl
         if file[-3:] == "pkl":
@@ -449,6 +453,8 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             extra_keys (dict): dictionary of keys to grab from the data file
             target_list (list of strings): dictionary of global keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
+            num_workers (int): number of parallel workers to use for graph building
+            verbose (bool): whether to print progress information
         """
         # check if file exists
         if not Path(file).exists():
@@ -870,6 +876,8 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             extra_keys (dict): dictionary of keys to grab from the data file
             target_list (list of strings): dictionary of global keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
+            num_workers (int): number of parallel workers to use for graph building
+            verbose (bool): whether to print progress information
         """
         # check if file ends in pkl
         if file[-3:] == "pkl":

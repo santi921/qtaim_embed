@@ -137,8 +137,8 @@ class GCNNodePred(pl.LightningModule):
         self.hparams.update(params)
         self.save_hyperparameters()
 
-        # convert string activation to function
-        if self.hparams.activation is not None:
+        # convert string activation to function (skip if already an nn.Module from checkpoint)
+        if self.hparams.activation is not None and isinstance(self.hparams.activation, str):
             self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
 
         input_size = {

@@ -88,7 +88,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             print(
                 "NOTE: No ring size if no ring features are enabled, metal/nonmetal bonds are also off"
             )
-        print("selected bond keys", selected_keys)
+        #print("selected bond keys", selected_keys)
 
     def __call__(self, mol: MoleculeWrapper, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
@@ -219,8 +219,8 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
             raise ValueError(
                 "`dtype` should be `float32` or `float64`, but got `{}`.".format(dtype)
             )
-        print("element set in featurizer", element_set)
-        print("selected atomic keys", selected_keys)
+        #print("element set in featurizer", element_set)
+        #print("selected atomic keys", selected_keys)
 
         self.dtype = dtype
         self._feature_size = 0
@@ -323,7 +323,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
         self.allowed_spins = allowed_spins
         self._feature_size = 0
         self._feature_name = []
-        print("selected global keys", selected_keys)
+        #print("selected global keys", selected_keys)
 
     def __call__(self, mol: MoleculeWrapper, **kwargs) -> Tuple[Dict[str, torch.Tensor], List[str]]:
         """
