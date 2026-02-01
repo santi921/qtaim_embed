@@ -17,12 +17,13 @@ import numpy as np
 
 from qtaim_embed.models.link_pred.link_model import GCNLinkPred
 from qtaim_embed.models.node_level.base_gcn import GCNNodePred
-from qtaim_embed.data.transforms import hetero_to_homo, homo_to_hetero
+from qtaim_embed.data.transforms import hetero_to_homo
 from qtaim_embed.data.geometry_to_graph import (
     GeometryToGraph,
     update_graph_topology,
     edges_from_predictions,
 )
+from qtaim_embed.models.utils import load_link_model_from_config, load_node_level_model_from_config
 
 
 class FullPredictor(nn.Module):
@@ -39,6 +40,9 @@ class FullPredictor(nn.Module):
             - node_model_path: Path to pretrained node model checkpoint
             - iterations: Number of prediction iterations (default: 3)
             - edge_threshold: Threshold for link prediction scores (default: 0.5)
+            - edge_aggregation: How to aggregate bidirectional edge scores, either
+              "max" or "avg" (default: "max"). This handles asymmetric predictors
+              like MLPPredictor by scoring both (i,j) and (j,i) then aggregating.
             - device: Device to run on ('cuda' or 'cpu')
 
     Example:
@@ -47,6 +51,7 @@ class FullPredictor(nn.Module):
         ...     "node_model_path": "checkpoints/node_model.ckpt",
         ...     "iterations": 3,
         ...     "edge_threshold": 0.5,
+        ...     "edge_aggregation": "max",
         ... }
         >>> predictor = FullPredictor(config)
         >>> labeled_graph = predictor.predict(initial_graph)
@@ -58,10 +63,16 @@ class FullPredictor(nn.Module):
         self.iterations = config.get("iterations", 3)
         self.edge_threshold = config.get("edge_threshold", 0.5)
         self.device = config.get("device", "cpu")
+        # How to aggregate bidirectional edge scores: "max" or "avg"
+        self.edge_aggregation = config.get("edge_aggregation", "max")
+        if self.edge_aggregation not in ("max", "avg"):
+            raise ValueError(f"edge_aggregation must be 'max' or 'avg', got {self.edge_aggregation}")
 
         # Load pretrained models
         self.link_model = self._load_link_model(config["link_model_path"])
+        print("Link model loaded.")
         self.node_model = self._load_node_model(config["node_model_path"])
+        print("Node model loaded.")
 
         # Move models to device
         self.link_model = self.link_model.to(self.device)
@@ -78,7 +89,6 @@ class FullPredictor(nn.Module):
         """Load link prediction model from checkpoint."""
         try:
             model = GCNLinkPred.load_from_checkpoint(checkpoint_path=path)
-            print(f"Link model loaded from {path}")
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load link model from {path}: {e}")
@@ -149,6 +159,10 @@ class FullPredictor(nn.Module):
 
         Converts heterograph to homograph, runs link prediction, and returns
         edge scores and predicted edge list.
+
+        Note: Scores both directions (i->j and j->i) for each edge pair to handle
+        asymmetric predictors (e.g., MLPPredictor). Aggregates using max or avg
+        based on self.edge_aggregation config.
         """
         # Convert to homogeneous graph for link prediction
         homo_graph = self.hetero_to_homo_transform(graph)
@@ -158,19 +172,16 @@ class FullPredictor(nn.Module):
         node_feats = homo_graph.ndata["ft"]
 
         # For link prediction, we need to generate candidate edges
-        # Use all possible edges as candidates
+        # Generate bidirectional edges to handle asymmetric predictors
         num_nodes = homo_graph.num_nodes()
-        candidate_edges = self._get_candidate_edges(num_nodes)
+        bidirectional_edges = self._get_bidirectional_candidate_edges(num_nodes)
 
-        # Create positive graph (current edges) and negative graph (non-edges)
+        # Create positive graph (current edges)
         positive_graph = homo_graph
 
         # Create a candidate graph with all potential edges for scoring
-        all_src = []
-        all_dst = []
-        for i, j in candidate_edges:
-            all_src.append(i)
-            all_dst.append(j)
+        all_src = [e[0] for e in bidirectional_edges]
+        all_dst = [e[1] for e in bidirectional_edges]
 
         candidate_graph = dgl.graph(
             (all_src, all_dst),
@@ -182,22 +193,76 @@ class FullPredictor(nn.Module):
         # to get scores for all candidate edges
         pos_scores, _ = self.link_model(positive_graph, candidate_graph, node_feats)
 
+        # Aggregate bidirectional scores to get one score per undirected edge
+        aggregated_scores, canonical_edges = self._aggregate_bidirectional_scores(
+            pos_scores, bidirectional_edges, num_nodes
+        )
+
         # Convert scores to edge predictions using threshold
-        edge_mask = torch.sigmoid(pos_scores) > self.edge_threshold
+        edge_probs = torch.sigmoid(aggregated_scores)
+        edge_mask = edge_probs > self.edge_threshold
         predicted_edges = [
-            candidate_edges[i] for i in range(len(candidate_edges))
+            canonical_edges[i] for i in range(len(canonical_edges))
             if edge_mask[i]
         ]
 
-        return pos_scores, predicted_edges
+        return aggregated_scores, predicted_edges
 
-    def _get_candidate_edges(self, num_nodes: int) -> List[Tuple[int, int]]:
-        """Generate all candidate edges (upper triangular)."""
+    def _get_bidirectional_candidate_edges(self, num_nodes: int) -> List[Tuple[int, int]]:
+        """
+        Generate all candidate edges in both directions.
+
+        For each pair (i, j) where i != j, generates both (i, j) and (j, i).
+        This ensures compatibility with asymmetric predictors like MLPPredictor.
+        """
         edges = []
         for i in range(num_nodes):
-            for j in range(i + 1, num_nodes):
-                edges.append((i, j))
+            for j in range(num_nodes):
+                if i != j:
+                    edges.append((i, j))
         return edges
+
+    def _aggregate_bidirectional_scores(
+        self,
+        scores: torch.Tensor,
+        bidirectional_edges: List[Tuple[int, int]],
+        num_nodes: int,
+    ) -> Tuple[torch.Tensor, List[Tuple[int, int]]]:
+        """
+        Aggregate scores from both directions into a single score per undirected edge.
+
+        Args:
+            scores: Tensor of shape (num_bidirectional_edges,) with scores for each directed edge
+            bidirectional_edges: List of (src, dst) tuples corresponding to scores
+            num_nodes: Number of nodes in the graph
+
+        Returns:
+            aggregated_scores: Tensor of shape (num_undirected_edges,)
+            canonical_edges: List of (i, j) tuples where i < j
+        """
+        # Build a mapping from directed edge to score
+        edge_to_score = {}
+        for idx, (src, dst) in enumerate(bidirectional_edges):
+            edge_to_score[(src, dst)] = scores[idx]
+
+        # Generate canonical edges (i < j) and aggregate scores
+        canonical_edges = []
+        aggregated_scores = []
+
+        for i in range(num_nodes):
+            for j in range(i + 1, num_nodes):
+                canonical_edges.append((i, j))
+                score_ij = edge_to_score.get((i, j), torch.tensor(float('-inf')))
+                score_ji = edge_to_score.get((j, i), torch.tensor(float('-inf')))
+
+                if self.edge_aggregation == "max":
+                    agg_score = torch.max(score_ij, score_ji)
+                else:  # avg
+                    agg_score = (score_ij + score_ji) / 2.0
+
+                aggregated_scores.append(agg_score)
+
+        return torch.stack(aggregated_scores), canonical_edges
 
     def _update_topology(
         self,
@@ -368,6 +433,7 @@ class FullPredictor(nn.Module):
             "config": {
                 "iterations": self.iterations,
                 "edge_threshold": self.edge_threshold,
+                "edge_aggregation": self.edge_aggregation,
             },
         }
 
@@ -402,6 +468,7 @@ class FullPredictorInference:
         node_ckpt: str,
         iterations: int = 3,
         edge_threshold: float = 0.5,
+        edge_aggregation: str = "max",
         distance_cutoff: float = 1.8,
         device: str = "cpu",
     ) -> "FullPredictorInference":
@@ -413,6 +480,7 @@ class FullPredictorInference:
             node_ckpt: Path to node model checkpoint.
             iterations: Number of prediction iterations.
             edge_threshold: Threshold for edge predictions.
+            edge_aggregation: How to aggregate bidirectional scores ("max" or "avg").
             distance_cutoff: Distance cutoff for initial graph.
             device: Device to run on.
 
@@ -424,6 +492,7 @@ class FullPredictorInference:
             "node_model_path": node_ckpt,
             "iterations": iterations,
             "edge_threshold": edge_threshold,
+            "edge_aggregation": edge_aggregation,
             "device": device,
         }
         full_predictor = FullPredictor(config)

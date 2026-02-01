@@ -160,21 +160,25 @@ class TestFullPredictorPrediction:
         elements = ["C", "H", "H"]
         return converter(coords, elements)
 
-    def test_get_candidate_edges(self, mock_predictor):
-        """Test candidate edge generation."""
-        edges = mock_predictor._get_candidate_edges(4)
+    def test_get_bidirectional_candidate_edges(self, mock_predictor):
+        """Test bidirectional candidate edge generation."""
+        edges = mock_predictor._get_bidirectional_candidate_edges(4)
 
-        # Should have n*(n-1)/2 = 6 edges
-        assert len(edges) == 6
-        # All edges should be (i, j) with i < j
+        # Should have n*(n-1) = 12 edges (both directions, no self-loops)
+        assert len(edges) == 12
+        # Should contain both (i, j) and (j, i) for each pair
+        assert (0, 1) in edges
+        assert (1, 0) in edges
+        # No self-loops
         for i, j in edges:
-            assert i < j
+            assert i != j
 
-    def test_get_candidate_edges_small(self, mock_predictor):
-        """Test candidate edge generation for small graphs."""
-        edges = mock_predictor._get_candidate_edges(2)
-        assert len(edges) == 1
-        assert edges[0] == (0, 1)
+    def test_get_bidirectional_candidate_edges_small(self, mock_predictor):
+        """Test bidirectional candidate edge generation for small graphs."""
+        edges = mock_predictor._get_bidirectional_candidate_edges(2)
+        assert len(edges) == 2
+        assert (0, 1) in edges
+        assert (1, 0) in edges
 
     def test_update_topology(self, mock_predictor, sample_graph):
         """Test graph topology update."""
