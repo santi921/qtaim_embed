@@ -60,6 +60,8 @@ class GCNGraphPred(pl.LightningModule):
         embedding_size: int, size of embedding layer
         global_pooling: str, type of global pooling
         compiled: bool, whether the model is compiled
+        grapher_config: dict, optional configuration for reconstructing the grapher
+            used during training (element_set, allowed_ring_size, etc.)
     """
 
     def __init__(
@@ -98,6 +100,7 @@ class GCNGraphPred(pl.LightningModule):
         pooling_ntypes: List[str] = ["atom", "bond"],
         pooling_ntypes_direct: List[str] = ["global"],
         compiled: bool = False,
+        grapher_config: Optional[Dict] = None,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -170,6 +173,7 @@ class GCNGraphPred(pl.LightningModule):
             "hidden_size": hidden_size,
             "ntasks": len(target_dict["global"]),
             "compiled": compiled,
+            "grapher_config": grapher_config,
         }
 
         self.hparams.update(params)

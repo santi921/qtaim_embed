@@ -91,13 +91,13 @@ class DataLoaderLinkLMDB(DataLoader):
     This assumes a heterograph dataset
     """
 
-    def __init__(self, dataset, transforms=None, **kwargs):
+    def __init__(self, dataset, transforms=None, concat_global=True, **kwargs):
         if "collate_fn" in kwargs:
             raise ValueError(
                 "'collate_fn' provided internally', you need not to provide one"
             )
         self.transforms = transforms
-        self.transformer = hetero_to_homo(concat_global=True)
+        self.transformer = hetero_to_homo(concat_global=concat_global)
 
         def collate(samples):
             graphs = samples

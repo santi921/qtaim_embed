@@ -906,12 +906,14 @@ class LMDBLinkDataModule(pl.LightningDataModule):
                 num_workers=self.config["optim"]["num_workers"],
                 pin_memory=self.config["optim"]["pin_memory"],
                 persistent_workers=self.config["optim"]["persistent_workers"],
+                concat_global=self.config["dataset"].get("concat_global", True),
             )
 
             self.val_dl = DataLoaderLinkLMDB(
                 dataset=self.val_ds,
                 batch_size=len(self.val_ds),
                 shuffle=False,
+                concat_global=self.config["dataset"].get("concat_global", True),
                 num_workers=self.config["optim"]["num_workers"],
             )
 
@@ -923,6 +925,7 @@ class LMDBLinkDataModule(pl.LightningDataModule):
                 dataset=self.test_ds,
                 batch_size=len(self.test_ds),
                 shuffle=False,
+                concat_global=self.config["dataset"].get("concat_global", True),
                 num_workers=self.config["optim"]["num_workers"],
             )
 
