@@ -3,6 +3,7 @@ import dgl
 import torch
 from collections import defaultdict
 from typing import Optional, Dict, List
+from pathlib import Path
 
 from qtaim_embed.utils.scalers import _transform
 
@@ -174,11 +175,14 @@ class HeteroGraphStandardScaler:
         Returns:
             None
         """
+        # Create parent directory if it doesn't exist
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+
         torch.save(
             {
                 "mean": self._mean,
                 "std": self._std,
-                "features_tf": self.features_tf, 
+                "features_tf": self.features_tf,
                 "copy": self.copy
             },
             path,
@@ -466,6 +470,9 @@ class HeteroGraphStandardScalerIterative:
         Returns:
             None
         """
+        # Create parent directory if it doesn't exist
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+
         torch.save(
             {
                 "mean": self._mean,
@@ -669,7 +676,8 @@ class HeteroGraphLogMagnitudeScaler:
         Returns:
             None
         """
-
+        # Create parent directory if it doesn't exist
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
 
         torch.save(
             {
