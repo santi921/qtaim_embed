@@ -10,6 +10,7 @@ enabling prediction of QTAIM-style labeled graphs from molecular geometries.
 """
 
 from typing import Dict, List, Optional, Tuple, Union
+import warnings
 import torch
 import torch.nn as nn
 import dgl
@@ -23,7 +24,11 @@ from qtaim_embed.data.geometry_to_graph import (
     update_graph_topology,
     edges_from_predictions,
 )
-from qtaim_embed.models.utils import load_link_model_from_config, load_node_level_model_from_config
+from qtaim_embed.models.utils import (
+    load_link_model_from_config,
+    load_node_level_model_from_config,
+    get_grapher_config_from_model,
+)
 
 
 class FullPredictor(nn.Module):
@@ -71,8 +76,13 @@ class FullPredictor(nn.Module):
         # Load pretrained models
         self.link_model = self._load_link_model(config["link_model_path"])
         print("Link model loaded.")
+        # print feature size and names 
+        print("link input model:",self.link_model.hparams.input_size)
         self.node_model = self._load_node_model(config["node_model_path"])
         print("Node model loaded.")
+        print("node input model(atom):",self.node_model.hparams.atom_input_size)
+        print("node input model(bond):",self.node_model.hparams.bond_input_size)
+        print("node input model(global):",self.node_model.hparams.global_input_size)
 
         # Move models to device
         self.link_model = self.link_model.to(self.device)
@@ -82,6 +92,26 @@ class FullPredictor(nn.Module):
         self.link_model.eval()
         self.node_model.eval()
 
+        # Extract grapher config from models for consistent featurization
+        self.grapher_config = self._get_grapher_config_from_models()
+
+        # Create geometry converter with matching element_set
+        distance_cutoff = config.get("distance_cutoff", 1.8)
+        if self.grapher_config is not None:
+            print(f"Using element_set from model: {self.grapher_config.get('element_set', [])[:5]}...")
+            self.geometry_converter = GeometryToGraph.from_grapher_config(
+                self.grapher_config,
+                distance_cutoff=distance_cutoff,
+            )
+        else:
+            warnings.warn(
+                "Models lack grapher_config - using default element set. "
+                "For consistent featurization, retrain models with grapher_config."
+            )
+            self.geometry_converter = GeometryToGraph(
+                distance_cutoff=distance_cutoff,
+            )
+
         # Transformer for hetero <-> homo conversion
         self.hetero_to_homo_transform = hetero_to_homo(concat_global=True)
 
@@ -89,6 +119,7 @@ class FullPredictor(nn.Module):
         """Load link prediction model from checkpoint."""
         try:
             model = GCNLinkPred.load_from_checkpoint(checkpoint_path=path)
+            print(f"Link model loaded from {path}")
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load link model from {path}: {e}")
@@ -101,6 +132,24 @@ class FullPredictor(nn.Module):
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load node model from {path}: {e}")
+
+    def _get_grapher_config_from_models(self) -> Optional[Dict]:
+        """
+        Extract grapher configuration from loaded models.
+
+        Tries the node model first (has full hetero graph featurizer info),
+        then falls back to the link model.
+
+        Returns:
+            dict or None: The grapher configuration, or None if not present in either model.
+        """
+        # Try node model first (has full hetero featurizer info)
+        config = get_grapher_config_from_model(self.node_model)
+        if config is not None:
+            return config
+
+        # Fall back to link model (may have limited info)
+        return get_grapher_config_from_model(self.link_model)
 
     @torch.no_grad()
     def predict(
@@ -333,25 +382,26 @@ class FullPredictor(nn.Module):
         coords: np.ndarray,
         elements: List[str],
         charge: int = 0,
-        distance_cutoff: float = 1.8,
         **kwargs,
     ) -> dgl.DGLHeteroGraph:
         """
         Convenience method to predict directly from geometry.
 
+        Uses the geometry converter configured at initialization, which has the
+        correct element_set from the model's grapher_config for consistent
+        featurization.
+
         Args:
             coords: Atomic coordinates of shape (N, 3).
             elements: List of element symbols.
             charge: Molecular charge.
-            distance_cutoff: Initial distance cutoff for edge creation.
             **kwargs: Additional arguments passed to predict().
 
         Returns:
             Labeled heterograph with predicted structure and properties.
         """
-        # Create initial graph from geometry
-        converter = GeometryToGraph(distance_cutoff=distance_cutoff)
-        initial_graph = converter(coords, elements, charge=charge)
+        # Create initial graph using the configured geometry converter
+        initial_graph = self.geometry_converter(coords, elements, charge=charge)
 
         # Run prediction
         return self.predict(initial_graph, **kwargs)
@@ -423,18 +473,21 @@ class FullPredictor(nn.Module):
                 "n_conv_layers": self.link_model.hparams.get("n_conv_layers"),
                 "hidden_size": self.link_model.hparams.get("hidden_size"),
                 "predictor": self.link_model.hparams.get("predictor"),
+                "grapher_config": self.link_model.hparams.get("grapher_config"),
             },
             "node_model": {
                 "type": type(self.node_model).__name__,
                 "n_conv_layers": self.node_model.hparams.get("n_conv_layers"),
                 "hidden_size": self.node_model.hparams.get("hidden_size"),
                 "target_dict": self.node_model.hparams.get("target_dict"),
+                "grapher_config": self.node_model.hparams.get("grapher_config"),
             },
             "config": {
                 "iterations": self.iterations,
                 "edge_threshold": self.edge_threshold,
                 "edge_aggregation": self.edge_aggregation,
             },
+            "grapher_config": self.grapher_config,
         }
 
 
@@ -443,7 +496,9 @@ class FullPredictorInference:
     Simplified inference-only wrapper for FullPredictor.
 
     This class provides a cleaner interface for production use when you just
-    need to run predictions without training capabilities.
+    need to run predictions without training capabilities. The geometry converter
+    is automatically configured from the models' grapher_config for consistent
+    element encoding.
 
     Example:
         >>> predictor = FullPredictorInference.from_checkpoints(
@@ -456,10 +511,10 @@ class FullPredictorInference:
     def __init__(
         self,
         full_predictor: FullPredictor,
-        geometry_converter: GeometryToGraph,
     ):
         self.full_predictor = full_predictor
-        self.geometry_converter = geometry_converter
+        # Use the geometry converter from FullPredictor, which has the correct element_set
+        self.geometry_converter = full_predictor.geometry_converter
 
     @classmethod
     def from_checkpoints(
@@ -474,6 +529,9 @@ class FullPredictorInference:
     ) -> "FullPredictorInference":
         """
         Create inference predictor from checkpoint paths.
+
+        The geometry converter is automatically configured from the models'
+        grapher_config to ensure consistent element one-hot encoding.
 
         Args:
             link_ckpt: Path to link model checkpoint.
@@ -493,12 +551,12 @@ class FullPredictorInference:
             "iterations": iterations,
             "edge_threshold": edge_threshold,
             "edge_aggregation": edge_aggregation,
+            "distance_cutoff": distance_cutoff,  # Pass to FullPredictor
             "device": device,
         }
         full_predictor = FullPredictor(config)
-        geometry_converter = GeometryToGraph(distance_cutoff=distance_cutoff)
 
-        return cls(full_predictor, geometry_converter)
+        return cls(full_predictor)
 
     def __call__(
         self,

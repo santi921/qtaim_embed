@@ -54,6 +54,8 @@ class GCNLinkPred(pl.LightningModule):
         embedding_size: int, size of embedding layer
         predictor: str, predictor type
         predictor_param_dict: dict, dictionary of predictor parameters
+        grapher_config: dict, optional configuration for reconstructing the grapher
+            used during training (element_set, allowed_ring_size, etc.)
 
     """
 
@@ -84,6 +86,7 @@ class GCNLinkPred(pl.LightningModule):
         predictor_param_dict: Dict[str, List[int]] = {},
         aggregator_type: str = "mean",
         compiled: Optional[bool] = None,
+        grapher_config: Optional[Dict] = None,
     ):
 
         super().__init__()
@@ -141,6 +144,7 @@ class GCNLinkPred(pl.LightningModule):
             "predictor_param_dict": predictor_param_dict,
             "aggregator_type": aggregator_type,
             "compiled": compiled,
+            "grapher_config": grapher_config,
         }
 
         self.hparams.update(params)

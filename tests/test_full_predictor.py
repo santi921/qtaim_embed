@@ -19,17 +19,41 @@ from qtaim_embed.models.full_predictor.full import (
 )
 
 
+class MockHparams:
+    """
+    Mock hyperparameters object that supports both attribute access and dict-like .get().
+
+    This mimics PyTorch Lightning's hparams namespace behavior where you can do
+    both `hparams.input_size` and `hparams.get("input_size")`.
+    """
+
+    def __init__(self, params_dict: dict):
+        for key, value in params_dict.items():
+            setattr(self, key, value)
+        self._params_dict = params_dict
+
+    def get(self, key, default=None):
+        return self._params_dict.get(key, default)
+
+    def __contains__(self, key):
+        return key in self._params_dict
+
+    def __repr__(self):
+        return f"MockHparams({self._params_dict})"
+
+
 class MockLinkModel(nn.Module):
     """Mock link prediction model for testing."""
 
     def __init__(self, input_size=50, hidden_size=64):
         super().__init__()
-        self.hparams = {
+        self.hparams = MockHparams({
             "input_size": input_size,
             "hidden_size": hidden_size,
             "n_conv_layers": 2,
             "predictor": "Dot",
-        }
+            "grapher_config": None,  # Add for compatibility with new code
+        })
         self.linear = nn.Linear(input_size, hidden_size)
 
     def forward(self, pos_graph, neg_graph, inputs):
@@ -52,15 +76,17 @@ class MockNodeModel(nn.Module):
 
     def __init__(self, atom_size=50, bond_size=10, global_size=5, target_dict=None):
         super().__init__()
-        self.hparams = {
+        target_dict = target_dict or {"atom": ["feat1"], "bond": ["feat2"]}
+        self.hparams = MockHparams({
             "atom_input_size": atom_size,
             "bond_input_size": bond_size,
             "global_input_size": global_size,
             "hidden_size": 64,
             "n_conv_layers": 2,
-            "target_dict": target_dict or {"atom": ["feat1"], "bond": ["feat2"]},
-        }
-        self.target_dict = target_dict or {"atom": ["feat1"], "bond": ["feat2"]}
+            "target_dict": target_dict,
+            "grapher_config": None,  # Add for compatibility with new code
+        })
+        self.target_dict = target_dict
 
     def forward(self, graph, inputs):
         # Return mock predictions for each target node type

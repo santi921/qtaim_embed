@@ -342,6 +342,46 @@ class GeometryToGraph:
             "global": {"feat_size": global_dim},
         }
 
+    @classmethod
+    def from_grapher_config(
+        cls,
+        grapher_config: Dict,
+        distance_cutoff: float = 1.8,
+        **kwargs,
+    ) -> "GeometryToGraph":
+        """
+        Create GeometryToGraph using element_set from a grapher configuration.
+
+        This factory method extracts the element_set from a grapher config (as stored
+        in model hyperparameters) and creates a GeometryToGraph instance that will
+        produce graphs with matching element one-hot encoding.
+
+        Args:
+            grapher_config: Dictionary containing grapher configuration, typically
+                extracted from model.hparams.grapher_config. Must contain 'element_set'.
+            distance_cutoff: Maximum distance for initial edge creation.
+            **kwargs: Additional arguments passed to GeometryToGraph constructor.
+
+        Returns:
+            GeometryToGraph instance configured to match the training featurization.
+
+        Example:
+            >>> grapher_config = model.hparams.get("grapher_config")
+            >>> converter = GeometryToGraph.from_grapher_config(
+            ...     grapher_config, distance_cutoff=2.0
+            ... )
+            >>> graph = converter(coords, elements)
+        """
+        element_set = grapher_config.get("element_set")
+        if element_set is None:
+            raise ValueError("grapher_config must contain 'element_set'")
+
+        return cls(
+            distance_cutoff=distance_cutoff,
+            element_set=element_set,
+            **kwargs,
+        )
+
 
 def edges_from_predictions(
     scores: torch.Tensor,

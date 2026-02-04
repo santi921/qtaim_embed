@@ -1,12 +1,16 @@
 {
     "dataset": {
+        "train_lmdb": "/home/santiagovargas/dev/qtaim_embed/data/lmdb_new_node_tmqm_10k_020126/train/",
+        "val_lmdb": "/home/santiagovargas/dev/qtaim_embed/data/lmdb_new_node_tmqm_10k_020126/val/",
+        "test_lmdb": "/home/santiagovargas/dev/qtaim_embed/data/lmdb_new_node_tmqm_10k_020126/test/",
+        "concat_global": true,
         "allowed_ring_size": [
             3,
             4,
             5,
             6
         ],
-        "train_batch_size": 128,
+        "train_batch_size": 1024,
         "allowed_charges": [
             -1,
             0,
@@ -18,19 +22,17 @@
         "element_set": [],
         "val_prop": 0.1,
         "test_prop": 0.1,
-        "bond_key": "bonds", 
+        "bond_key": "bonds",
         "debug": false,
         "seed": 42,
-        "num_workers": 32,
+        "num_workers": 0,
         "extra_dataset_info": null,
         "log_scale_features": false,
         "log_scale_targets": false,
         "standard_scale_features": true,
         "standard_scale_targets": true,
         "extra_keys": {
-            "atom": [
-                "extra_feat_atom_esp_total"
-            ],
+            "atom": [],
             "bond": [
                 "bond_length"
             ],
@@ -39,9 +41,7 @@
             ]
         },
         "target_dict": {
-            "atom": [
-                "extra_feat_atom_esp_total"
-            ],
+            "atom": [],
             "bond": [],
             "global": []
         },
@@ -49,13 +49,14 @@
     },
     "model": {
         "conv_fn": "GraphSAGE",
-        "dropout": 0.2,
+        "dropout": 0.1,
         "initializer": "kaiming",
         "batch_norm_tf": true,
         "activation": "ReLU",
         "bias": true,
+        "compiled": false,
         "norm": "both",
-        "n_conv_layers": 2,
+        "n_conv_layers": 4,
         "lr": 0.01,
         "weight_decay": 5e-05,
         "lr_plateau_patience": 25,
@@ -69,7 +70,7 @@
         "num_heads": 2,
         "feat_drop": 0.1,
         "attn_drop": 0.1,
-        "predictor": "MLP",
+        "predictor": "Attention",
         "predictor_param_dict": {
             "fc_layer_size": [
                 512
@@ -79,12 +80,12 @@
             "activation": "ReLU"
         },
         "aggregator_type": "pool",
-        "residual": false,
+        "residual": true,
         "num_heads_gat": 2,
         "dropout_feat_gat": 0.1,
         "dropout_attn_gat": 0.1,
-        "hidden_size": 64,
-        "residual_gat": true,
+        "hidden_size": 256,
+        "residual_gat": false,
         "batch_norm": true,
         "restore": false,
         "max_epochs": 1000,
@@ -92,13 +93,14 @@
     },
     "optim": {
         "num_devices": 1,
+        "train_batch_size": 1024,
         "num_nodes": 1,
         "gradient_clip_val": 10.0,
-        "precision": 32,
+        "precision": "bf16",
         "strategy": "auto",
         "accumulate_grad_batches": 1,
-        "num_workers": 32,
-        "pin_memory": true,
-        "persistent_workers": true
+        "num_workers": 0,
+        "pin_memory": false,
+        "persistent_workers": false
     }
 }

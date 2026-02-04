@@ -45,6 +45,8 @@ class GCNNodePred(pl.LightningModule):
         loss_fn: str, loss function
         resid_n_graph_convs: int, number of graph convolutions per residual block
         scalers: list, list of scalers applied to each node type
+        grapher_config: dict, optional configuration for reconstructing the grapher
+            used during training (element_set, allowed_ring_size, etc.)
 
     """
 
@@ -76,6 +78,7 @@ class GCNNodePred(pl.LightningModule):
         lr_scale_factor: float = 0.5,
         loss_fn: str = "mse",
         compiled: bool = False,
+        grapher_config: Optional[Dict] = None,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -132,6 +135,7 @@ class GCNNodePred(pl.LightningModule):
             "hidden_size": hidden_size,
             "embedding_size": embedding_size,
             "compiled": compiled,
+            "grapher_config": grapher_config,
         }
 
         self.hparams.update(params)

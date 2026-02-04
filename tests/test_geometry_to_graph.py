@@ -388,7 +388,6 @@ class TestIntegration:
 
         # Verify initial structure
         assert graph.num_nodes("atom") == 5
-        initial_bonds = graph.num_nodes("bond")
 
         # Simulate a prediction that modifies topology
         new_edges = [(0, 1), (0, 2), (0, 3), (0, 4)]  # All H bound to C
@@ -441,3 +440,5 @@ class TestIntegration:
         # Update topology
         final_graph = update_graph_topology(graph, predicted_edges)
         assert final_graph.num_nodes("bond") == 2
+
+
