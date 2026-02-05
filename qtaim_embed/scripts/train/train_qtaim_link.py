@@ -39,6 +39,19 @@ def main(argv=None):
         default=1,
         help="number of parallel workers for dataset preprocessing (default: 1)",
     )
+    parser.add_argument(
+        "--profiler",
+        type=str,
+        default=None,
+        choices=["simple", "pytorch", "advanced"],
+        help="Enable profiling: 'simple' for timing, 'pytorch' for detailed trace",
+    )
+    parser.add_argument(
+        "--profile_filename",
+        type=str,
+        default="link_profile",
+        help="Filename for profiler output (default: link_profile)",
+    )
 
     args = parser.parse_args()
 
@@ -60,6 +73,8 @@ def main(argv=None):
     print("log_save_dir: ", log_save_dir)
     print("wandb_entity: ", wandb_entity)
     print("config: ", config)
+    if args.profiler:
+        print(f"profiler: {args.profiler} (output: {args.profile_filename})")
 
     if config is None:
         print("...using default config!")
@@ -148,7 +163,7 @@ def main(argv=None):
         early_stopping_callback = EarlyStopping(
             monitor="val_loss",
             min_delta=0.00,
-            patience=config["model"]["extra_stop_patience"],
+            patience=config["model"].get("extra_stop_patience", 25),  # Default to 25 if not specified
             verbose=False,
             mode="min",
         )
@@ -174,11 +189,12 @@ def main(argv=None):
             default_root_dir=config["dataset"]["log_save_dir"],
             logger=[logger_tb, logger_wb],
             precision=config["optim"]["precision"],
+            profiler=args.profiler,  # Enable profiling via CLI flag
         )
 
         # log dataset and optim settings from config
-        run.config.update(config["dataset"])
-        run.config.update(config["optim"])
+        run.config.update(config["dataset"], allow_val_change=True)
+        run.config.update(config["optim"], allow_val_change=True)
 
         print("dataset and optim settings logged!")
         print("fitting model!")

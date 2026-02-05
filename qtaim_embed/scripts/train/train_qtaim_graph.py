@@ -36,6 +36,19 @@ def main(argv=None):
         default=1,
         help="number of parallel workers for dataset preprocessing (default: 1)",
     )
+    parser.add_argument(
+        "--profiler",
+        type=str,
+        default=None,
+        choices=["simple", "pytorch", "advanced"],
+        help="Enable profiling: 'simple' for timing, 'pytorch' for detailed trace",
+    )
+    parser.add_argument(
+        "--profile_filename",
+        type=str,
+        default="link_profile",
+        help="Filename for profiler output (default: link_profile)",
+    )
 
     args = parser.parse_args()
 
@@ -47,6 +60,8 @@ def main(argv=None):
     log_save_dir = args.log_save_dir
     wandb_entity = args.wandb_entity
     config = args.config
+    if args.profiler:
+        print(f"profiler: {args.profiler} (output: {args.profile_filename})")
 
     if config is None:
         config = get_default_graph_level_config()
@@ -153,12 +168,12 @@ def main(argv=None):
             default_root_dir=config["dataset"]["log_save_dir"],
             logger=[logger_tb, logger_wb],
             precision=config["optim"]["precision"],
+            profiler=args.profiler,  # Enable profiling via CLI flag
         )
 
         # log dataset and optim settings from config
-        run.config.update(config["dataset"])
-        run.config.update(config["optim"])
-
+        run.config.update(config["dataset"], allow_val_change=True)
+        run.config.update(config["optim"], allow_val_change=True)
         trainer.fit(model, dm)
 
         if use_lmdb:

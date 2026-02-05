@@ -82,6 +82,7 @@ def get_default_link_level_config():
             # "pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
+            "extra_stop_patience": 25,  # Early stopping patience
             "predictor": "Dot",
             "predictor_param_dict": {},
             "aggregator_type": "none",
@@ -90,14 +91,14 @@ def get_default_link_level_config():
         "optim": {
             "num_devices": 1,
             "num_nodes": 1,
-            "num_workers": 0,
+            "num_workers": 4,
             "gradient_clip_val": 5.0,
             "strategy": "auto",
             "precision": "bf16",
             "accumulate_grad_batches": 1,
-            "pin_memory": False,
-            "persistent_workers": False,
-            "train_batch_size": 2,
+            "pin_memory": True,
+            "persistent_workers": True,
+            "train_batch_size": 128,
         },
     }
 
