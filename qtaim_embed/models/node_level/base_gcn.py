@@ -8,15 +8,19 @@ import torch.nn.functional as F
 from torch.optim import lr_scheduler
 
 import pytorch_lightning as pl
-import dgl.nn.pytorch as dglnn
+from torch_geometric.nn import HeteroConv, GATConv
+from torch_geometric.data import HeteroData
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
 
 from qtaim_embed.utils.models import _split_batched_output, get_layer_args
-from qtaim_embed.models.layers import GraphConvDropoutBatch, ResidualBlock, UnifySize
-from dgl.nn.pytorch import GATConv
+from qtaim_embed.models.layers import (
+    GraphConvDropoutBatch,
+    ResidualBlock,
+    UnifySize,
+    EDGE_TYPE_MAP,
+)
 import torch.autograd.profiler as profiler
-import dgl
 
 from typing import List, Tuple, Dict, Optional
 
@@ -45,8 +49,6 @@ class GCNNodePred(pl.LightningModule):
         loss_fn: str, loss function
         resid_n_graph_convs: int, number of graph convolutions per residual block
         scalers: list, list of scalers applied to each node type
-        grapher_config: dict, optional configuration for reconstructing the grapher
-            used during training (element_set, allowed_ring_size, etc.)
 
     """
 
@@ -78,7 +80,6 @@ class GCNNodePred(pl.LightningModule):
         lr_scale_factor: float = 0.5,
         loss_fn: str = "mse",
         compiled: bool = False,
-        grapher_config: Optional[Dict] = None,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -135,14 +136,13 @@ class GCNNodePred(pl.LightningModule):
             "hidden_size": hidden_size,
             "embedding_size": embedding_size,
             "compiled": compiled,
-            "grapher_config": grapher_config,
         }
 
         self.hparams.update(params)
         self.save_hyperparameters()
 
-        # convert string activation to function (skip if already an nn.Module from checkpoint)
-        if self.hparams.activation is not None and isinstance(self.hparams.activation, str):
+        # convert string activation to function
+        if self.hparams.activation is not None:
             self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
 
         input_size = {
@@ -158,6 +158,9 @@ class GCNNodePred(pl.LightningModule):
 
         self.conv_layers = nn.ModuleList()
 
+        # All short edge type names used for building HeteroConv dicts
+        edge_types = ["a2b", "b2a", "a2g", "g2a", "b2g", "g2b", "a2a", "b2b", "g2g"]
+
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             for i in range(self.hparams.n_conv_layers):
                 embedding_in = True
@@ -168,21 +171,12 @@ class GCNNodePred(pl.LightningModule):
                     embedding_in=embedding_in,
                 )
 
+                conv_dict = {
+                    EDGE_TYPE_MAP[et]: GraphConvDropoutBatch(**layer_args[et])
+                    for et in edge_types
+                }
                 self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
-                        {
-                            "a2b": GraphConvDropoutBatch(**layer_args["a2b"]),
-                            "b2a": GraphConvDropoutBatch(**layer_args["b2a"]),
-                            "a2g": GraphConvDropoutBatch(**layer_args["a2g"]),
-                            "g2a": GraphConvDropoutBatch(**layer_args["g2a"]),
-                            "b2g": GraphConvDropoutBatch(**layer_args["b2g"]),
-                            "g2b": GraphConvDropoutBatch(**layer_args["g2b"]),
-                            "a2a": GraphConvDropoutBatch(**layer_args["a2a"]),
-                            "b2b": GraphConvDropoutBatch(**layer_args["b2b"]),
-                            "g2g": GraphConvDropoutBatch(**layer_args["g2g"]),
-                        },
-                        aggregate=self.hparams.aggregate,
-                    )
+                    HeteroConv(conv_dict, aggr=self.hparams.aggregate)
                 )
 
         elif self.hparams.conv_fn == "ResidualBlock":
@@ -230,23 +224,13 @@ class GCNNodePred(pl.LightningModule):
                     activation=self.hparams.activation,
                     embedding_in=True,
                 )
-                # print("resid layer args", layer_args)
 
+                conv_dict = {
+                    EDGE_TYPE_MAP[et]: GATConv(**layer_args[et])
+                    for et in edge_types
+                }
                 self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
-                        {
-                            "a2b": GATConv(**layer_args["a2b"]),
-                            "b2a": GATConv(**layer_args["b2a"]),
-                            "a2g": GATConv(**layer_args["a2g"]),
-                            "g2a": GATConv(**layer_args["g2a"]),
-                            "b2g": GATConv(**layer_args["b2g"]),
-                            "g2b": GATConv(**layer_args["g2b"]),
-                            "a2a": GATConv(**layer_args["a2a"]),
-                            "b2b": GATConv(**layer_args["b2b"]),
-                            "g2g": GATConv(**layer_args["g2g"]),
-                        },
-                        aggregate=self.hparams.aggregate,
-                    )
+                    HeteroConv(conv_dict, aggr=self.hparams.aggregate)
                 )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
@@ -292,18 +276,18 @@ class GCNNodePred(pl.LightningModule):
             else self.compiled_forward
         )
 
-    # disable jit on top level function
-    # @torch.compiler.disable(recursive=False)
-    # @torch.jit.export  # Decorate the forward method for TorchScript
-    def compiled_forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
+    def compiled_forward(self, graph: HeteroData, inputs: dict) -> dict:
         """
         Forward pass with JIT compatibility
         """
 
         feats = self.embedding(inputs)
 
+        # Extract edge_index_dict from PyG HeteroData graph
+        edge_index_dict = graph.edge_index_dict
+
         for ind, conv in enumerate(self.conv_layers):
-            feats = conv(graph, feats)
+            feats = conv(feats, edge_index_dict)
 
             if self.hparams.conv_fn == "GATConv":
                 for k in list(feats.keys()):
@@ -315,8 +299,6 @@ class GCNNodePred(pl.LightningModule):
                     )
                     feats[k] = v.reshape(-1, reshape_dim)
 
-        # feats = {k: v for k, v in feats.items() if self.hparams.target_dict[k] != [None]}
-
         filtered_feats = {}
         for k, v in feats.items():
             if self.hparams.target_dict[k] != [None]:
@@ -325,7 +307,7 @@ class GCNNodePred(pl.LightningModule):
 
         return feats
 
-    def forward(self, graph: dgl.DGLHeteroGraph, inputs: dict) -> dict:
+    def forward(self, graph: HeteroData, inputs: dict) -> dict:
         """
         Forward pass
         """
@@ -372,10 +354,11 @@ class GCNNodePred(pl.LightningModule):
         batch_graph, batch_label = batch
         logits_list = []
         labels_list = []
+        # Extract node features from PyG HeteroData
+        feat_dict = {ntype: batch_graph[ntype].feat for ntype in batch_graph.node_types}
         logits = self.forward(
-            batch_graph, batch_graph.ndata["feat"]
+            batch_graph, feat_dict
         )  # returns a dict of node types
-        # print("lmdb batch", batch_graph, batch_label.keys())
         with profiler.record_function("Post Forward"):
             max_nodes = -1
 
@@ -400,7 +383,7 @@ class GCNNodePred(pl.LightningModule):
             # compute loss
             all_loss = self.compute_loss(logits, labels)
 
-            # compat with older torchmetrics/dgl
+            # compat with older torchmetrics
             if type(all_loss) == list:
                 all_loss = torch.stack(all_loss)
 
@@ -563,7 +546,7 @@ class GCNNodePred(pl.LightningModule):
         """
         r2, mae, mse = self.compute_metrics(mode="test")
 
-        # compat with older torchmetrics/dgl
+        # compat with older torchmetrics
         if type(r2) == list:
             r2 = torch.stack(r2)
         if type(mae) == list:
@@ -704,7 +687,9 @@ class GCNNodePred(pl.LightningModule):
 
         # batch_graph, batch_label = batch
         for batch_graph, batched_label in test_dataloader:
-            preds = self.forward(batch_graph, batch_graph.ndata["feat"])
+            # Extract node features from PyG HeteroData
+            feat_dict = {ntype: batch_graph[ntype].feat for ntype in batch_graph.node_types}
+            preds = self.forward(batch_graph, feat_dict)
             # detach every tensor in dictionary
             preds_unscaled = {k: deepcopy(v.detach()) for k, v in preds.items()}
             # print("preds shape", preds_unscaled["atom"].shape)

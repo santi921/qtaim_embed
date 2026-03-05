@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from pathlib import Path
 import pandas as pd
-import dgl
+from torch_geometric.data import HeteroData
 
 from qtaim_embed.utils.models import (
     get_layer_args,
@@ -202,7 +202,7 @@ def get_datasets_graph_level_classifier(log_scale_features, standard_scale_featu
 
 
 def get_invalid_data():
-    return pd.read_pickle("./data/qm8_invalid.pkl")
+    return pd.read_pickle(DATA_DIR / "qm8_invalid.pkl")
 
 
 def make_hetero(num_atoms, num_bonds, a2b, b2a, self_loop=True):
@@ -229,39 +229,57 @@ def make_hetero(num_atoms, num_bonds, a2b, b2a, self_loop=True):
         a2b = [(0, 0)]
         b2a = [(0, 0)]
 
-    edge_dict = {
-        ("atom", "a2b", "bond"): a2b,
-        ("bond", "b2a", "atom"): b2a,
-        ("atom", "a2g", "global"): [(i, 0) for i in range(num_atoms)],
-        ("global", "g2a", "atom"): [(0, i) for i in range(num_atoms)],
-        ("bond", "b2g", "global"): [(i, 0) for i in range(num_bonds)],
-        ("global", "g2b", "bond"): [(0, i) for i in range(num_bonds)],
-    }
+    data = HeteroData()
+
+    # Set number of nodes
+    data["atom"].num_nodes = num_atoms
+    data["bond"].num_nodes = num_bonds
+    data["global"].num_nodes = 1
+
+    # Convert edge lists from list of tuples to [2, E] tensors
+    def _edges_to_tensor(edge_list):
+        if len(edge_list) == 0:
+            return torch.zeros((2, 0), dtype=torch.long)
+        src = [e[0] for e in edge_list]
+        dst = [e[1] for e in edge_list]
+        return torch.tensor([src, dst], dtype=torch.long)
+
+    data["atom", "a2b", "bond"].edge_index = _edges_to_tensor(a2b)
+    data["bond", "b2a", "atom"].edge_index = _edges_to_tensor(b2a)
+    data["atom", "a2g", "global"].edge_index = _edges_to_tensor(
+        [(i, 0) for i in range(num_atoms)]
+    )
+    data["global", "g2a", "atom"].edge_index = _edges_to_tensor(
+        [(0, i) for i in range(num_atoms)]
+    )
+    data["bond", "b2g", "global"].edge_index = _edges_to_tensor(
+        [(i, 0) for i in range(num_bonds)]
+    )
+    data["global", "g2b", "bond"].edge_index = _edges_to_tensor(
+        [(0, i) for i in range(num_bonds)]
+    )
 
     if self_loop:
-        a2a = [(i, i) for i in range(num_atoms)]
-        b2b = [(i, i) for i in range(num_bonds)]
-        g2g = [(0, 0)]
-        edge_dict.update(
-            {
-                ("atom", "a2a", "atom"): a2a,
-                ("bond", "b2b", "bond"): b2b,
-                ("global", "g2g", "global"): g2g,
-            }
+        data["atom", "a2a", "atom"].edge_index = _edges_to_tensor(
+            [(i, i) for i in range(num_atoms)]
         )
-    g = dgl.heterograph(edge_dict)
+        data["bond", "b2b", "bond"].edge_index = _edges_to_tensor(
+            [(i, i) for i in range(num_bonds)]
+        )
+        data["global", "g2g", "global"].edge_index = _edges_to_tensor([(0, 0)])
 
     feats_size = {"atom": 2, "bond": 3, "global": 4}
+    num_nodes_map = {"atom": num_atoms, "bond": num_bonds, "global": 1}
     feats = {}
     for ntype, size in feats_size.items():
-        num_node = g.number_of_nodes(ntype)
+        num_node = num_nodes_map[ntype]
         ft = torch.tensor(
             np.arange(num_node * size).reshape(num_node, size), dtype=torch.float32
         )
-        g.nodes[ntype].data.update({"feat": ft})
+        data[ntype].feat = ft
         feats[ntype] = ft
 
-    return g, feats
+    return data, feats
 
 
 def make_hetero_graph():

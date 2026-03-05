@@ -15,7 +15,7 @@ from pytorch_lightning.callbacks import (
 
 
 from qtaim_embed.utils.data import get_default_link_level_config
-from qtaim_embed.core.datamodule import QTAIMLinkTaskDataModule, LMDBLinkDataModule
+from qtaim_embed.core.datamodule import QTAIMLinkTaskDataModule, LMDBDataModule
 from qtaim_embed.models.utils import LogParameters, load_link_model_from_config
 
 torch.set_float32_matmul_precision("high")  # might have to disable on older GPUs
@@ -39,19 +39,6 @@ def main(argv=None):
         default=1,
         help="number of parallel workers for dataset preprocessing (default: 1)",
     )
-    parser.add_argument(
-        "--profiler",
-        type=str,
-        default=None,
-        choices=["simple", "pytorch", "advanced"],
-        help="Enable profiling: 'simple' for timing, 'pytorch' for detailed trace",
-    )
-    parser.add_argument(
-        "--profile_filename",
-        type=str,
-        default="link_profile",
-        help="Filename for profiler output (default: link_profile)",
-    )
 
     args = parser.parse_args()
 
@@ -73,16 +60,13 @@ def main(argv=None):
     print("log_save_dir: ", log_save_dir)
     print("wandb_entity: ", wandb_entity)
     print("config: ", config)
-    if args.profiler:
-        print(f"profiler: {args.profiler} (output: {args.profile_filename})")
 
     if config is None:
         print("...using default config!")
         config = get_default_link_level_config()
     else:
         config = json.load(open(config, "r"))
-    
-    
+
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
     # set num_workers from CLI (overrides config file)
@@ -96,10 +80,10 @@ def main(argv=None):
     #    config["model"]["target_dict"] = config["dataset"]["target_dict"]
     # if "target_dict" not in config["model"]:
     #    config["model"]["target_dict"] = config["dataset"]["target_dict"]
-    
+
     if use_lmdb:
         print("...using lmdbs!")
-        dm = LMDBLinkDataModule(config=config)
+        dm = LMDBDataModule(config=config)
 
     else:
         assert dataset_loc is not None, "dataset_loc must be provided if not using lmdb"
@@ -125,11 +109,7 @@ def main(argv=None):
             dm_test.prepare_data(stage="test")
 
     feature_names, feature_size = dm.prepare_data(stage="fit")
-    config["model"]["input_size"] = feature_size["atom"]
-    if config["dataset"].get("concat_global", True):
-        config["model"]["input_size"] += feature_size["global"]
-    print("feature size atom: ", feature_size["atom"])
-    #config["model"]["input_size"] = dm.node_len
+    config["model"]["input_size"] = dm.node_len
     print("feature size dict: ", config["model"]["input_size"])
 
     print(">" * 40 + "config_settings" + "<" * 40)
@@ -163,7 +143,7 @@ def main(argv=None):
         early_stopping_callback = EarlyStopping(
             monitor="val_loss",
             min_delta=0.00,
-            patience=config["model"].get("extra_stop_patience", 25),  # Default to 25 if not specified
+            patience=config["model"]["extra_stop_patience"],
             verbose=False,
             mode="min",
         )
@@ -189,12 +169,11 @@ def main(argv=None):
             default_root_dir=config["dataset"]["log_save_dir"],
             logger=[logger_tb, logger_wb],
             precision=config["optim"]["precision"],
-            profiler=args.profiler,  # Enable profiling via CLI flag
         )
 
         # log dataset and optim settings from config
-        run.config.update(config["dataset"], allow_val_change=True)
-        run.config.update(config["optim"], allow_val_change=True)
+        run.config.update(config["dataset"])
+        run.config.update(config["optim"])
 
         print("dataset and optim settings logged!")
         print("fitting model!")

@@ -181,6 +181,9 @@ pytest tests/ --cov=qtaim_embed
 - Follow existing patterns for PyTorch Lightning modules
 - Docstrings for public classes and methods
 - Configuration via dictionaries, not command-line-heavy interfaces
+- DONT USE EMOJIS or emdashes
+- run code reviews after any large changes 
+- plan mode automatically for any changes that seem to edit more than one file or any file that is critical/highly called upon
 
 ## Common Tasks
 
@@ -296,3 +299,5 @@ trainer = pl.Trainer(logger=logger)
 ```
 
 Sweep configs are in `scripts/train/sweep_config*.json`.
+
+

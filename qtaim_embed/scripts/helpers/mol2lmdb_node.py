@@ -3,11 +3,6 @@ import argparse
 import torch
 import json
 import numpy as np
-import argparse
-import dgl
-import torch
-import tempfile
-from copy import deepcopy
 
 from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset
 from qtaim_embed.utils.data import train_validation_test_split

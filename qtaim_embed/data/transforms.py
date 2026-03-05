@@ -1,7 +1,6 @@
 import torch
 from torch.distributions import Bernoulli
-from dgl.transforms import BaseTransform
-import dgl
+from torch_geometric.data import HeteroData, Data
 
 from qtaim_embed.utils.grapher import (
     get_bond_list_from_heterograph,
@@ -10,21 +9,21 @@ from qtaim_embed.utils.grapher import (
 )
 
 
-class DropBondHeterograph(BaseTransform):
-    r"""Randomly drop edges, as described in
-    `DropEdge: Towards Deep Graph Convolutional Networks on Node Classification
-    <https://arxiv.org/abs/1907.10903>`__ and `Graph Contrastive Learning with Augmentations
-    <https://arxiv.org/abs/2010.13902>`__.
+class DropBondHeterograph:
+    r"""Randomly drop bond nodes from a heterogeneous graph.
 
-    Takes
+    Inspired by DropEdge: Towards Deep Graph Convolutional Networks on Node Classification
+    <https://arxiv.org/abs/1907.10903> and Graph Contrastive Learning with Augmentations
+    <https://arxiv.org/abs/2010.13902>.
+
+    Parameters
     ----------
     p : float, optional
-        Probability of an edge to be dropped.
+        Probability of a bond node being dropped.
     drop_node_type : list, optional
-        list of node types to drop
+        List of node types to drop.
     drop_edge_types : list, optional
-        list of edge types to drop that correspond to the node types in drop_node_type
-
+        List of edge type relation names that involve the dropped node types.
     """
 
     def __init__(
@@ -44,15 +43,58 @@ class DropBondHeterograph(BaseTransform):
         if self.p == 0:
             return g
 
-        for c_etype in self.drop_node_type:
-            samples = self.dist.sample(torch.Size([g.num_nodes(c_etype)]))
-            node_ids_to_remove = g.nodes(ntype=c_etype)[samples.bool()]
-            g.remove_nodes(node_ids_to_remove, ntype=c_etype)
+        for c_ntype in self.drop_node_type:
+            num_nodes = g[c_ntype].num_nodes
+            samples = self.dist.sample(torch.Size([num_nodes]))
+            keep_mask = ~samples.bool()
+            keep_ids = torch.where(keep_mask)[0]
+
+            if keep_ids.numel() == 0:
+                # Keep at least one node to avoid empty graph
+                keep_ids = torch.tensor([0])
+                keep_mask = torch.zeros(num_nodes, dtype=torch.bool)
+                keep_mask[0] = True
+
+            # Build node ID remapping
+            new_ids = torch.full((num_nodes,), -1, dtype=torch.long)
+            new_ids[keep_ids] = torch.arange(keep_ids.numel())
+
+            # Update node features for the dropped type
+            for key in g[c_ntype].keys():
+                attr = getattr(g[c_ntype], key)
+                if isinstance(attr, torch.Tensor) and attr.size(0) == num_nodes:
+                    setattr(g[c_ntype], key, attr[keep_ids])
+            g[c_ntype].num_nodes = keep_ids.numel()
+
+            # Update all edge types that reference this node type
+            for edge_type in g.edge_types:
+                src_type, rel, dst_type = edge_type
+                edge_index = g[edge_type].edge_index
+
+                if src_type == c_ntype:
+                    # Remap source nodes, filter edges with removed nodes
+                    mask = keep_mask[edge_index[0]]
+                    edge_index = edge_index[:, mask]
+                    edge_index[0] = new_ids[edge_index[0]]
+                    g[edge_type].edge_index = edge_index
+
+                if dst_type == c_ntype:
+                    # Remap destination nodes, filter edges with removed nodes
+                    mask = keep_mask[edge_index[1]]
+                    edge_index = edge_index[:, mask]
+                    edge_index[1] = new_ids[edge_index[1]]
+                    g[edge_type].edge_index = edge_index
 
         return g
 
 
-class hetero_to_homo(BaseTransform):
+class hetero_to_homo:
+    """Convert a heterogeneous molecular graph to a homogeneous graph.
+
+    Atom nodes become graph nodes, bond nodes become edge features.
+    Optionally concatenates global features onto atom and bond features.
+    """
+
     def __init__(self, concat_global=False):
         self.concat_global = concat_global
         self.global_feat_len = None
@@ -71,80 +113,108 @@ class hetero_to_homo(BaseTransform):
             global_ft_bond = global_ft.repeat(bond_ft.shape[0], 1)
             bond_ft = torch.cat([bond_ft, global_ft_bond], dim=1)
 
-        homo = construct_homograph_blank(graph.nodes["atom"].data["feat"], edge_list)
+        homo = construct_homograph_blank(graph["atom"].feat, edge_list)
 
-        homo.ndata["ft"] = atom_ft
-        homo.edata["ft"] = bond_ft
+        homo.ft = atom_ft
+        # Store bond features as edge attributes
+        if homo.edge_index.size(1) > 0:
+            homo.edge_ft = bond_ft
 
         return homo
 
 
-class homo_to_hetero(BaseTransform):
+class homo_to_hetero:
+    """Convert a homogeneous graph back to a heterogeneous molecular graph.
+
+    Reconstructs atom, bond, and global node types from a homogeneous graph
+    where global features were concatenated.
+    """
+
     def __init__(self, global_feat_len, self_loop=True):
         self.global_feat_len = global_feat_len
         self.self_loop = self_loop
 
     def __call__(self, graph):
-
         graph = graph.clone()
-        atom_ft = graph.ndata["ft"]
-        bond_ft = graph.edata["ft"]
+        atom_ft = graph.ft
+        bond_ft = graph.edge_ft if hasattr(graph, 'edge_ft') else None
         atom_ft_base = atom_ft[:, 0 : -self.global_feat_len]
-        bond_ft_base = bond_ft[:, 0 : -self.global_feat_len]
         global_ft = atom_ft[0, -self.global_feat_len :].reshape(1, -1)
-        node_list = graph.nodes()
-        edges_raw_u, edges_raw_v = graph.edges()
-        bond_list = [[edges_raw_u[i], edges_raw_v[i]] for i in range(len(edges_raw_u))]
 
-        num_atoms = len(node_list)
-        num_bonds = len(bond_list)
+        num_atoms = graph.num_nodes
+        edge_index = graph.edge_index
+        num_bonds = edge_index.size(1)
 
-        a2b = []
-        b2a = []
+        if bond_ft is not None:
+            bond_ft_base = bond_ft[:, 0 : -self.global_feat_len]
+        else:
+            bond_ft_base = torch.zeros(num_bonds, 0)
+
+        # Build edge lists for hetero graph
+        a2b_src, a2b_dst = [], []
+        b2a_src, b2a_dst = [], []
 
         if num_bonds == 0:
             num_bonds = 1
-            a2b = [(0, 0)]
-            b2a = [(0, 0)]
-
+            a2b_src, a2b_dst = [0], [0]
+            b2a_src, b2a_dst = [0], [0]
         else:
-            a2b = []
-            b2a = []
             for b in range(num_bonds):
-                u = bond_list[b][0]
-                v = bond_list[b][1]
-                b2a.extend([[b, u], [b, v]])
-                a2b.extend([[u, b], [v, b]])
+                u = edge_index[0, b].item()
+                v = edge_index[1, b].item()
+                b2a_src.extend([b, b])
+                b2a_dst.extend([u, v])
+                a2b_src.extend([u, v])
+                a2b_dst.extend([b, b])
 
-        a2g = [(a, 0) for a in range(num_atoms)]
-        g2a = [(0, a) for a in range(num_atoms)]
-        b2g = [(b, 0) for b in range(num_bonds)]
-        g2b = [(0, b) for b in range(num_bonds)]
+        a2g_src = list(range(num_atoms))
+        a2g_dst = [0] * num_atoms
+        g2a_src = [0] * num_atoms
+        g2a_dst = list(range(num_atoms))
+        b2g_src = list(range(num_bonds))
+        b2g_dst = [0] * num_bonds
+        g2b_src = [0] * num_bonds
+        g2b_dst = list(range(num_bonds))
 
-        edges_dict = {
-            ("atom", "a2b", "bond"): a2b,
-            ("bond", "b2a", "atom"): b2a,
-            ("atom", "a2g", "global"): a2g,
-            ("global", "g2a", "atom"): g2a,
-            ("bond", "b2g", "global"): b2g,
-            ("global", "g2b", "bond"): g2b,
-        }
+        data = HeteroData()
+        data["atom"].num_nodes = num_atoms
+        data["bond"].num_nodes = num_bonds
+        data["global"].num_nodes = 1
+
+        data["atom", "a2b", "bond"].edge_index = torch.tensor(
+            [a2b_src, a2b_dst], dtype=torch.long
+        )
+        data["bond", "b2a", "atom"].edge_index = torch.tensor(
+            [b2a_src, b2a_dst], dtype=torch.long
+        )
+        data["atom", "a2g", "global"].edge_index = torch.tensor(
+            [a2g_src, a2g_dst], dtype=torch.long
+        )
+        data["global", "g2a", "atom"].edge_index = torch.tensor(
+            [g2a_src, g2a_dst], dtype=torch.long
+        )
+        data["bond", "b2g", "global"].edge_index = torch.tensor(
+            [b2g_src, b2g_dst], dtype=torch.long
+        )
+        data["global", "g2b", "bond"].edge_index = torch.tensor(
+            [g2b_src, g2b_dst], dtype=torch.long
+        )
+
         if self.self_loop:
-            a2a = [(i, i) for i in range(num_atoms)]
-            b2b = [(i, i) for i in range(num_bonds)]
-            g2g = [(0, 0)]
-            edges_dict.update(
-                {
-                    ("atom", "a2a", "atom"): a2a,
-                    ("bond", "b2b", "bond"): b2b,
-                    ("global", "g2g", "global"): g2g,
-                }
+            a2a_nodes = list(range(num_atoms))
+            b2b_nodes = list(range(num_bonds))
+            data["atom", "a2a", "atom"].edge_index = torch.tensor(
+                [a2a_nodes, a2a_nodes], dtype=torch.long
+            )
+            data["bond", "b2b", "bond"].edge_index = torch.tensor(
+                [b2b_nodes, b2b_nodes], dtype=torch.long
+            )
+            data["global", "g2g", "global"].edge_index = torch.tensor(
+                [[0], [0]], dtype=torch.long
             )
 
-        g = dgl.heterograph(edges_dict)
-
-        # update node and edge features
-        g.nodes["atom"].data["feat"] = atom_ft_base
-        g.nodes["bond"].data["feat"] = bond_ft_base
-        g.nodes["global"].data["feat"] = global_ft
-        return g
+        # Set node features
+        data["atom"].feat = atom_ft_base
+        data["bond"].feat = bond_ft_base
+        data["global"].feat = global_ft
+        return data

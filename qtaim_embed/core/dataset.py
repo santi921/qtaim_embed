@@ -1,4 +1,5 @@
 import torch
+from torch_geometric.data import HeteroData
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
@@ -16,6 +17,27 @@ from qtaim_embed.data.processing import (
     HeteroGraphStandardScaler,
     HeteroGraphLogMagnitudeScaler,
 )
+
+
+def _get_ndata(graph: HeteroData, key: str) -> Dict[str, torch.Tensor]:
+    """
+    Helper to get a feature dict from PyG HeteroData, equivalent to DGL's g.ndata[key].
+    Returns a dict mapping node type -> tensor for all node types that have the attribute.
+    """
+    return {
+        nt: getattr(graph[nt], key)
+        for nt in graph.node_types
+        if hasattr(graph[nt], key)
+    }
+
+
+def _set_ndata(graph: HeteroData, key: str, data_dict: Dict[str, torch.Tensor]) -> None:
+    """
+    Helper to set a feature dict on PyG HeteroData, equivalent to DGL's g.ndata[key] = dict.
+    Sets the attribute on each node type present in data_dict.
+    """
+    for nt, tensor in data_dict.items():
+        setattr(graph[nt], key, tensor)
 
 
 class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
@@ -62,10 +84,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             extra_keys (dict): dictionary of keys to grab from the data file
             target_dict (dict): dictionary of keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
-            num_workers (int): number of parallel workers to use for graph building
-            bond_key (str): key in dataframe corresponding to bond information
-            map_key (str): key in dataframe corresponding to mapping information
-            verbose (bool): whether to print progress information
         """
         # check if file ends in pkl
         if file[-3:] == "pkl":
@@ -286,30 +304,23 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
 
     def load(self) -> None:
         self.get_include_exclude_indices()
-        # print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        # print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        # print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
             features_new = {}
-            for key, value in graph.ndata["feat"].items():
+            ndata_feat = _get_ndata(graph, "feat")
+            for key, value in ndata_feat.items():
                 if key in self.include_names.keys():
-                    graph_features = {}
-
-                    graph_features[key] = graph.ndata["feat"][key][
+                    features_new[key] = ndata_feat[key][
                         :, self.exclude_locs[key]
                     ]
+                    labels[key] = ndata_feat[key][:, self.include_locs[key]]
+                _set_ndata(graph, "feat", features_new)
+                _set_ndata(graph, "labels", labels)
 
-                    features_new.update(graph_features)
-                    labels[key] = graph.ndata["feat"][key][:, self.include_locs[key]]
-                graph.ndata["feat"] = features_new
-                graph.ndata["labels"] = labels
-
-            # label_list.append(labels)
         if self.verbose:
-            print("original loader node types:", graph.ndata["feat"].keys())
-            print("original loader label types:", graph.ndata["labels"].keys())
+            print("original loader node types:", list(_get_ndata(graph, "feat").keys()))
+            print("original loader label types:", list(_get_ndata(graph, "labels").keys()))
 
         if self.log_scale_features:
             print("... > Log scaling features")
@@ -343,8 +354,6 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             print("... > feature mean(s): \n", scaler.mean)
             print("... > feature std(s):  \n", scaler.std)
 
-        # self.labels = label_list
-
     @property
     def feature_names(self) -> Dict[str, List[str]]:
         return self.exclude_names
@@ -364,11 +373,10 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         """
         Perform inverse standardization on the given graphs.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized features
+            graphs: list of PyG HeteroData graphs with inverse standardized features
         """
-        # assert that one of standard_scale_targets or log_scale_targets is true
         assert (
             self.log_scale_features or self.standard_scale_features
         ), "a scaler must be used to unscale features"
@@ -387,12 +395,10 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         """
         Perform inverse standardization of targets on the given graphs.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized targets
-
+            graphs: list of PyG HeteroData graphs with inverse standardized targets
         """
-        # assert that one of standard_scale_targets or log_scale_targets is true
         assert (
             self.log_scale_labels or self.standard_scale_labels
         ), "a scaler must be used to unscale targets"
@@ -453,8 +459,6 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             extra_keys (dict): dictionary of keys to grab from the data file
             target_list (list of strings): dictionary of global keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
-            num_workers (int): number of parallel workers to use for graph building
-            verbose (bool): whether to print progress information
         """
         # check if file exists
         if not Path(file).exists():
@@ -696,34 +700,19 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
 
     def load(self) -> None:
         self.get_include_exclude_indices()
-        # print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        # print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        # print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
             features_new = {}
-            for key, value in graph.ndata["feat"].items():
+            ndata_feat = _get_ndata(graph, "feat")
+            for key, value in ndata_feat.items():
                 if key in self.include_names.keys():
-                    graph_features = {}
-
-                    graph_features[key] = graph.ndata["feat"][key][
+                    features_new[key] = ndata_feat[key][
                         :, self.exclude_locs[key]
                     ]
-
-                    features_new.update(graph_features)
-                    # if key == "global":
-                    labels[key] = graph.ndata["feat"][key][:, self.include_locs[key]]
-                    # else:
-                    #    labels[key] = graph.ndata["feat"][key][
-                    #        :, self.include_locs[key]
-                    #    ]
-                graph.ndata["feat"] = features_new
-                graph.ndata["labels"] = labels
-
-            # label_list.append(labels)
-        # print("original loader node types:", graph.ndata["feat"].keys())
-        # print("original loader label types:", graph.ndata["labels"].keys())
+                    labels[key] = ndata_feat[key][:, self.include_locs[key]]
+                _set_ndata(graph, "feat", features_new)
+                _set_ndata(graph, "labels", labels)
 
         if self.log_scale_features:
             print("... > Log scaling features")
@@ -736,8 +725,6 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             print("... > Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
-            # self.scaler_feat_mean = scaler.mean
-            # self.scaler_feat_std = scaler.std
             self.feature_scalers.append(scaler)
 
             if self.verbose:
@@ -748,7 +735,6 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             print("... > Log scaling targets")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
             self.graphs = log_scaler(self.graphs)
-            # self.log_label_scaler = log_scaler
             self.label_scalers.append(log_scaler)
             print("... > Log scaling targets complete")
 
@@ -756,16 +742,11 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             print("... > Scaling targets")
             scaler = HeteroGraphStandardScaler(features_tf=False)
             self.graphs = scaler(self.graphs)
-            # self.scaler_label_mean = scaler.mean
-            # self.scaler_label_std = scaler.std
-            # self.standard_label_scaler = scaler
             self.label_scalers.append(scaler)
 
             if self.verbose:
                 print("... > feature mean(s): \n", scaler.mean)
                 print("... > feature std(s):  \n", scaler.std)
-
-        # self.labels = label_list
 
     @property
     def feature_names(self) -> Dict[str, List[str]]:
@@ -786,11 +767,10 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         """
         Perform inverse standardization on the given graphs.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized features
+            graphs: list of PyG HeteroData graphs with inverse standardized features
         """
-        # assert that one of standard_scale_targets or log_scale_targets is true
         assert (
             self.log_scale_features or self.standard_scale_features
         ), "a scaler must be used to unscale features"
@@ -809,12 +789,10 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         """
         Perform inverse standardization of targets on the given graphs.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized targets
-
+            graphs: list of PyG HeteroData graphs with inverse standardized targets
         """
-        # assert that one of standard_scale_targets or log_scale_targets is true
         assert (
             self.log_scale_labels or self.standard_scale_labels
         ), "a scaler must be used to unscale targets"
@@ -832,7 +810,6 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                 print("unscaling feats with standard scaler")
             graphs_ret = self.label_scalers[0].inverse(graphs_ret)
         return graphs_ret
-
 
 
 class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
@@ -876,8 +853,6 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             extra_keys (dict): dictionary of keys to grab from the data file
             target_list (list of strings): dictionary of global keys to use as labels
             extra_dataset_info (dict): dictionary of extra info to be stored in the dataset
-            num_workers (int): number of parallel workers to use for graph building
-            verbose (bool): whether to print progress information
         """
         # check if file ends in pkl
         if file[-3:] == "pkl":
@@ -1093,9 +1068,6 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
 
     def load(self) -> None:
         self.get_include_exclude_indices()
-        # print("original loader node types:", self.graphs[0].ndata["feat"].keys())
-        # print("original loader label types:", self.graphs[0].ndata["labels"].keys())
-        # print("include names: ", self.include_names.keys())
         print("... > parsing labels and features in graphs")
         filtered_graph_count = 0
         filter_ind = []
@@ -1103,21 +1075,16 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         if self.impute:
             self.mode_dict = {}
 
-        # print("categories set list: ", categories_set_list)
         for ind, graph in tqdm(enumerate(self.graphs)):
             labels = {}
             features_new = {}
-            for key, value in graph.ndata["feat"].items():
+            ndata_feat = _get_ndata(graph, "feat")
+            for key, value in ndata_feat.items():
                 if key in self.include_names.keys():
-                    graph_features = {}
-
-                    graph_features[key] = graph.ndata["feat"][key][
+                    features_new[key] = ndata_feat[key][
                         :, self.exclude_locs[key]
                     ]
-
-                    features_new.update(graph_features)
-                    labels_temp = graph.ndata["feat"][key][:, self.include_locs[key]]
-                    # print("labels temp: ", labels_temp)
+                    labels_temp = ndata_feat[key][:, self.include_locs[key]]
                     # check if any of the labels are nan
                     if self.impute:
                         for ind_task, val in enumerate(labels_temp[0]):
@@ -1141,20 +1108,16 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                             categories_set_list[i].add(int(list_labels[i]))
                             for i in range(len(self.include_locs["global"]))
                         ]  # update number of categories
-                    # print("labels temp: ", labels_temp[0])
                     labels[key] = labels_temp
 
-            graph.ndata["feat"] = features_new
-            # print(labels)
-            graph.ndata["labels"] = labels
+            _set_ndata(graph, "feat", features_new)
+            _set_ndata(graph, "labels", labels)
         if self.impute:
-            # print("mode dict: ", self.mode_dict)
             # convert mode dict to mode
             for key, value in self.mode_dict.items():
                 self.mode_dict[key] = value.index(max(value))
 
         self.categories_set_list = categories_set_list
-        # print("categories set list: ", categories_set_list)
         dict_distro = {}
         graphs_filtered = []
         mol_wrappers_filtered = []
@@ -1165,7 +1128,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                     mol_wrappers_filtered.append(self.data[ind])
                     # convert labels to one hot
                     labels = []
-                    labels_raw = graph.ndata["labels"]["global"]
+                    labels_raw = graph["global"].labels
 
                     if len(categories_set_list) == 1:
                         labels = np.zeros((1, len(categories_set_list[0])))
@@ -1175,8 +1138,6 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                         )
                         labels_raw = labels_raw[0]
 
-                    # print("labels raw: ", labels_raw)
-                    # for i, label in enumerate(labels_raw):
                     for j, category_set in enumerate(categories_set_list):
                         ind_hot = list(category_set).index(int(labels_raw[j]))
                         if j not in dict_distro:
@@ -1188,14 +1149,12 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                             labels[j, ind_hot] = 1
 
                     labels = torch.tensor(np.array([labels]), dtype=torch.int64)
-                    # labels = torch.tensor(labels.flatten())
-                    # print(labels)
-                    graph.ndata["labels"] = {"global": labels}
+                    _set_ndata(graph, "labels", {"global": labels})
             else:
                 graphs_filtered.append(graph)
                 mol_wrappers_filtered.append(self.data[ind])
                 labels = []
-                labels_raw = graph.ndata["labels"]["global"]
+                labels_raw = graph["global"].labels
                 if len(categories_set_list) == 1:
                     labels = np.zeros((1, len(categories_set_list[0])))
                 else:
@@ -1204,8 +1163,6 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                     )
                     labels_raw = labels_raw[0]
                 for j, category_set in enumerate(categories_set_list):
-                    # print(category_set)
-                    # print("labels raw: ", labels_raw[j])
                     if labels_raw[j] == np.NaN or torch.isnan(labels_raw[j]):
                         ind_hot = self.mode_dict[j]
                     else:
@@ -1219,12 +1176,11 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                     else:
                         labels[j, ind_hot] = 1
                 labels = torch.tensor(np.array([labels]), dtype=torch.int64)
-                graph.ndata["labels"] = {"global": labels}
+                _set_ndata(graph, "labels", {"global": labels})
 
         self.graphs = graphs_filtered
         self.data = mol_wrappers_filtered
         self.dict_distro = dict_distro
-        # label_list.append(labels)
         print("... > number of categories for each label: ")
         for i, category_set in enumerate(categories_set_list):
             print(
@@ -1235,8 +1191,8 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                 "with distribution: ",
                 dict_distro[i],
             )
-        print("original loader node types:", graph.ndata["feat"].keys())
-        print("original loader label types:", graph.ndata["labels"].keys())
+        print("original loader node types:", list(_get_ndata(graph, "feat").keys()))
+        print("original loader label types:", list(_get_ndata(graph, "labels").keys()))
 
         if self.impute:
             print("number of graphs imputed: ", filtered_graph_count)
@@ -1254,15 +1210,11 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             print("... > Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
-            # self.scaler_feat_mean = scaler.mean
-            # self.scaler_feat_std = scaler.std
             self.feature_scalers.append(scaler)
             print("... > Scaling features complete")
             if self.verbose:
                 print("... > feature mean(s): \n", scaler.mean)
                 print("... > feature std(s):  \n", scaler.std)
-
-        # self.labels = label_list
 
     @property
     def feature_names(self) -> Dict[str, List[str]]:
@@ -1283,11 +1235,10 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         """
         Perform inverse standardization on the given graphs.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized features
+            graphs: list of PyG HeteroData graphs with inverse standardized features
         """
-        # assert that one of standard_scale_targets or log_scale_targets is true
         assert (
             self.log_scale_features or self.standard_scale_features
         ), "a scaler must be used to unscale features"

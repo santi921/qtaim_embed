@@ -1,61 +1,40 @@
 import os
-import dgl
+import io
 import lmdb
 import pickle
-import tempfile
+import torch
+from torch_geometric.data import HeteroData
 from tqdm import tqdm
 
 from qtaim_embed.core.dataset import Subset
-#from qtaim_embed.data.processing import (
-#    HeteroGraphStandardScaler,
-#    HeteroGraphLogMagnitudeScaler,
-#)
 
 scalar = 1 / 1024
 
 
+
 def TransformMol(data_object):
     serialized_graph = data_object["molecule_graph"]
-    # check if serialized_graph is DGL graph or if it is chunk
-    if isinstance(serialized_graph, dgl.DGLGraph):
-        return data_object
-    elif isinstance(serialized_graph, dgl.DGLHeteroGraph):
+    # check if serialized_graph is already a PyG HeteroData or if it is bytes
+    if isinstance(serialized_graph, HeteroData):
         return data_object
 
-    dgl_graph = load_dgl_graph_from_serialized(serialized_graph)
-    # data_object["molecule_graph"] = dgl_graph
-    return dgl_graph
+    graph = load_graph_from_serialized(serialized_graph)
+    return graph
 
 
-def serialize_dgl_graph(dgl_graph, ret=True):
-    # import pdb
-    # pdb.set_trace()
-    # Create a temporary file
-    with tempfile.NamedTemporaryFile() as tmpfile:
-        # Save the graph to the temporary file
-
-        dgl.save_graphs(tmpfile.name, [dgl_graph])
-
-        # Read the content of the file
-        if ret:
-            tmpfile.seek(0)
-            serialized_data = tmpfile.read()
+def serialize_graph(graph, ret=True):
+    """Serialize a PyG HeteroData graph to bytes using torch.save with BytesIO."""
+    buf = io.BytesIO()
+    torch.save(graph, buf)
     if ret:
-        return serialized_data
+        return buf.getvalue()
 
 
-def load_dgl_graph_from_serialized(serialized_graph):
-    with tempfile.NamedTemporaryFile(mode="wb", delete=True) as tmpfile:
-        tmpfile.write(serialized_graph)
-        tmpfile.flush()  # Ensure all data is written
-
-        # Rewind the file to the beginning before reading
-        tmpfile.seek(0)
-
-        # Load the graph using the file handle
-        graphs, _ = dgl.load_graphs(tmpfile.name)
-
-    return graphs[0]  # Assuming there's only one graph
+def load_graph_from_serialized(serialized_graph):
+    """Load a PyG HeteroData graph from serialized bytes."""
+    buf = io.BytesIO(serialized_graph)
+    graph = torch.load(buf, weights_only=False)
+    return graph
 
 
 def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int = -1):
@@ -161,10 +140,10 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
 
 def _serialize_graphs_parallel(graphs, num_workers):
     """
-    Serialize DGL graphs in parallel (LMDB conversion only).
+    Serialize PyG graphs in parallel (LMDB conversion only).
 
     Args:
-        graphs: List of DGL graphs
+        graphs: List of PyG HeteroData graphs
         num_workers: Number of parallel workers
 
     Returns:
@@ -219,11 +198,11 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         if num_workers > 1:
             # Parallel serialization
             graphs_to_serialize = [dataset.dataset.graphs[ind] for ind in dataset.indices]
-            dgl_graphs_serialized = _serialize_graphs_parallel(graphs_to_serialize, num_workers)
+            graphs_serialized = _serialize_graphs_parallel(graphs_to_serialize, num_workers)
         else:
             # Serial serialization (original behavior)
-            dgl_graphs_serialized = [
-                serialize_dgl_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices
+            graphs_serialized = [
+                serialize_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices
             ]
 
         if save_scalers: 
@@ -243,10 +222,10 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         # List of Molecules - serialize graphs
         if num_workers > 1:
             # Parallel serialization
-            dgl_graphs_serialized = _serialize_graphs_parallel(dataset.graphs, num_workers)
+            graphs_serialized = _serialize_graphs_parallel(dataset.graphs, num_workers)
         else:
             # Serial serialization (original behavior)
-            dgl_graphs_serialized = [serialize_dgl_graph(g) for g in dataset.graphs]
+            graphs_serialized = [serialize_graph(g) for g in dataset.graphs]
 
         if save_scalers: 
             feature_scalers = dataset.feature_scalers
@@ -267,7 +246,7 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
     print("...> writing molecules to lmdb")
     # print("number of molecules to write: ", len(molecule_ind_list))
     write_molecule_lmdb(
-        graphs=dgl_graphs_serialized,
+        graphs=graphs_serialized,
         lmdb_dir=lmdb_dir,
         lmdb_name="molecule.lmdb",
         global_values=global_dict,

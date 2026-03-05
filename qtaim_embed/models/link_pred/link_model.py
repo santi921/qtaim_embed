@@ -5,9 +5,8 @@ import torch.nn as nn
 from torch.optim import lr_scheduler
 import pytorch_lightning as pl
 
-from dgl.nn.pytorch import GATConv
-from dgl.nn import SAGEConv
-from dgl.heterograph import DGLGraph
+from torch_geometric.nn import SAGEConv, GATConv
+from torch_geometric.data import Data
 
 from qtaim_embed.utils.models import get_layer_args_homo, _split_batched_output
 
@@ -54,8 +53,6 @@ class GCNLinkPred(pl.LightningModule):
         embedding_size: int, size of embedding layer
         predictor: str, predictor type
         predictor_param_dict: dict, dictionary of predictor parameters
-        grapher_config: dict, optional configuration for reconstructing the grapher
-            used during training (element_set, allowed_ring_size, etc.)
 
     """
 
@@ -86,7 +83,6 @@ class GCNLinkPred(pl.LightningModule):
         predictor_param_dict: Dict[str, List[int]] = {},
         aggregator_type: str = "mean",
         compiled: Optional[bool] = None,
-        grapher_config: Optional[Dict] = None,
     ):
 
         super().__init__()
@@ -144,7 +140,6 @@ class GCNLinkPred(pl.LightningModule):
             "predictor_param_dict": predictor_param_dict,
             "aggregator_type": aggregator_type,
             "compiled": compiled,
-            "grapher_config": grapher_config,
         }
 
         self.hparams.update(params)
@@ -225,8 +220,15 @@ class GCNLinkPred(pl.LightningModule):
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
 
-        if self.hparams.conv_fn in ["GraphSAGE", "GATConv"]:
-            self.conv_out_size = self.conv_layers[-1]._out_feats
+        if self.hparams.conv_fn == "GraphSAGE":
+            self.conv_out_size = self.conv_layers[-1].out_channels
+        elif self.hparams.conv_fn == "GATConv":
+            # PyG GATConv with concat=True outputs out_channels * heads
+            last_conv = self.conv_layers[-1]
+            if last_conv.concat:
+                self.conv_out_size = last_conv.out_channels * last_conv.heads
+            else:
+                self.conv_out_size = last_conv.out_channels
         else:
             self.conv_out_size = self.conv_layers[-1].out_feats
         # print(self.conv_layers)
@@ -278,47 +280,59 @@ class GCNLinkPred(pl.LightningModule):
         )
 
     def compiled_forward(
-        self, pos_graph: DGLGraph, neg_graph: DGLGraph, inputs: torch.Tensor
+        self, pos_graph: Data, neg_graph: Data, inputs: torch.Tensor
     ):
         """
-        Forward pass
+        Forward pass.
+
+        Parameters
+        ----------
+        pos_graph : Data
+            PyG Data object for positive edges. Must have edge_index attribute.
+        neg_graph : Data
+            PyG Data object for negative edges. Must have edge_index attribute.
+        inputs : torch.Tensor
+            Node feature tensor of shape [num_nodes, input_size].
+
+        Returns
+        -------
+        tuple of torch.Tensor
+            (pos_pred, neg_pred) scalar scores for positive and negative edges.
         """
-        # print("type of inputs", type(inputs))
-        # print("pos graph", type(pos_graph))
-        # print("neg graph", type(neg_graph))
+        pos_edge_index = pos_graph.edge_index
+        neg_edge_index = neg_graph.edge_index
 
         feats_embed = self.embedding(inputs)
         feats_pos, feats_neg = feats_embed, feats_embed  # Initialize for compatibility
 
         for ind, conv in enumerate(self.conv_layers):
-            # Explicitly handle the first layer
-            if ind == 0:
-                feats_pos = conv(pos_graph, feats_embed)
-                feats_neg = conv(neg_graph, feats_embed)
-            else:
-                feats_pos = conv(pos_graph, feats_pos)
-                feats_neg = conv(neg_graph, feats_neg)
-
-            # Handle GATConv-specific reshaping explicitly
-            if self.hparams.conv_fn == "GATConv":
-                if ind < self.hparams.n_conv_layers - 1:
-                    feats_pos = feats_pos.view(
-                        -1, self.hparams.num_heads * self.hparams.hidden_size
-                    )
-                    feats_neg = feats_neg.view(
-                        -1, self.hparams.num_heads * self.hparams.hidden_size
-                    )
+            if self.hparams.conv_fn in ["GraphSAGE", "GATConv"]:
+                # PyG SAGEConv/GATConv: conv(x, edge_index)
+                if ind == 0:
+                    feats_pos = conv(feats_embed, pos_edge_index)
+                    feats_neg = conv(feats_embed, neg_edge_index)
                 else:
-                    feats_pos = feats_pos.view(-1, self.hparams.hidden_size)
-                    feats_neg = feats_neg.view(-1, self.hparams.hidden_size)
+                    feats_pos = conv(feats_pos, pos_edge_index)
+                    feats_neg = conv(feats_neg, neg_edge_index)
+            else:
+                # GraphConvDropoutBatch / ResidualBlockHomo: conv(x, edge_index, edge_weight)
+                if ind == 0:
+                    feats_pos = conv(feats_embed, pos_edge_index)
+                    feats_neg = conv(feats_embed, neg_edge_index)
+                else:
+                    feats_pos = conv(feats_pos, pos_edge_index)
+                    feats_neg = conv(feats_neg, neg_edge_index)
 
-        # Ensure predictor compatibility
-        pos_pred = self.predictor(pos_graph, feats_pos)
-        neg_pred = self.predictor(neg_graph, feats_neg)
+            # Note: PyG GATConv with concat=True already flattens output,
+            # so no manual reshaping is needed.
+
+        # Predictor takes (edge_index, h) in PyG
+        pos_pred = self.predictor(pos_edge_index, feats_pos)
+        neg_pred = self.predictor(neg_edge_index, feats_neg)
 
         return pos_pred, neg_pred
 
-    def forward(self, pos_graph: DGLGraph, neg_graph: DGLGraph, inputs: torch.Tensor):
+    def forward(self, pos_graph: Data, neg_graph: Data, inputs: torch.Tensor):
         """
         Forward pass
         """

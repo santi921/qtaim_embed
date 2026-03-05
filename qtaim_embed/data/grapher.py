@@ -1,4 +1,5 @@
-import dgl
+import torch
+from torch_geometric.data import HeteroData
 
 
 class HeteroCompleteGraphFromMolWrapper:
@@ -19,70 +20,93 @@ class HeteroCompleteGraphFromMolWrapper:
 
     def build_graph(self, mol):
         bonds = list(mol.bonds.keys())
-        # print("bonds", bonds)
         num_bonds = len(bonds)
         num_atoms = len(mol.coords)
-        a2b = []
-        b2a = []
-        if num_bonds == 0:
-            # print("num bonds 1 examples!!!!!")
-            num_bonds = 1
-            a2b = [(0, 0)]
-            b2a = [(0, 0)]
+        a2b_src, a2b_dst = [], []
+        b2a_src, b2a_dst = [], []
 
+        if num_bonds == 0:
+            num_bonds = 1
+            a2b_src, a2b_dst = [0], [0]
+            b2a_src, b2a_dst = [0], [0]
         else:
-            a2b = []
-            b2a = []
             for b in range(num_bonds):
                 u = bonds[b][0]
                 v = bonds[b][1]
-                b2a.extend([[b, u], [b, v]])
-                a2b.extend([[u, b], [v, b]])
+                b2a_src.extend([b, b])
+                b2a_dst.extend([u, v])
+                a2b_src.extend([u, v])
+                a2b_dst.extend([b, b])
 
-        a2g = [(a, 0) for a in range(num_atoms)]
-        g2a = [(0, a) for a in range(num_atoms)]
-        b2g = [(b, 0) for b in range(num_bonds)]
-        g2b = [(0, b) for b in range(num_bonds)]
+        a2g_src = list(range(num_atoms))
+        a2g_dst = [0] * num_atoms
+        g2a_src = [0] * num_atoms
+        g2a_dst = list(range(num_atoms))
+        b2g_src = list(range(num_bonds))
+        b2g_dst = [0] * num_bonds
+        g2b_src = [0] * num_bonds
+        g2b_dst = list(range(num_bonds))
 
-        edges_dict = {
-            ("atom", "a2b", "bond"): a2b,
-            ("bond", "b2a", "atom"): b2a,
-            ("atom", "a2g", "global"): a2g,
-            ("global", "g2a", "atom"): g2a,
-            ("bond", "b2g", "global"): b2g,
-            ("global", "g2b", "bond"): g2b,
-        }
+        data = HeteroData()
+
+        # Set number of nodes for each type explicitly
+        data["atom"].num_nodes = num_atoms
+        data["bond"].num_nodes = num_bonds
+        data["global"].num_nodes = 1
+
+        # Edge connectivity: edge_index is [2, num_edges] with dtype=torch.long
+        data["atom", "a2b", "bond"].edge_index = torch.tensor(
+            [a2b_src, a2b_dst], dtype=torch.long
+        )
+        data["bond", "b2a", "atom"].edge_index = torch.tensor(
+            [b2a_src, b2a_dst], dtype=torch.long
+        )
+        data["atom", "a2g", "global"].edge_index = torch.tensor(
+            [a2g_src, a2g_dst], dtype=torch.long
+        )
+        data["global", "g2a", "atom"].edge_index = torch.tensor(
+            [g2a_src, g2a_dst], dtype=torch.long
+        )
+        data["bond", "b2g", "global"].edge_index = torch.tensor(
+            [b2g_src, b2g_dst], dtype=torch.long
+        )
+        data["global", "g2b", "bond"].edge_index = torch.tensor(
+            [g2b_src, g2b_dst], dtype=torch.long
+        )
+
         if self.self_loop:
-            a2a = [(i, i) for i in range(num_atoms)]
-            b2b = [(i, i) for i in range(num_bonds)]
-            g2g = [(0, 0)]
-            edges_dict.update(
-                {
-                    ("atom", "a2a", "atom"): a2a,
-                    ("bond", "b2b", "bond"): b2b,
-                    ("global", "g2g", "global"): g2g,
-                }
+            a2a_nodes = list(range(num_atoms))
+            b2b_nodes = list(range(num_bonds))
+            data["atom", "a2a", "atom"].edge_index = torch.tensor(
+                [a2a_nodes, a2a_nodes], dtype=torch.long
+            )
+            data["bond", "b2b", "bond"].edge_index = torch.tensor(
+                [b2b_nodes, b2b_nodes], dtype=torch.long
+            )
+            data["global", "g2g", "global"].edge_index = torch.tensor(
+                [[0], [0]], dtype=torch.long
             )
 
-        g = dgl.heterograph(edges_dict)
-        # g = dgl.add_self_loop(g)
-        # add name
-        g.mol_name = mol.id
+        # Store molecule name as custom attribute
+        data.mol_name = mol.id
 
-        return g
+        return data
 
-    def featurize(self, g, mol, ret_feat_names=False, **kwargs):
+    def featurize(self, data, mol, ret_feat_names=False, **kwargs):
         if self.atom_featurizer is not None:
             feat_dict, feat_atom = self.atom_featurizer(mol, **kwargs)
-            g.nodes["atom"].data.update(feat_dict)
+            for key, val in feat_dict.items():
+                data["atom"][key] = val
 
         if self.bond_featurizer is not None:
             feat_dict, feat_bond = self.bond_featurizer(mol, **kwargs)
-            g.nodes["bond"].data.update(feat_dict)
+            for key, val in feat_dict.items():
+                data["bond"][key] = val
 
         if self.global_featurizer is not None:
             feat_dict, globe_feat = self.global_featurizer(mol, **kwargs)
-            g.nodes["global"].data.update(feat_dict)
+            for key, val in feat_dict.items():
+                data["global"][key] = val
 
         if ret_feat_names or self.feat_names is None:
             feat_names = {}
@@ -94,6 +118,6 @@ class HeteroCompleteGraphFromMolWrapper:
                 feat_names["global"] = globe_feat
             self.feat_names = feat_names
             if ret_feat_names:
-                return g, feat_names
+                return data, feat_names
 
-        return g
+        return data

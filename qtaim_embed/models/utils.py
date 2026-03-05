@@ -2,56 +2,12 @@ import torch
 import numpy as np
 import pytorch_lightning as pl
 import pandas as pd
-from typing import Optional
 from qtaim_embed.models.graph_level.base_gcn import GCNGraphPred
 from qtaim_embed.models.node_level.base_gcn import GCNNodePred
 from qtaim_embed.models.graph_level.base_gcn_classifier import GCNGraphPredClassifier
 from qtaim_embed.models.link_pred.link_model import GCNLinkPred
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 from qtaim_embed.models.initializers import xavier_init, kaiming_init, equi_var_init
-from qtaim_embed.utils.grapher import get_grapher
-
-
-def get_grapher_from_model(model):
-    """
-    Reconstruct grapher from model's stored grapher_config.
-
-    This utility function extracts the grapher configuration stored in
-    a model's hyperparameters and reconstructs the grapher object that
-    was used during training. This ensures consistent graph featurization
-    between training and inference.
-
-    Args:
-        model: A PyTorch Lightning model (GCNGraphPred, GCNNodePred, or GCNLinkPred)
-            that has grapher_config stored in its hyperparameters.
-
-    Returns:
-        HeteroCompleteGraphFromMolWrapper or None: The reconstructed grapher,
-            or None if the model doesn't have a grapher_config.
-
-    Example:
-        >>> model = GCNNodePred.load_from_checkpoint("model.ckpt")
-        >>> grapher = get_grapher_from_model(model)
-        >>> if grapher is not None:
-        ...     graph = grapher.build_graph(mol_wrapper)
-    """
-    config = model.hparams.get("grapher_config")
-    if config is None:
-        return None
-    return get_grapher(**config)
-
-
-def get_grapher_config_from_model(model) -> Optional[dict]:
-    """
-    Extract grapher configuration from a model's hyperparameters.
-
-    Args:
-        model: A PyTorch Lightning model with grapher_config in hparams.
-
-    Returns:
-        dict or None: The grapher configuration dictionary, or None if not present.
-    """
-    return model.hparams.get("grapher_config")
 
 
 def load_graph_level_model_from_config(config):

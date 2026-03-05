@@ -1,10 +1,6 @@
 from typing import List, Tuple, Dict, Optional
 from copy import deepcopy
 
-import dgl.nn.pytorch as dglnn
-import dgl
-from dgl.readout import sum_nodes, softmax_nodes
-
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -13,39 +9,37 @@ from qtaim_embed.models.layers import GraphConvDropoutBatch
 
 
 class DotPredictor(nn.Module):
-    def apply_edges(self, edges):
-        """
-        Computes a scalar score for each edge of the given graph.
+    """
+    Computes a scalar score for each edge using a dot product between
+    source and destination node features.
+    """
 
+    def forward(self, edge_index, h):
+        """
         Parameters
         ----------
-        edges :
-            Has three members ``src``, ``dst`` and ``data``, each of
-            which is a dictionary representing the features of the
-            source nodes, the destination nodes, and the edges
-            themselves.
+        edge_index : torch.Tensor
+            Edge index tensor of shape [2, num_edges]. Row 0 is source nodes,
+            row 1 is destination nodes.
+        h : torch.Tensor
+            Node feature tensor of shape [num_nodes, feat_dim].
 
         Returns
         -------
-        dict
-            A dictionary of new edge features.
+        torch.Tensor
+            Scalar score for each edge of shape [num_edges].
         """
-        ret_val = torch.sum(edges.src["h"] * edges.dst["h"], dim=1)
-        return {"score": ret_val}
-
-    def forward(self, g, h):
-        with g.local_scope():
-            g.ndata["h"] = h
-            # Compute a new edge feature named 'score' by a dot-product between the
-            # source node feature 'h' and destination node feature 'h'.
-            # g.apply_edges(fn.u_dot_v('h', 'h', 'score'))
-            g.apply_edges(self.apply_edges)
-            # u_dot_v returns a 1-element vector for each edge so you need to squeeze it.
-            # return g.edata['score'][:, 0]
-            return g.edata["score"]
+        src, dst = edge_index
+        score = torch.sum(h[src] * h[dst], dim=1)
+        return score
 
 
 class MLPPredictor(nn.Module):
+    """
+    MLP-based edge scorer. Concatenates source and destination node features
+    and passes them through an MLP to produce a scalar score per edge.
+    """
+
     def __init__(
         self,
         h_feats,
@@ -63,14 +57,11 @@ class MLPPredictor(nn.Module):
             self.activation = None
 
         self.layers = nn.ModuleList()
-        # self.layers.append(nn.Linear(h_feats * 2, h_dims[0]))
         input_size = h_feats * 2
         output_size = h_dims[0]
         self.layers.append(nn.Linear(input_size, output_size))
 
         for i in range(1, len(h_dims)):
-            # print("mlp layer: ", i)
-
             if batch_norm:
                 self.layers.append(nn.BatchNorm1d(h_dims[i - 1]))
             if activation is not None:
@@ -92,72 +83,66 @@ class MLPPredictor(nn.Module):
         self.layers.append(nn.Linear(h_dims[-1], 1))
         self.layers.append(nn.Sigmoid())
 
-    def apply_edges(self, edges):
+    def forward(self, edge_index, h):
         """
-        Computes a scalar score for each edge of the given graph.
-
         Parameters
         ----------
-        edges :
-            Has three members ``src``, ``dst`` and ``data``, each of
-            which is a dictionary representing the features of the
-            source nodes, the destination nodes, and the edges
-            themselves.
+        edge_index : torch.Tensor
+            Edge index tensor of shape [2, num_edges].
+        h : torch.Tensor
+            Node feature tensor of shape [num_nodes, feat_dim].
 
         Returns
         -------
-        dict
-            A dictionary of new edge features.
+        torch.Tensor
+            Scalar score for each edge of shape [num_edges].
         """
-        h = torch.cat([edges.src["h"], edges.dst["h"]], 1)
+        src, dst = edge_index
+        h_concat = torch.cat([h[src], h[dst]], dim=1)
         for layer in self.layers[:-1]:
-            h = layer(h)
-        return {"score": h.squeeze(1)}
-
-    def forward(self, g, h):
-        with g.local_scope():
-            g.ndata["h"] = h
-            g.apply_edges(self.apply_edges)
-            return g.edata["score"]
+            h_concat = layer(h_concat)
+        # Final sigmoid layer and squeeze to get scalar per edge
+        h_concat = self.layers[-1](h_concat)
+        return h_concat.squeeze(1)
 
 
 class AttentionPredictor(nn.Module):
+    """
+    Attention-based edge scorer. Uses a gate mechanism to compute a weighted
+    score for each edge based on source and destination node features.
+    """
+
     def __init__(self, in_feats: int, **kwargs):
         super(AttentionPredictor, self).__init__()
         self.in_feats = in_feats
         self.gate_nn = nn.Linear(2 * in_feats, 1)
 
-    def apply_edges(self, edges, get_attention=False):
+    def forward(self, edge_index, h, get_attention=False):
         """
-        Computes a scalar score for each edge of the given graph.
-
         Parameters
         ----------
-        edges :
-            Has three members ``src``, ``dst`` and ``data``, each of
-            which is a dictionary representing the features of the
-            source nodes, the destination nodes, and the edges
-            themselves.
+        edge_index : torch.Tensor
+            Edge index tensor of shape [2, num_edges].
+        h : torch.Tensor
+            Node feature tensor of shape [num_nodes, feat_dim].
+        get_attention : bool, optional
+            If True, also return the attention gate values. Default: False.
 
         Returns
         -------
-        dict
-            A dictionary of new edge features.
+        torch.Tensor
+            Scalar score for each edge of shape [num_edges].
+        torch.Tensor (optional)
+            Gate attention values, returned only if get_attention=True.
         """
-        h = torch.cat([edges.src["h"], edges.dst["h"]], 1)
-
-        gate = F.leaky_relu(self.gate_nn(h))
+        src, dst = edge_index
+        h_concat = torch.cat([h[src], h[dst]], dim=1)
+        gate = F.leaky_relu(self.gate_nn(h_concat))
         gate = F.softmax(gate, dim=1)
-        rst = torch.sum(gate * edges.src["h"], dim=1)
+        score = torch.sum(gate * h[src], dim=1)
         if get_attention:
-            return {"score": rst}, gate
-        return {"score": rst}
-
-    def forward(self, g, h):
-        with g.local_scope():
-            g.ndata["h"] = h
-            g.apply_edges(self.apply_edges)
-            return g.edata["score"]
+            return score, gate
+        return score
 
 
 class UnifySize(nn.Module):
@@ -170,7 +155,7 @@ class UnifySize(nn.Module):
     feature between data points.
 
     Args:
-        input_dim (dict): feature sizes of nodes with node type as key and size as value
+        input_dim (int): input feature size
         output_dim (int): output feature size, i.e. the size we will turn all the
             features to
     """
@@ -183,16 +168,21 @@ class UnifySize(nn.Module):
     def forward(self, feats):
         """
         Args:
-            feats (dict): features dict with node type as key and feature as value
+            feats (torch.Tensor): input features
 
         Returns:
-            dict: size adjusted features
+            torch.Tensor: size adjusted features
         """
-        # return {k: self.linears[k](x) for k, x in feats.items()}
         return self.linears(feats)
 
 
 class ResidualBlockHomo(nn.Module):
+    """
+    Homogeneous graph residual block using GraphConvDropoutBatch layers.
+    Supports an input block mode where the first layer output is used
+    as a skip connection target (with detached clone for gradient isolation).
+    """
+
     def __init__(self, layer_args, resid_n_graph_convs=2, input_block=False, **kwargs):
         super(ResidualBlockHomo, self).__init__()
         # create graph convolutional layer
@@ -223,7 +213,6 @@ class ResidualBlockHomo(nn.Module):
 
                 else:
                     layer_arg_copy["in_feats"] = layer_args["out_feats"]
-                    # print("layer arg copy:", layer_arg_copy)
                     self.layers.append(
                         GraphConvDropoutBatch(
                             in_feats=layer_arg_copy["in_feats"],
@@ -238,7 +227,6 @@ class ResidualBlockHomo(nn.Module):
                         ),
                     )
             else:
-                # print("layer args:", layer_args)
                 self.layers.append(
                     GraphConvDropoutBatch(
                         in_feats=layer_arg_copy["in_feats"],
@@ -256,25 +244,38 @@ class ResidualBlockHomo(nn.Module):
         self.layers = nn.ModuleList(self.layers)
         self.out_feats = self.layers[-1].out_feats
 
-    def forward(self, graph, feat, weight=None, edge_weight=None):
-        input_feats = feat
+    def forward(self, x, edge_index, edge_weight=None):
+        """
+        Forward pass for the residual block.
 
-        if self.input_block == True:
-            # print("input block")
-            feats_rectified = self.layers[0](graph, input_feats, weight, edge_weight)
+        Parameters
+        ----------
+        x : torch.Tensor
+            Node feature tensor of shape [num_nodes, feat_dim].
+        edge_index : torch.Tensor
+            Edge index tensor of shape [2, num_edges].
+        edge_weight : torch.Tensor, optional
+            Edge weight tensor of shape [num_edges].
+
+        Returns
+        -------
+        torch.Tensor
+            Output node features after residual connection.
+        """
+        input_feats = x
+
+        if self.input_block:
+            feats_rectified = self.layers[0](x, edge_index, edge_weight)
             feats = feats_rectified.detach().clone()
             for layer in self.layers[1:]:
-                feats = layer(graph, feats, weight, edge_weight)
-
-            feat = feats_rectified + feats
-
+                feats = layer(feats, edge_index, edge_weight)
+            x = feats_rectified + feats
         else:
-            # print("no input block")
             for layer in self.layers:
-                feat = layer(graph, feat, weight, edge_weight)
-            feat = feat + input_feats
+                x = layer(x, edge_index, edge_weight)
+            x = x + input_feats
 
-        return feat
+        return x
 
     def pad_args_graph_conv(self, layer_args):
         """
