@@ -67,10 +67,10 @@ def serialize_graph_worker(args_tuple):
         idx, graph = args_tuple
 
         # Import here to ensure workers have access
-        from qtaim_embed.data.lmdb import serialize_dgl_graph
+        from qtaim_embed.data.lmdb import serialize_graph
 
         # Serialize the graph
-        serialized = serialize_dgl_graph(graph)
+        serialized = serialize_graph(graph)
 
         return (idx, serialized)
 

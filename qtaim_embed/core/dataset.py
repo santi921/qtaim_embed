@@ -1367,7 +1367,7 @@ class LMDBBaseDataset(Dataset):
             lock=False,
             readahead=True,
             meminit=False,
-            max_readers=1,
+            max_readers=126,
         )
         return env
 

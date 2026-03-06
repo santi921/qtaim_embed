@@ -15,7 +15,7 @@ from pytorch_lightning.callbacks import (
 
 
 from qtaim_embed.utils.data import get_default_link_level_config
-from qtaim_embed.core.datamodule import QTAIMLinkTaskDataModule, LMDBDataModule
+from qtaim_embed.core.datamodule import QTAIMLinkTaskDataModule, LMDBLinkDataModule
 from qtaim_embed.models.utils import LogParameters, load_link_model_from_config
 
 torch.set_float32_matmul_precision("high")  # might have to disable on older GPUs
@@ -36,8 +36,8 @@ def main(argv=None):
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=1,
-        help="number of parallel workers for dataset preprocessing (default: 1)",
+        default=None,
+        help="number of parallel workers (overrides config file if set)",
     )
 
     args = parser.parse_args()
@@ -69,8 +69,9 @@ def main(argv=None):
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
-    # set num_workers from CLI (overrides config file)
-    config["dataset"]["num_workers"] = args.num_workers
+    # override num_workers from CLI only if explicitly passed
+    if args.num_workers is not None:
+        config["dataset"]["num_workers"] = args.num_workers
 
     print(">" * 40 + "config_settings" + "<" * 40)
 
@@ -83,7 +84,7 @@ def main(argv=None):
 
     if use_lmdb:
         print("...using lmdbs!")
-        dm = LMDBDataModule(config=config)
+        dm = LMDBLinkDataModule(config=config)
 
     else:
         assert dataset_loc is not None, "dataset_loc must be provided if not using lmdb"
@@ -109,7 +110,11 @@ def main(argv=None):
             dm_test.prepare_data(stage="test")
 
     feature_names, feature_size = dm.prepare_data(stage="fit")
-    config["model"]["input_size"] = dm.node_len
+    if hasattr(dm, "node_len") and dm.node_len is not None:
+        config["model"]["input_size"] = dm.node_len
+    else:
+        # Derive node_len from LMDB feature_size (atom + global)
+        config["model"]["input_size"] = feature_size["atom"] + feature_size["global"]
     print("feature size dict: ", config["model"]["input_size"])
 
     print(">" * 40 + "config_settings" + "<" * 40)
@@ -172,8 +177,8 @@ def main(argv=None):
         )
 
         # log dataset and optim settings from config
-        run.config.update(config["dataset"])
-        run.config.update(config["optim"])
+        run.config.update(config["dataset"], allow_val_change=True)
+        run.config.update(config["optim"], allow_val_change=True)
 
         print("dataset and optim settings logged!")
         print("fitting model!")
