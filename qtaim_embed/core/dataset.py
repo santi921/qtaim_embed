@@ -121,6 +121,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             filter_self_bonds=filter_self_bonds,
         )
+        del df
 
         if element_set == [] or element_set == None:
             self.element_set = sorted(element_set_ret)
@@ -152,13 +153,24 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                 graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
                 graph_list.append(graph)
 
+        # Free source data -- all information is now in the graphs.
+        del mol_wrappers, grapher
+        import gc
+        gc.collect()
+        # Force glibc to return freed pages to the OS.
+        try:
+            import ctypes
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception:
+            pass
+
         self.standard_scale_features = standard_scale_features
         self.log_scale_features = log_scale_features
         self.log_scale_labels = log_scale_targets
         self.standard_scale_labels = standard_scale_targets
         self.feature_scalers = []
         self.label_scalers = []
-        self.data = mol_wrappers
+        self.data = None
         self.feat_names = names
         self.graphs = graph_list
         self.allowed_spins = allowed_spins
@@ -175,7 +187,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         )
 
     def __len__(self) -> int:
-        return len(self.data)
+        return len(self.graphs)
 
     def __getitem__(self, idx: int) -> Any:
         # print(idx)
@@ -315,8 +327,8 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
                         :, self.exclude_locs[key]
                     ]
                     labels[key] = ndata_feat[key][:, self.include_locs[key]]
-                _set_ndata(graph, "feat", features_new)
-                _set_ndata(graph, "labels", labels)
+            _set_ndata(graph, "feat", features_new)
+            _set_ndata(graph, "labels", labels)
 
         if self.verbose:
             print("original loader node types:", list(_get_ndata(graph, "feat").keys()))
@@ -502,6 +514,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             filter_self_bonds=filter_self_bonds,
         )
+        del df
 
         # legacy used if element_set == None:
         # if element_set == None:
@@ -536,13 +549,24 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                 graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
                 graph_list.append(graph)
 
+        # Free source data -- all information is now in the graphs.
+        del mol_wrappers, grapher
+        import gc
+        gc.collect()
+        # Force glibc to return freed pages to the OS.
+        try:
+            import ctypes
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception:
+            pass
+
         self.standard_scale_features = standard_scale_features
         self.log_scale_features = log_scale_features
         self.log_scale_labels = log_scale_targets
         self.standard_scale_labels = standard_scale_targets
         self.feature_scalers = []
         self.label_scalers = []
-        self.data = mol_wrappers
+        self.data = None
         self.feat_names = names
         self.allowed_spins = allowed_spins
         self.allowed_charges = allowed_charges
@@ -559,7 +583,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         )
 
     def __len__(self) -> int:
-        return len(self.data)
+        return len(self.graphs)
 
     def __getitem__(self, idx: int) -> Any:
         # print(idx)
@@ -711,8 +735,8 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                         :, self.exclude_locs[key]
                     ]
                     labels[key] = ndata_feat[key][:, self.include_locs[key]]
-                _set_ndata(graph, "feat", features_new)
-                _set_ndata(graph, "labels", labels)
+            _set_ndata(graph, "feat", features_new)
+            _set_ndata(graph, "labels", labels)
 
         if self.log_scale_features:
             print("... > Log scaling features")
@@ -890,6 +914,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             global_keys=extra_keys["global"],
             filter_self_bonds=filter_self_bonds,
         )
+        del df
 
         if element_set == [] or element_set == None:
             self.element_set = sorted(element_set_ret)
@@ -942,7 +967,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         )
 
     def __len__(self) -> int:
-        return len(self.data)
+        return len(self.graphs)
 
     def __getitem__(self, idx: int) -> Any:
         # print(idx)
@@ -1163,7 +1188,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
                     )
                     labels_raw = labels_raw[0]
                 for j, category_set in enumerate(categories_set_list):
-                    if labels_raw[j] == np.NaN or torch.isnan(labels_raw[j]):
+                    if torch.isnan(labels_raw[j]):
                         ind_hot = self.mode_dict[j]
                     else:
                         ind_hot = list(category_set).index(int(labels_raw[j]))

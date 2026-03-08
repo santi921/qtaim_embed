@@ -83,9 +83,9 @@ def test_multi_out():
     dl = dm_lmdb.train_dataloader()
 
     for batched_graphs, batched_labels in dl:
-        assert batched_graphs.ndata["feat"]["atom"].shape[1] == 12
-        assert batched_graphs.ndata["feat"]["bond"].shape[1] == 8
-        assert batched_graphs.ndata["feat"]["global"].shape[1] == 3
+        assert batched_graphs["atom"].feat.shape[1] == 12
+        assert batched_graphs["bond"].feat.shape[1] == 8
+        assert batched_graphs["global"].feat.shape[1] == 3
         assert batched_labels["atom"].shape[1] == 1
         assert batched_labels["bond"].shape[1] == 3
         break

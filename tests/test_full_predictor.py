@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 import torch
 import torch.nn as nn
-import dgl
+from torch_geometric.data import HeteroData
 from unittest.mock import patch
 
 from qtaim_embed.data.geometry_to_graph import GeometryToGraph
@@ -58,8 +58,7 @@ class MockLinkModel(nn.Module):
 
     def forward(self, pos_graph, neg_graph, inputs):
         # Return mock scores
-        num_pos_edges = pos_graph.num_edges() if pos_graph.num_edges() > 0 else 1
-        num_neg_edges = neg_graph.num_edges() if neg_graph.num_edges() > 0 else 1
+        num_neg_edges = neg_graph.edge_index.shape[1] if neg_graph.edge_index.numel() > 0 else 1
         pos_scores = torch.randn(num_neg_edges)  # Use neg_graph edges for candidate scoring
         neg_scores = torch.randn(num_neg_edges)
         return pos_scores, neg_scores
@@ -93,7 +92,7 @@ class MockNodeModel(nn.Module):
         predictions = {}
         for node_type, targets in self.target_dict.items():
             if targets and targets != [None]:
-                num_nodes = graph.num_nodes(node_type)
+                num_nodes = graph[node_type].num_nodes
                 num_features = len(targets)
                 predictions[node_type] = torch.randn(num_nodes, num_features)
         return predictions
@@ -211,17 +210,17 @@ class TestFullPredictorPrediction:
         new_edges = [(0, 1), (0, 2)]
         updated_graph = mock_predictor._update_topology(sample_graph, new_edges)
 
-        assert updated_graph.num_nodes("bond") == 2
-        assert updated_graph.num_nodes("atom") == sample_graph.num_nodes("atom")
+        assert updated_graph["bond"].num_nodes == 2
+        assert updated_graph["atom"].num_nodes == sample_graph["atom"].num_nodes
 
     def test_predict_returns_graph(self, mock_predictor, sample_graph):
         """Test that predict returns a graph."""
         # This test verifies the structure, not the actual predictions
         result = mock_predictor.predict(sample_graph)
 
-        assert isinstance(result, dgl.DGLHeteroGraph)
-        assert result.num_nodes("atom") == sample_graph.num_nodes("atom")
-        assert result.num_nodes("global") == 1
+        assert isinstance(result, HeteroData)
+        assert result["atom"].num_nodes == sample_graph["atom"].num_nodes
+        assert result["global"].num_nodes == 1
 
     def test_predict_with_intermediate(self, mock_predictor, sample_graph):
         """Test prediction with intermediate results."""
@@ -229,7 +228,7 @@ class TestFullPredictorPrediction:
             sample_graph, return_intermediate=True
         )
 
-        assert isinstance(result, dgl.DGLHeteroGraph)
+        assert isinstance(result, HeteroData)
         assert len(intermediate) == mock_predictor.iterations
 
         # Check intermediate results structure
@@ -241,12 +240,12 @@ class TestFullPredictorPrediction:
 
     def test_predict_preserves_atom_features(self, mock_predictor, sample_graph):
         """Test that atom features are preserved through prediction."""
-        original_atom_feat = sample_graph.nodes["atom"].data["feat"].clone()
+        original_atom_feat = sample_graph["atom"].feat.clone()
 
         result = mock_predictor.predict(sample_graph)
 
         # Atom features should be preserved (or updated)
-        assert result.nodes["atom"].data["feat"].shape[0] == original_atom_feat.shape[0]
+        assert result["atom"].feat.shape[0] == original_atom_feat.shape[0]
 
 
 class TestFullPredictorEvaluation:
@@ -356,8 +355,8 @@ class TestFullPredictorFromGeometry:
             coords, elements, charge=0
         )
 
-        assert isinstance(result, dgl.DGLHeteroGraph)
-        assert result.num_nodes("atom") == 2
+        assert isinstance(result, HeteroData)
+        assert result["atom"].num_nodes == 2
 
 
 class TestFullPredictorInference:
@@ -461,7 +460,7 @@ class TestEdgeCases:
         graph = converter(coords, elements)
         result = mock_predictor.predict(graph)
 
-        assert result.num_nodes("atom") == 1
+        assert result["atom"].num_nodes == 1
 
     def test_zero_iterations(self):
         """Test with zero iterations (no-op)."""
@@ -488,7 +487,7 @@ class TestEdgeCases:
             result = predictor.predict(graph)
 
             # With 0 iterations, should return original graph
-            assert result.num_nodes("atom") == graph.num_nodes("atom")
+            assert result["atom"].num_nodes == graph["atom"].num_nodes
 
     def test_high_threshold(self, mock_predictor):
         """Test with very high edge threshold (likely no edges predicted)."""
@@ -501,7 +500,7 @@ class TestEdgeCases:
 
         # Should still complete without error
         result = mock_predictor.predict(graph)
-        assert isinstance(result, dgl.DGLHeteroGraph)
+        assert isinstance(result, HeteroData)
 
     def test_low_threshold(self, mock_predictor):
         """Test with very low edge threshold (likely all edges predicted)."""
@@ -514,4 +513,4 @@ class TestEdgeCases:
 
         # Should still complete without error
         result = mock_predictor.predict(graph)
-        assert isinstance(result, dgl.DGLHeteroGraph)
+        assert isinstance(result, HeteroData)

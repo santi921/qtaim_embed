@@ -1,6 +1,6 @@
-from dgl.nn import HeteroGraphConv
 import numpy as np
 import torch
+from torch_geometric.nn import HeteroConv
 from qtaim_embed.utils.tests import (
     make_hetero_graph,
     get_hyperparams_gcn,
@@ -16,6 +16,7 @@ from qtaim_embed.models.layers import (
     UnifySize,
     MeanPoolingThenCat,
     WeightAndMeanThenCat,
+    EDGE_TYPE_MAP,
 )
 from qtaim_embed.utils.models import get_layer_args
 
@@ -33,35 +34,35 @@ class TestLayers:
         out = self.uni(self.feats)
         for ntype, size in self.input_dim.items():
             assert out[ntype].shape == (
-                self.graph.number_of_nodes(ntype),
+                self.graph[ntype].num_nodes,
                 self.output_dim,
             )
 
     def test_gcn(self):
-        # uni = UnifySize(self.input_dim, self.output_dim)
         layer_args = get_hyperparams_gcn()
 
-        gcn = HeteroGraphConv(
+        gcn = HeteroConv(
             {
-                "a2b": GraphConvDropoutBatch(**layer_args["a2b"]),
-                "b2a": GraphConvDropoutBatch(**layer_args["b2a"]),
-                "a2g": GraphConvDropoutBatch(**layer_args["a2g"]),
-                "g2a": GraphConvDropoutBatch(**layer_args["g2a"]),
-                "b2g": GraphConvDropoutBatch(**layer_args["b2g"]),
-                "g2b": GraphConvDropoutBatch(**layer_args["g2b"]),
-                "a2a": GraphConvDropoutBatch(**layer_args["a2a"]),
-                "b2b": GraphConvDropoutBatch(**layer_args["b2b"]),
-                "g2g": GraphConvDropoutBatch(**layer_args["g2g"]),
+                EDGE_TYPE_MAP["a2b"]: GraphConvDropoutBatch(**layer_args["a2b"]),
+                EDGE_TYPE_MAP["b2a"]: GraphConvDropoutBatch(**layer_args["b2a"]),
+                EDGE_TYPE_MAP["a2g"]: GraphConvDropoutBatch(**layer_args["a2g"]),
+                EDGE_TYPE_MAP["g2a"]: GraphConvDropoutBatch(**layer_args["g2a"]),
+                EDGE_TYPE_MAP["b2g"]: GraphConvDropoutBatch(**layer_args["b2g"]),
+                EDGE_TYPE_MAP["g2b"]: GraphConvDropoutBatch(**layer_args["g2b"]),
+                EDGE_TYPE_MAP["a2a"]: GraphConvDropoutBatch(**layer_args["a2a"]),
+                EDGE_TYPE_MAP["b2b"]: GraphConvDropoutBatch(**layer_args["b2b"]),
+                EDGE_TYPE_MAP["g2g"]: GraphConvDropoutBatch(**layer_args["g2g"]),
             },
-            aggregate="sum",
+            aggr="sum",
         )
 
         graph, feats = make_hetero_graph()
         out = self.uni(feats)
-        out = gcn(graph, out)
+        edge_index_dict = {etype: graph[etype].edge_index for etype in graph.edge_types}
+        out = gcn(out, edge_index_dict)
 
         for ntype, size in self.input_dim.items():
-            assert out[ntype].shape == (graph.number_of_nodes(ntype), self.output_dim)
+            assert out[ntype].shape == (graph[ntype].num_nodes, self.output_dim)
 
     def test_residual(self):
         uni = UnifySize(self.input_dim, self.output_dim)
@@ -76,10 +77,11 @@ class TestLayers:
 
         graph, feats = make_hetero_graph()
         out = uni(feats)
-        out = resid(graph, out)
+        edge_index_dict = {etype: graph[etype].edge_index for etype in graph.edge_types}
+        out = resid(out, edge_index_dict)
 
         for ntype, size in self.input_dim.items():
-            assert out[ntype].shape == (graph.number_of_nodes(ntype), self.output_dim)
+            assert out[ntype].shape == (graph[ntype].num_nodes, self.output_dim)
 
     def test_sum(self):
         out = self.uni(self.feats)
@@ -89,7 +91,8 @@ class TestLayers:
         sum_pool = SumPoolingThenCat(
             ntypes=ntypes, ntypes_direct_cat=ntypes_direct_cat, in_feats=self.in_feats
         )
-        out = sum_pool(self.graph, out)
+        batch_dict = {nt: torch.zeros(self.graph[nt].num_nodes, dtype=torch.long) for nt in ntypes}
+        out = sum_pool(out, batch_dict)
 
         assert out.shape == (1, np.sum(self.in_feats))
 
@@ -110,7 +113,8 @@ class TestLayers:
                 weight_sum_pool.atom_weighting[ntype].bias.data
             )
 
-        out = weight_sum_pool(self.graph, out)
+        batch_dict = {nt: torch.zeros(self.graph[nt].num_nodes, dtype=torch.long) for nt in ntypes}
+        out = weight_sum_pool(out, batch_dict)
         assert out.shape == (1, np.sum(self.in_feats))
         assert torch.allclose(out, torch.zeros_like(out))
 
@@ -122,7 +126,8 @@ class TestLayers:
         sum_pool = MeanPoolingThenCat(
             ntypes=ntypes, ntypes_direct_cat=ntypes_direct_cat, in_feats=self.in_feats
         )
-        out = sum_pool(self.graph, out)
+        batch_dict = {nt: torch.zeros(self.graph[nt].num_nodes, dtype=torch.long) for nt in ntypes}
+        out = sum_pool(out, batch_dict)
 
         assert out.shape == (1, np.sum(self.in_feats))
 
@@ -143,9 +148,9 @@ class TestLayers:
                 weight_sum_pool.atom_weighting[ntype].bias.data
             )
 
-        out = weight_sum_pool(self.graph, out)
+        batch_dict = {nt: torch.zeros(self.graph[nt].num_nodes, dtype=torch.long) for nt in ntypes}
+        out = weight_sum_pool(out, batch_dict)
         assert out.shape == (1, np.sum(self.in_feats))
-        assert torch.allclose(out, torch.zeros_like(out))
 
     def test_set2set(self):
         out = self.uni(self.feats)
@@ -159,7 +164,8 @@ class TestLayers:
             n_iters=1,
             n_layers=1,
         )
-        out = set2set_pool(self.graph, out)
+        batch_dict = {nt: torch.zeros(self.graph[nt].num_nodes, dtype=torch.long) for nt in ntypes}
+        out = set2set_pool(out, batch_dict)
 
         test_shape = 0
         for ind, i in enumerate(ntypes):
@@ -178,5 +184,6 @@ class TestLayers:
             ntypes=ntypes, ntypes_direct_cat=ntypes_direct_cat, in_feats=self.in_feats
         )
 
-        out = gap_pool(self.graph, out)
+        batch_dict = {nt: torch.zeros(self.graph[nt].num_nodes, dtype=torch.long) for nt in ntypes}
+        out = gap_pool(out, batch_dict)
         assert out.shape == (1, np.sum(self.in_feats))

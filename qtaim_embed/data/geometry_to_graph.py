@@ -8,9 +8,9 @@ iterative link-node prediction pipeline.
 
 import numpy as np
 import torch
-import dgl
 from typing import List, Dict, Tuple, Optional, Union
 from scipy.spatial.distance import cdist
+from torch_geometric.data import HeteroData
 
 # Default element set for one-hot encoding (common organic + transition metals)
 DEFAULT_ELEMENT_SET = [
@@ -25,19 +25,19 @@ DEFAULT_ELEMENT_SET = [
 
 class GeometryToGraph:
     """
-    Converts molecular geometry (xyz coordinates + element types) to a DGL heterograph.
+    Converts molecular geometry (xyz coordinates + element types) to a PyG HeteroData graph.
 
     This class builds an initial graph representation using distance cutoffs for edge
-    determination, suitable for use in iterative link prediction → node prediction loops.
+    determination, suitable for use in iterative link prediction -> node prediction loops.
 
     Args:
         distance_cutoff: Maximum distance (in Angstroms) for initial edge creation.
-            Default is 1.8 Å which captures most covalent bonds.
+            Default is 1.8 A which captures most covalent bonds.
         element_set: List of elements for one-hot encoding. If None, uses DEFAULT_ELEMENT_SET.
         self_loop: Whether to add self-loops for atom, bond, and global nodes.
         include_coordinates: Whether to include xyz coordinates in atom features.
         include_distances: Whether to include bond distances in bond features.
-        min_distance: Minimum distance threshold to avoid self-connections (default 0.1 Å).
+        min_distance: Minimum distance threshold to avoid self-connections (default 0.1 A).
 
     Example:
         >>> converter = GeometryToGraph(distance_cutoff=2.0)
@@ -72,9 +72,9 @@ class GeometryToGraph:
         charge: int = 0,
         spin_multiplicity: int = 1,
         mol_id: Optional[str] = None,
-    ) -> dgl.DGLHeteroGraph:
+    ) -> HeteroData:
         """
-        Build a heterograph from coordinates and element types.
+        Build a HeteroData graph from coordinates and element types.
 
         Args:
             coords: Atomic coordinates of shape (N, 3) in Angstroms.
@@ -84,7 +84,7 @@ class GeometryToGraph:
             mol_id: Optional molecule identifier.
 
         Returns:
-            DGL heterograph with atom, bond, and global nodes.
+            PyG HeteroData with atom, bond, and global nodes.
         """
         coords = self._to_numpy(coords)
 
@@ -95,7 +95,7 @@ class GeometryToGraph:
         edges = self._get_edges_from_distances(distances)
 
         # Build heterograph structure
-        graph = self._build_heterograph(len(elements), edges)
+        graph = self._build_heterodata(len(elements), edges)
 
         # Add node features
         self._add_atom_features(graph, elements, coords)
@@ -123,24 +123,18 @@ class GeometryToGraph:
 
         Returns list of (atom_i, atom_j) tuples where i < j.
         """
-        n_atoms = distances.shape[0]
-        edges = []
+        rows, cols = np.triu_indices(distances.shape[0], k=1)
+        d = distances[rows, cols]
+        mask = (d > self.min_distance) & (d <= self.distance_cutoff)
+        return list(zip(rows[mask].tolist(), cols[mask].tolist()))
 
-        for i in range(n_atoms):
-            for j in range(i + 1, n_atoms):
-                dist = distances[i, j]
-                if self.min_distance < dist <= self.distance_cutoff:
-                    edges.append((i, j))
-
-        return edges
-
-    def _build_heterograph(
+    def _build_heterodata(
         self,
         num_atoms: int,
         edges: List[Tuple[int, int]],
-    ) -> dgl.DGLHeteroGraph:
+    ) -> HeteroData:
         """
-        Build the DGL heterograph structure.
+        Build the PyG HeteroData graph structure.
 
         Creates atom, bond, and global nodes with appropriate edge types:
         - a2b, b2a: atom-bond connections
@@ -153,46 +147,68 @@ class GeometryToGraph:
         # Handle case with no bonds
         if num_bonds == 0:
             num_bonds = 1
-            a2b = [(0, 0)]
-            b2a = [(0, 0)]
+            a2b_src, a2b_dst = [0], [0]
+            b2a_src, b2a_dst = [0], [0]
         else:
-            a2b = []
-            b2a = []
+            a2b_src, a2b_dst = [], []
+            b2a_src, b2a_dst = [], []
             for bond_idx, (u, v) in enumerate(edges):
-                # Each bond connects to two atoms
-                a2b.extend([(u, bond_idx), (v, bond_idx)])
-                b2a.extend([(bond_idx, u), (bond_idx, v)])
+                a2b_src.extend([u, v])
+                a2b_dst.extend([bond_idx, bond_idx])
+                b2a_src.extend([bond_idx, bond_idx])
+                b2a_dst.extend([u, v])
 
-        # Atom-global and bond-global edges
-        a2g = [(a, 0) for a in range(num_atoms)]
-        g2a = [(0, a) for a in range(num_atoms)]
-        b2g = [(b, 0) for b in range(num_bonds)]
-        g2b = [(0, b) for b in range(num_bonds)]
+        a2g_src = list(range(num_atoms))
+        a2g_dst = [0] * num_atoms
+        g2a_src = [0] * num_atoms
+        g2a_dst = list(range(num_atoms))
+        b2g_src = list(range(num_bonds))
+        b2g_dst = [0] * num_bonds
+        g2b_src = [0] * num_bonds
+        g2b_dst = list(range(num_bonds))
 
-        edges_dict = {
-            ("atom", "a2b", "bond"): a2b,
-            ("bond", "b2a", "atom"): b2a,
-            ("atom", "a2g", "global"): a2g,
-            ("global", "g2a", "atom"): g2a,
-            ("bond", "b2g", "global"): b2g,
-            ("global", "g2b", "bond"): g2b,
-        }
+        data = HeteroData()
+        data["atom"].num_nodes = num_atoms
+        data["bond"].num_nodes = num_bonds
+        data["global"].num_nodes = 1
+
+        data["atom", "a2b", "bond"].edge_index = torch.tensor(
+            [a2b_src, a2b_dst], dtype=torch.long
+        )
+        data["bond", "b2a", "atom"].edge_index = torch.tensor(
+            [b2a_src, b2a_dst], dtype=torch.long
+        )
+        data["atom", "a2g", "global"].edge_index = torch.tensor(
+            [a2g_src, a2g_dst], dtype=torch.long
+        )
+        data["global", "g2a", "atom"].edge_index = torch.tensor(
+            [g2a_src, g2a_dst], dtype=torch.long
+        )
+        data["bond", "b2g", "global"].edge_index = torch.tensor(
+            [b2g_src, b2g_dst], dtype=torch.long
+        )
+        data["global", "g2b", "bond"].edge_index = torch.tensor(
+            [g2b_src, g2b_dst], dtype=torch.long
+        )
 
         if self.self_loop:
-            a2a = [(i, i) for i in range(num_atoms)]
-            b2b = [(i, i) for i in range(num_bonds)]
-            g2g = [(0, 0)]
-            edges_dict.update({
-                ("atom", "a2a", "atom"): a2a,
-                ("bond", "b2b", "bond"): b2b,
-                ("global", "g2g", "global"): g2g,
-            })
+            a2a_nodes = list(range(num_atoms))
+            b2b_nodes = list(range(num_bonds))
+            data["atom", "a2a", "atom"].edge_index = torch.tensor(
+                [a2a_nodes, a2a_nodes], dtype=torch.long
+            )
+            data["bond", "b2b", "bond"].edge_index = torch.tensor(
+                [b2b_nodes, b2b_nodes], dtype=torch.long
+            )
+            data["global", "g2g", "global"].edge_index = torch.tensor(
+                [[0], [0]], dtype=torch.long
+            )
 
-        return dgl.heterograph(edges_dict)
+        return data
 
     def _add_atom_features(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
         elements: List[str],
         coords: np.ndarray,
     ) -> None:
@@ -204,23 +220,18 @@ class GeometryToGraph:
         for i, elem in enumerate(elements):
             if elem in self.element_to_idx:
                 element_one_hot[i, self.element_to_idx[elem]] = 1.0
-            else:
-                # Unknown element - could add "other" category or raise warning
-                pass
 
         features = [element_one_hot]
 
-        # Add coordinates if requested
         if self.include_coordinates:
             features.append(coords.astype(np.float32))
 
-        # Concatenate all features
         atom_feats = np.concatenate(features, axis=1)
-        graph.nodes["atom"].data["feat"] = torch.tensor(atom_feats, dtype=torch.float32)
+        graph["atom"].feat = torch.tensor(atom_feats, dtype=torch.float32)
 
     def _add_bond_features(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
         edges: List[Tuple[int, int]],
         coords: np.ndarray,
         distances: np.ndarray,
@@ -236,41 +247,39 @@ class GeometryToGraph:
                 bond_distances[bond_idx, 0] = distances[i, j]
             features.append(bond_distances)
 
-        # Add bond direction vector (normalized)
+        # Add bond direction vector (normalized) - vectorized
         bond_vectors = np.zeros((num_bonds, 3), dtype=np.float32)
-        for bond_idx, (i, j) in enumerate(edges):
-            vec = coords[j] - coords[i]
-            norm = np.linalg.norm(vec)
-            if norm > 1e-6:
-                vec = vec / norm
-            bond_vectors[bond_idx] = vec
+        if edges:
+            src_idx = np.array([e[0] for e in edges])
+            dst_idx = np.array([e[1] for e in edges])
+            vecs = coords[dst_idx] - coords[src_idx]
+            norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+            norms = np.where(norms > 1e-6, norms, 1.0)
+            bond_vectors[:len(edges)] = vecs / norms
         features.append(bond_vectors)
 
-        # If no edges, create dummy features
         if len(edges) == 0:
-            # Dummy bond with zero features
             bond_feats = np.zeros((1, sum(f.shape[1] for f in features)), dtype=np.float32)
         else:
             bond_feats = np.concatenate(features, axis=1)
 
-        graph.nodes["bond"].data["feat"] = torch.tensor(bond_feats, dtype=torch.float32)
+        graph["bond"].feat = torch.tensor(bond_feats, dtype=torch.float32)
 
     def _add_global_features(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
         charge: int,
         spin_multiplicity: int,
         num_atoms: int,
     ) -> None:
         """Add features to global node."""
-        # Basic global features: charge, spin, num_atoms
         global_feats = np.array([[
             float(charge),
             float(spin_multiplicity),
             float(num_atoms),
         ]], dtype=np.float32)
 
-        graph.nodes["global"].data["feat"] = torch.tensor(global_feats, dtype=torch.float32)
+        graph["global"].feat = torch.tensor(global_feats, dtype=torch.float32)
 
     @classmethod
     def from_molecule_wrapper(
@@ -279,7 +288,7 @@ class GeometryToGraph:
         distance_cutoff: float = 1.8,
         use_mol_bonds: bool = False,
         **kwargs,
-    ) -> dgl.DGLHeteroGraph:
+    ) -> HeteroData:
         """
         Create a graph from a MoleculeWrapper object.
 
@@ -291,7 +300,7 @@ class GeometryToGraph:
             **kwargs: Additional arguments passed to GeometryToGraph constructor.
 
         Returns:
-            DGL heterograph.
+            PyG HeteroData graph.
         """
         converter = cls(distance_cutoff=distance_cutoff, **kwargs)
 
@@ -301,11 +310,9 @@ class GeometryToGraph:
         mol_id = mol_wrapper.id
 
         if use_mol_bonds:
-            # Use the bonds defined in the MoleculeWrapper
             edges = list(mol_wrapper.bonds.keys())
-            graph = converter._build_heterograph(len(elements), edges)
+            graph = converter._build_heterodata(len(elements), edges)
 
-            # Compute distances for bond features
             distances = cdist(coords, coords)
 
             converter._add_atom_features(graph, elements, coords)
@@ -387,7 +394,6 @@ def edges_from_predictions(
     scores: torch.Tensor,
     num_atoms: int,
     threshold: float = 0.5,
-    symmetric: bool = True,
 ) -> List[Tuple[int, int]]:
     """
     Convert link prediction scores to edge list.
@@ -403,88 +409,98 @@ def edges_from_predictions(
     Returns:
         List of (atom_i, atom_j) tuples for predicted edges.
     """
-    edges = []
-    score_idx = 0
-
-    for i in range(num_atoms):
-        for j in range(i + 1, num_atoms):
-            if scores[score_idx] > threshold:
-                edges.append((i, j))
-            score_idx += 1
-
-    return edges
+    i_idx, j_idx = torch.triu_indices(num_atoms, num_atoms, offset=1)
+    mask = scores > threshold
+    return list(zip(i_idx[mask].tolist(), j_idx[mask].tolist()))
 
 
 def update_graph_topology(
-    old_graph: dgl.DGLHeteroGraph,
+    old_graph: HeteroData,
     new_edges: List[Tuple[int, int]],
     self_loop: bool = True,
-) -> dgl.DGLHeteroGraph:
+) -> HeteroData:
     """
-    Create a new heterograph with updated edge topology while preserving node features.
+    Create a new HeteroData graph with updated edge topology while preserving node features.
 
     This function is used in the iterative prediction loop to update the graph
     structure based on link prediction results.
 
     Args:
-        old_graph: The existing heterograph.
+        old_graph: The existing HeteroData graph.
         new_edges: New list of edges (atom pairs).
         self_loop: Whether to include self-loops.
 
     Returns:
-        New heterograph with updated topology and preserved atom features.
+        New HeteroData graph with updated topology and preserved atom features.
     """
-    num_atoms = old_graph.num_nodes("atom")
+    num_atoms = old_graph["atom"].num_nodes
     num_bonds = max(len(new_edges), 1)
 
-    # Build new edge structure
     if len(new_edges) == 0:
-        a2b = [(0, 0)]
-        b2a = [(0, 0)]
+        a2b_src, a2b_dst = [0], [0]
+        b2a_src, b2a_dst = [0], [0]
     else:
-        a2b = []
-        b2a = []
+        a2b_src, a2b_dst = [], []
+        b2a_src, b2a_dst = [], []
         for bond_idx, (u, v) in enumerate(new_edges):
-            a2b.extend([(u, bond_idx), (v, bond_idx)])
-            b2a.extend([(bond_idx, u), (bond_idx, v)])
+            a2b_src.extend([u, v])
+            a2b_dst.extend([bond_idx, bond_idx])
+            b2a_src.extend([bond_idx, bond_idx])
+            b2a_dst.extend([u, v])
 
-    a2g = [(a, 0) for a in range(num_atoms)]
-    g2a = [(0, a) for a in range(num_atoms)]
-    b2g = [(b, 0) for b in range(num_bonds)]
-    g2b = [(0, b) for b in range(num_bonds)]
+    a2g_src = list(range(num_atoms))
+    a2g_dst = [0] * num_atoms
+    g2a_src = [0] * num_atoms
+    g2a_dst = list(range(num_atoms))
+    b2g_src = list(range(num_bonds))
+    b2g_dst = [0] * num_bonds
+    g2b_src = [0] * num_bonds
+    g2b_dst = list(range(num_bonds))
 
-    edges_dict = {
-        ("atom", "a2b", "bond"): a2b,
-        ("bond", "b2a", "atom"): b2a,
-        ("atom", "a2g", "global"): a2g,
-        ("global", "g2a", "atom"): g2a,
-        ("bond", "b2g", "global"): b2g,
-        ("global", "g2b", "bond"): g2b,
-    }
+    new_graph = HeteroData()
+    new_graph["atom"].num_nodes = num_atoms
+    new_graph["bond"].num_nodes = num_bonds
+    new_graph["global"].num_nodes = 1
+
+    new_graph["atom", "a2b", "bond"].edge_index = torch.tensor(
+        [a2b_src, a2b_dst], dtype=torch.long
+    )
+    new_graph["bond", "b2a", "atom"].edge_index = torch.tensor(
+        [b2a_src, b2a_dst], dtype=torch.long
+    )
+    new_graph["atom", "a2g", "global"].edge_index = torch.tensor(
+        [a2g_src, a2g_dst], dtype=torch.long
+    )
+    new_graph["global", "g2a", "atom"].edge_index = torch.tensor(
+        [g2a_src, g2a_dst], dtype=torch.long
+    )
+    new_graph["bond", "b2g", "global"].edge_index = torch.tensor(
+        [b2g_src, b2g_dst], dtype=torch.long
+    )
+    new_graph["global", "g2b", "bond"].edge_index = torch.tensor(
+        [g2b_src, g2b_dst], dtype=torch.long
+    )
 
     if self_loop:
-        a2a = [(i, i) for i in range(num_atoms)]
-        b2b = [(i, i) for i in range(num_bonds)]
-        g2g = [(0, 0)]
-        edges_dict.update({
-            ("atom", "a2a", "atom"): a2a,
-            ("bond", "b2b", "bond"): b2b,
-            ("global", "g2g", "global"): g2g,
-        })
+        a2a_nodes = list(range(num_atoms))
+        b2b_nodes = list(range(num_bonds))
+        new_graph["atom", "a2a", "atom"].edge_index = torch.tensor(
+            [a2a_nodes, a2a_nodes], dtype=torch.long
+        )
+        new_graph["bond", "b2b", "bond"].edge_index = torch.tensor(
+            [b2b_nodes, b2b_nodes], dtype=torch.long
+        )
+        new_graph["global", "g2g", "global"].edge_index = torch.tensor(
+            [[0], [0]], dtype=torch.long
+        )
 
-    # Create new graph
-    new_graph = dgl.heterograph(edges_dict)
+    # Copy atom and global features from old graph
+    new_graph["atom"].feat = old_graph["atom"].feat.clone()
+    new_graph["global"].feat = old_graph["global"].feat.clone()
 
-    # Copy atom features from old graph
-    new_graph.nodes["atom"].data["feat"] = old_graph.nodes["atom"].data["feat"].clone()
-
-    # Copy global features
-    new_graph.nodes["global"].data["feat"] = old_graph.nodes["global"].data["feat"].clone()
-
-    # Bond features need to be recomputed or initialized
-    # For now, initialize with zeros - will be updated by node model
-    old_bond_feat_dim = old_graph.nodes["bond"].data["feat"].shape[1]
-    new_graph.nodes["bond"].data["feat"] = torch.zeros(
+    # Initialize bond features to zero (topology changed; values recomputed by node model)
+    old_bond_feat_dim = old_graph["bond"].feat.shape[1]
+    new_graph["bond"].feat = torch.zeros(
         (num_bonds, old_bond_feat_dim), dtype=torch.float32
     )
 

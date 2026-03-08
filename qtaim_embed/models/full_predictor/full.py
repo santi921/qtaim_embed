@@ -13,8 +13,8 @@ from typing import Dict, List, Optional, Tuple, Union
 import warnings
 import torch
 import torch.nn as nn
-import dgl
 import numpy as np
+from torch_geometric.data import Data, HeteroData
 
 from qtaim_embed.models.link_pred.link_model import GCNLinkPred
 from qtaim_embed.models.node_level.base_gcn import GCNNodePred
@@ -154,9 +154,9 @@ class FullPredictor(nn.Module):
     @torch.no_grad()
     def predict(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
         return_intermediate: bool = False,
-    ) -> Union[dgl.DGLHeteroGraph, Tuple[dgl.DGLHeteroGraph, List[Dict]]]:
+    ) -> Union[HeteroData, Tuple[HeteroData, List[Dict]]]:
         """
         Run the iterative prediction loop on a graph.
 
@@ -201,7 +201,7 @@ class FullPredictor(nn.Module):
 
     def _predict_links(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
     ) -> Tuple[torch.Tensor, List[Tuple[int, int]]]:
         """
         Run link prediction on the graph.
@@ -218,11 +218,11 @@ class FullPredictor(nn.Module):
         homo_graph = homo_graph.to(self.device)
 
         # Get node features for link prediction
-        node_feats = homo_graph.ndata["ft"]
+        node_feats = homo_graph.ft
 
         # For link prediction, we need to generate candidate edges
         # Generate bidirectional edges to handle asymmetric predictors
-        num_nodes = homo_graph.num_nodes()
+        num_nodes = homo_graph.num_nodes
         bidirectional_edges = self._get_bidirectional_candidate_edges(num_nodes)
 
         # Create positive graph (current edges)
@@ -232,8 +232,8 @@ class FullPredictor(nn.Module):
         all_src = [e[0] for e in bidirectional_edges]
         all_dst = [e[1] for e in bidirectional_edges]
 
-        candidate_graph = dgl.graph(
-            (all_src, all_dst),
+        candidate_graph = Data(
+            edge_index=torch.tensor([all_src, all_dst], dtype=torch.long),
             num_nodes=num_nodes,
         ).to(self.device)
 
@@ -315,9 +315,9 @@ class FullPredictor(nn.Module):
 
     def _update_topology(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
         new_edges: List[Tuple[int, int]],
-    ) -> dgl.DGLHeteroGraph:
+    ) -> HeteroData:
         """
         Update graph topology with new predicted edges.
 
@@ -328,15 +328,15 @@ class FullPredictor(nn.Module):
 
     def _predict_nodes(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
     ) -> Dict[str, torch.Tensor]:
         """
         Run node prediction on the graph.
 
         Returns predicted features for each node type in the target_dict.
         """
-        # Get current node features
-        node_feats = graph.ndata["feat"]
+        # Get current node features as dict expected by node model
+        node_feats = {ntype: graph[ntype].feat for ntype in graph.node_types}
 
         # Run node prediction
         predictions = self.node_model(graph, node_feats)
@@ -345,9 +345,9 @@ class FullPredictor(nn.Module):
 
     def _update_node_features(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
         predictions: Dict[str, torch.Tensor],
-    ) -> dgl.DGLHeteroGraph:
+    ) -> HeteroData:
         """
         Update node features with predictions for next iteration.
 
@@ -356,9 +356,9 @@ class FullPredictor(nn.Module):
         """
         # Update predicted node types with their predictions
         for node_type, pred in predictions.items():
-            if node_type in graph.ntypes:
+            if node_type in graph.node_types:
                 # Get current features
-                current_feat = graph.nodes[node_type].data.get("feat")
+                current_feat = getattr(graph[node_type], 'feat', None)
 
                 if current_feat is not None:
                     # Option 1: Replace features with predictions
@@ -367,13 +367,13 @@ class FullPredictor(nn.Module):
                         # Update only the predicted dimensions
                         new_feat = current_feat.clone()
                         new_feat[:, :pred.shape[1]] = pred
-                        graph.nodes[node_type].data["feat"] = new_feat
+                        graph[node_type].feat = new_feat
                     else:
                         # Predictions are larger - extend features
-                        graph.nodes[node_type].data["feat"] = pred
+                        graph[node_type].feat = pred
 
                 # Store predictions separately for final output
-                graph.nodes[node_type].data["pred"] = pred
+                graph[node_type].pred = pred
 
         return graph
 
@@ -383,7 +383,7 @@ class FullPredictor(nn.Module):
         elements: List[str],
         charge: int = 0,
         **kwargs,
-    ) -> dgl.DGLHeteroGraph:
+    ) -> HeteroData:
         """
         Convenience method to predict directly from geometry.
 
@@ -408,7 +408,7 @@ class FullPredictor(nn.Module):
 
     def evaluate(
         self,
-        graph: dgl.DGLHeteroGraph,
+        graph: HeteroData,
         ground_truth_edges: Optional[List[Tuple[int, int]]] = None,
         ground_truth_features: Optional[Dict[str, torch.Tensor]] = None,
     ) -> Dict[str, float]:
@@ -447,8 +447,8 @@ class FullPredictor(nn.Module):
         # Evaluate node features if ground truth provided
         if ground_truth_features is not None:
             for node_type, gt_feat in ground_truth_features.items():
-                if node_type in predicted_graph.ntypes:
-                    pred_feat = predicted_graph.nodes[node_type].data.get("pred")
+                if node_type in predicted_graph.node_types:
+                    pred_feat = getattr(predicted_graph[node_type], 'pred', None)
                     if pred_feat is not None:
                         # Ensure same shape
                         min_dim = min(pred_feat.shape[1], gt_feat.shape[1])
@@ -597,11 +597,10 @@ class FullPredictorInference:
         }
 
         # Extract predicted node features
-        for node_type in predicted_graph.ntypes:
-            if "pred" in predicted_graph.nodes[node_type].data:
-                result[f"{node_type}_predictions"] = (
-                    predicted_graph.nodes[node_type].data["pred"].cpu().numpy()
-                )
+        for node_type in predicted_graph.node_types:
+            pred = getattr(predicted_graph[node_type], 'pred', None)
+            if pred is not None:
+                result[f"{node_type}_predictions"] = pred.cpu().numpy()
 
         return result
 

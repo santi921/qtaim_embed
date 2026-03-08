@@ -92,16 +92,16 @@ def test_write_chunked():
     train_lmdb = LMDBMoleculeDataset({"src": "./data/lmdb/train_chunk/"})
     # compare tensors
     assert torch.equal(
-        TransformMol(train_lmdb.__getitem__(27)).ndata["labels"]["global"],
-        dm.train_dataset[27].ndata["labels"]["global"],
+        TransformMol(train_lmdb.__getitem__(27))["global"].labels,
+        dm.train_dataset[27]["global"].labels,
     )
     assert torch.equal(
-        TransformMol(train_lmdb.__getitem__(2)).ndata["labels"]["global"],
-        dm.train_dataset[2].ndata["labels"]["global"],
+        TransformMol(train_lmdb.__getitem__(2))["global"].labels,
+        dm.train_dataset[2]["global"].labels,
     )
     assert torch.equal(
-        TransformMol(train_lmdb.__getitem__(40)).ndata["labels"]["global"],
-        dm.train_dataset[40].ndata["labels"]["global"],
+        TransformMol(train_lmdb.__getitem__(40))["global"].labels,
+        dm.train_dataset[40]["global"].labels,
     )
     assert train_lmdb.__len__() == train_dl_size
 

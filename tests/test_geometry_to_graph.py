@@ -2,7 +2,7 @@
 Tests for GeometryToGraph module.
 
 Tests the conversion of molecular geometry (xyz coordinates + elements) to
-DGL heterographs for use in the iterative link-node prediction pipeline.
+PyG HeteroData graphs for use in the iterative link-node prediction pipeline.
 """
 
 import numpy as np
@@ -30,12 +30,12 @@ class TestGeometryToGraph:
         graph = converter(coords, elements)
 
         # Check node counts
-        assert graph.num_nodes("atom") == 2
-        assert graph.num_nodes("bond") == 1  # One H-H bond
-        assert graph.num_nodes("global") == 1
+        assert graph["atom"].num_nodes == 2
+        assert graph["bond"].num_nodes == 1  # One H-H bond
+        assert graph["global"].num_nodes == 1
 
         # Check that atom features exist and have correct shape
-        atom_feats = graph.nodes["atom"].data["feat"]
+        atom_feats = graph["atom"].feat
         assert atom_feats.shape[0] == 2
         # Features: element one-hot + coordinates
         expected_feat_dim = len(DEFAULT_ELEMENT_SET) + 3
@@ -56,10 +56,10 @@ class TestGeometryToGraph:
         graph = converter(coords, elements)
 
         # Check node counts
-        assert graph.num_nodes("atom") == 3
+        assert graph["atom"].num_nodes == 3
         # Should have 2 O-H bonds (H-H distance > 1.2)
-        assert graph.num_nodes("bond") == 2
-        assert graph.num_nodes("global") == 1
+        assert graph["bond"].num_nodes == 2
+        assert graph["global"].num_nodes == 1
 
     def test_no_bonds_molecule(self):
         """Test handling of isolated atoms (no bonds)."""
@@ -72,9 +72,9 @@ class TestGeometryToGraph:
         graph = converter(coords, elements)
 
         # Should create a dummy bond node
-        assert graph.num_nodes("atom") == 2
-        assert graph.num_nodes("bond") == 1  # Dummy bond
-        assert graph.num_nodes("global") == 1
+        assert graph["atom"].num_nodes == 2
+        assert graph["bond"].num_nodes == 1  # Dummy bond
+        assert graph["global"].num_nodes == 1
 
     def test_element_one_hot_encoding(self):
         """Test that element one-hot encoding is correct."""
@@ -84,7 +84,7 @@ class TestGeometryToGraph:
         elements = ["C", "H"]
 
         graph = converter(coords, elements)
-        atom_feats = graph.nodes["atom"].data["feat"]
+        atom_feats = graph["atom"].feat
 
         # Get indices of C and H in element set
         c_idx = DEFAULT_ELEMENT_SET.index("C")
@@ -105,7 +105,7 @@ class TestGeometryToGraph:
         elements = ["C", "H"]
 
         graph = converter(coords, elements)
-        atom_feats = graph.nodes["atom"].data["feat"]
+        atom_feats = graph["atom"].feat
 
         # Coordinates should be at the end of the feature vector
         assert np.allclose(atom_feats[0, -3:].numpy(), [1.0, 2.0, 3.0])
@@ -123,7 +123,7 @@ class TestGeometryToGraph:
         elements = ["C", "H"]
 
         graph = converter(coords, elements)
-        bond_feats = graph.nodes["bond"].data["feat"]
+        bond_feats = graph["bond"].feat
 
         # Check distance is in bond features
         assert bond_feats.shape[0] == 1
@@ -138,7 +138,7 @@ class TestGeometryToGraph:
         elements = ["C", "H", "H"]
 
         graph = converter(coords, elements, charge=1, spin_multiplicity=2)
-        global_feats = graph.nodes["global"].data["feat"]
+        global_feats = graph["global"].feat
 
         # Should have [charge, spin, num_atoms]
         assert global_feats.shape == (1, 3)
@@ -169,7 +169,7 @@ class TestGeometryToGraph:
         ]
 
         for etype in expected_etypes:
-            assert etype in graph.canonical_etypes
+            assert etype in graph.edge_types
 
     def test_no_self_loops(self):
         """Test graph creation without self-loops."""
@@ -181,9 +181,9 @@ class TestGeometryToGraph:
         graph = converter(coords, elements)
 
         # Self-loop edge types should not exist
-        assert ("atom", "a2a", "atom") not in graph.canonical_etypes
-        assert ("bond", "b2b", "bond") not in graph.canonical_etypes
-        assert ("global", "g2g", "global") not in graph.canonical_etypes
+        assert ("atom", "a2a", "atom") not in graph.edge_types
+        assert ("bond", "b2b", "bond") not in graph.edge_types
+        assert ("global", "g2g", "global") not in graph.edge_types
 
     def test_tensor_input(self):
         """Test that torch tensor input is handled correctly."""
@@ -194,8 +194,8 @@ class TestGeometryToGraph:
 
         graph = converter(coords, elements)
 
-        assert graph.num_nodes("atom") == 2
-        assert graph.num_nodes("bond") == 1
+        assert graph["atom"].num_nodes == 2
+        assert graph["bond"].num_nodes == 1
 
     def test_custom_element_set(self):
         """Test using a custom element set."""
@@ -210,7 +210,7 @@ class TestGeometryToGraph:
         elements = ["X", "Y"]
 
         graph = converter(coords, elements)
-        atom_feats = graph.nodes["atom"].data["feat"]
+        atom_feats = graph["atom"].feat
 
         # Should have 3 features (custom element set size)
         assert atom_feats.shape[1] == 3
@@ -274,13 +274,13 @@ class TestUpdateGraphTopology:
         new_graph = update_graph_topology(old_graph, new_edges)
 
         # Should now have 2 bonds
-        assert new_graph.num_nodes("bond") == 2
+        assert new_graph["bond"].num_nodes == 2
         # Should preserve atom count
-        assert new_graph.num_nodes("atom") == 3
+        assert new_graph["atom"].num_nodes == 3
         # Should preserve atom features
         assert torch.allclose(
-            new_graph.nodes["atom"].data["feat"],
-            old_graph.nodes["atom"].data["feat"],
+            new_graph["atom"].feat,
+            old_graph["atom"].feat,
         )
 
     def test_update_removes_edges(self):
@@ -294,15 +294,15 @@ class TestUpdateGraphTopology:
         elements = ["C", "C", "C"]
 
         old_graph = converter(coords, elements)
-        old_bond_count = old_graph.num_nodes("bond")
+        old_bond_count = old_graph["bond"].num_nodes
 
         # Update with fewer edges
         new_edges = [(0, 1)]
         new_graph = update_graph_topology(old_graph, new_edges)
 
         # Should have only 1 bond
-        assert new_graph.num_nodes("bond") == 1
-        assert new_graph.num_nodes("bond") < old_bond_count
+        assert new_graph["bond"].num_nodes == 1
+        assert new_graph["bond"].num_nodes < old_bond_count
 
     def test_update_empty_edges(self):
         """Test handling of empty edge list."""
@@ -317,7 +317,7 @@ class TestUpdateGraphTopology:
         new_graph = update_graph_topology(old_graph, new_edges)
 
         # Should create dummy bond
-        assert new_graph.num_nodes("bond") == 1
+        assert new_graph["bond"].num_nodes == 1
 
 
 class TestEdgesFromPredictions:
@@ -387,19 +387,19 @@ class TestIntegration:
         graph = converter(coords, elements)
 
         # Verify initial structure
-        assert graph.num_nodes("atom") == 5
+        assert graph["atom"].num_nodes == 5
 
         # Simulate a prediction that modifies topology
         new_edges = [(0, 1), (0, 2), (0, 3), (0, 4)]  # All H bound to C
         updated_graph = update_graph_topology(graph, new_edges)
 
-        assert updated_graph.num_nodes("atom") == 5
-        assert updated_graph.num_nodes("bond") == 4
+        assert updated_graph["atom"].num_nodes == 5
+        assert updated_graph["bond"].num_nodes == 4
 
         # Verify features are preserved
         assert torch.allclose(
-            updated_graph.nodes["atom"].data["feat"],
-            graph.nodes["atom"].data["feat"],
+            updated_graph["atom"].feat,
+            graph["atom"].feat,
         )
 
     def test_complete_pipeline(self):
@@ -423,8 +423,8 @@ class TestIntegration:
         graph = converter(coords, elements, charge=0, mol_id="CO2")
 
         # Check structure
-        assert graph.num_nodes("atom") == 3
-        assert graph.num_nodes("global") == 1
+        assert graph["atom"].num_nodes == 3
+        assert graph["global"].num_nodes == 1
         assert hasattr(graph, "mol_name")
 
         # Simulate link prediction scores
@@ -439,6 +439,6 @@ class TestIntegration:
 
         # Update topology
         final_graph = update_graph_topology(graph, predicted_edges)
-        assert final_graph.num_nodes("bond") == 2
+        assert final_graph["bond"].num_nodes == 2
 
 

@@ -39,10 +39,10 @@ class TestGrapher:
         for ind in range(len(graph_list)):
             # shape_atom_feats = graph.ndata["feat"]["atom"].shape
             num_atoms_mol_wrapper = list_atom_num[ind]
-            num_atoms = graph_list[ind].num_nodes("atom")
+            num_atoms = graph_list[ind]["atom"].num_nodes
             assert num_atoms == num_atoms_mol_wrapper
             num_bonds_mol_wrapper = list_bond_num[ind]
-            num_bonds = graph_list[ind].num_nodes("bond")
+            num_bonds = graph_list[ind]["bond"].num_nodes
             assert num_bonds_mol_wrapper == num_bonds
 
 

@@ -10,6 +10,17 @@ from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 from qtaim_embed.models.initializers import xavier_init, kaiming_init, equi_var_init
 
 
+def get_grapher_config_from_model(model):
+    """
+    Extract grapher configuration from a model's hparams.
+
+    Returns the grapher_config dict if present in hparams, else None.
+    """
+    if hasattr(model, 'hparams') and hasattr(model.hparams, 'grapher_config'):
+        return model.hparams.grapher_config
+    return None
+
+
 def load_graph_level_model_from_config(config):
     """
     returns model and optimizer from dict of parameters
@@ -23,38 +34,32 @@ def load_graph_level_model_from_config(config):
     if config["restore"]:
         print(":::RESTORING MODEL FROM EXISTING FILE:::")
 
-        if config["restore_path"] != None:
+        if config["restore_path"] is not None:
             try:
                 try:
                     model = GCNGraphPred.load_from_checkpoint(
                         checkpoint_path=config["restore_path"]
                     )
-                    # model.to(device)
                     print(":::MODEL LOADED:::")
                     return model
-                except:
+                except Exception:
                     model = GCNGraphPredClassifier.load_from_checkpoint(
                         checkpoint_path=config["restore_path"]
                     )
-                    # model.to(device)
                     print(":::MODEL LOADED:::")
                     return model
-            except:
+            except Exception:
                 pass
             print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
-            if load_dir == None:
-                load_dir = "./"
-
+            load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNGraphPred.load_from_checkpoint(
                     checkpoint_path=load_dir + "/last.ckpt"
                 )
-                # model.to(device)
                 print(":::MODEL LOADED:::")
                 return model
-
-            except:
+            except Exception:
                 print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
     shape_fc = config["shape_fc"]
@@ -174,30 +179,25 @@ def load_node_level_model_from_config(config):
     if config["restore"]:
         print(":::RESTORING MODEL FROM EXISTING FILE:::")
 
-        if config["restore_path"] != None:
+        if config["restore_path"] is not None:
             try:
                 model = GCNNodePred.load_from_checkpoint(
                     checkpoint_path=config["restore_path"]
                 )
-                # model.to(device)
                 print(":::MODEL LOADED:::")
                 return model
-            except:
+            except Exception:
                 pass
             print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
-            if load_dir == None:
-                load_dir = "./"
-
+            load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNNodePred.load_from_checkpoint(
                     checkpoint_path=load_dir + "/last.ckpt"
                 )
-                # model.to(device)
                 print(":::MODEL LOADED:::")
                 return model
-
-            except:
+            except Exception:
                 print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
     print(config)
@@ -263,30 +263,25 @@ def load_link_model_from_config(config):
     if config["restore"]:
         print(":::RESTORING MODEL FROM EXISTING FILE:::")
 
-        if config["restore_path"] != None:
+        if config["restore_path"] is not None:
             try:
                 model = GCNLinkPred.load_from_checkpoint(
                     checkpoint_path=config["restore_path"]
                 )
-                # model.to(device)
                 print(":::MODEL LOADED:::")
                 return model
-            except:
+            except Exception:
                 pass
             print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
-            if load_dir == None:
-                load_dir = "./"
-
+            load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNLinkPred.load_from_checkpoint(
                     checkpoint_path=load_dir + "/last.ckpt"
                 )
-                # model.to(device)
                 print(":::MODEL LOADED:::")
                 return model
-
-            except:
+            except Exception:
                 print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
     print(config)

@@ -87,6 +87,11 @@ def main(argv=None):
         num_workers=num_workers,
     )
 
+    # Free MoleculeWrapper objects -- no longer needed after graph construction.
+    import gc
+    dataset.data = None
+    gc.collect()
+
     if split == True:
         if config["dataset"]["test_prop"] > 0.0:
             train_dataset, val_dataset, test_dataset = train_validation_test_split(

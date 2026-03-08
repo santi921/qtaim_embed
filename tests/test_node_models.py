@@ -1,8 +1,11 @@
 import torch
 import pytorch_lightning as pl
+from pathlib import Path
 from qtaim_embed.core.datamodule import QTAIMNodeTaskDataModule
 from qtaim_embed.models.utils import load_node_level_model_from_config
 from copy import deepcopy
+
+_TEST_DATA = str(Path(__file__).parent / "data" / "labelled_data.pkl")
 
 torch.set_float32_matmul_precision("medium")
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -50,7 +53,7 @@ class TestNodePred:
                 ],
             },
             "target_dict": target_dict,
-            "train_dataset_loc": "/home/santiagovargas/dev/qtaim_embed/data/tmqm_all/new_parse/high/high_train_50.pkl",
+            "train_dataset_loc": _TEST_DATA,
             "verbose": False,
         },
         "model": {

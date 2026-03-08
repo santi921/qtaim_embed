@@ -63,7 +63,7 @@ def test_classifier_dataset():
     assert len_dataset_multi == 100 - nan_count_multi, "Dataset size mismatch"
     ind_check_shift = 0
     for ind, graph in enumerate(dataset_single.graphs):
-        label_single = graph.ndata["labels"]["global"]
+        label_single = graph["global"].labels
         check_val = list_target_single[ind + ind_check_shift]
         un_one_hot = torch.argmax(label_single[0], dim=1)
         if not np.isnan(check_val[0]):
@@ -75,7 +75,7 @@ def test_classifier_dataset():
 
     graph_ind = 0
     for ind, check_vals_raw in enumerate(list_target_multi):
-        label_multi = dataset_multi.graphs[graph_ind].ndata["labels"]["global"]
+        label_multi = dataset_multi.graphs[graph_ind]["global"].labels
         check_vals = [i for i in check_vals_raw]
         if not np.isnan(np.array(check_vals)).any():
             check_vals = [int(i) for i in check_vals_raw]

@@ -93,8 +93,9 @@ class HeteroGraphStandardScaler:
             self._mean = {}
             dtype = node_feats[node_types[0]][0].dtype
             for nt in node_types:
-                if torch.cat(node_feats[nt]).shape[1] > 0:
-                    feats, mean, std = _transform(torch.cat(node_feats[nt]), self.copy, eta=self.epsilon)
+                cat_feats = torch.cat(node_feats[nt])
+                if cat_feats.shape[1] > 0:
+                    feats, mean, std = _transform(cat_feats, self.copy, eta=self.epsilon)
                     node_feats[nt] = torch.tensor(feats, dtype=dtype)
                     mean = torch.tensor(mean, dtype=dtype)
                     std = torch.tensor(std, dtype=dtype)
@@ -107,7 +108,7 @@ class HeteroGraphStandardScaler:
         for nt in node_types:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
-                setattr(g[nt], graph_key, ft)
+                setattr(g[nt], graph_key, ft.clone())
 
         return graphs
 
@@ -152,7 +153,7 @@ class HeteroGraphStandardScaler:
             # node_feats_size[nt]
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
-                setattr(g[nt], graph_key, ft)
+                setattr(g[nt], graph_key, ft.clone())
         print("... > standard scaler - inverse done")
         return graphs
 
@@ -303,8 +304,9 @@ class HeteroGraphStandardScalerIterative:
                 )
                 self.dict_node_sizes[nt] = 0
 
-            if torch.cat(node_feats[nt]).shape[1] > 0:
-                feats = torch.cat(node_feats[nt]).to(
+            cat_feats = torch.cat(node_feats[nt])
+            if cat_feats.shape[1] > 0:
+                feats = cat_feats.to(
                     torch.float64
                 )  # Use higher precision
                 # clean nans
@@ -371,7 +373,7 @@ class HeteroGraphStandardScalerIterative:
                 node_feats_size[nt].append(len(data))
 
         # standardize
-        if self._mean is not {} and self._std is not {}:
+        if self._mean and self._std:
             for nt in node_types:
                 # safely handle the case where std is zeron
                 feats = (torch.cat(node_feats[nt]) - self._mean[nt]) / self._std[nt]
@@ -381,7 +383,7 @@ class HeteroGraphStandardScalerIterative:
         for nt in node_types:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
-                setattr(g[nt], graph_key, ft)
+                setattr(g[nt], graph_key, ft.clone())
 
         return graphs
 
@@ -442,7 +444,7 @@ class HeteroGraphStandardScalerIterative:
             # node_feats_size[nt]
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
-                setattr(g[nt], graph_key, ft)
+                setattr(g[nt], graph_key, ft.clone())
         print("... > standard scaler - inverse done")
         return graphs
 
@@ -572,7 +574,7 @@ class HeteroGraphLogMagnitudeScaler:
         for nt in node_types:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
-                setattr(g[nt], graph_key, ft)
+                setattr(g[nt], graph_key, ft.clone())
 
         return graphs
 
@@ -627,7 +629,7 @@ class HeteroGraphLogMagnitudeScaler:
         for nt in node_types:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
-                setattr(g[nt], graph_key, ft)
+                setattr(g[nt], graph_key, ft.clone())
         print("... > log scaler - inverse done")
         return graphs
 
