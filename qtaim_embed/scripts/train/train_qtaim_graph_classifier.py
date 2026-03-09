@@ -47,7 +47,8 @@ def main(argv=None):
     if config is None:
         config = get_default_graph_level_config_classif()
     else:
-        config = json.load(open(config, "r"))
+        with open(config, "r") as f:
+            config = json.load(f)
 
     if config["optim"]["precision"] == "16" or config["optim"]["precision"] == "32":
         config["optim"]["precision"] = int(config["optim"]["precision"])

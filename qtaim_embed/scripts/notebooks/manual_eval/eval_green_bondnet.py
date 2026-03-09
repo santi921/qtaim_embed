@@ -412,9 +412,8 @@ def main():
         "qtaim": df_pred_qtaim,
     }
 
-    json.dump(
-        dict_results_full, open("./green_bondnet_results_revamp.json", "w"), indent=4
-    )
+    with open("./green_bondnet_results_revamp.json", "w") as f:
+        json.dump(dict_results_full, f, indent=4)
 
 
 main()

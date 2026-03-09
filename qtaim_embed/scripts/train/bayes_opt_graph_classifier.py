@@ -259,7 +259,8 @@ def main(argv=None):
     wandb_project_name = args.project_name
     sweep_config_loc = args.sweep_config
     sweep_config = {}
-    sweep_params = json.load(open(sweep_config_loc, "r"))
+    with open(sweep_config_loc, "r") as f:
+        sweep_params = json.load(f)
     sweep_params["debug"] = {"values": [debug]}
     sweep_config["parameters"] = sweep_params
     # sweep_config["log_save_dir"] = log_save_dir

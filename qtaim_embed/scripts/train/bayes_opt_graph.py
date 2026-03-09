@@ -342,7 +342,8 @@ def main(argv=None):
     use_lmdb = args.use_lmdb
     wandb_entity = args.wandb_entity
     sweep_config = {}
-    sweep_params = json.load(open(sweep_config_loc, "r"))
+    with open(sweep_config_loc, "r") as f:
+        sweep_params = json.load(f)
     sweep_params["debug"] = {"values": [debug]}
     sweep_params["lmdb"] = {"values": [use_lmdb]}
     sweep_config["parameters"] = sweep_params

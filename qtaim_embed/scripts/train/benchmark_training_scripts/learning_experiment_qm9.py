@@ -141,7 +141,8 @@ def main():
 
     print(results_dict)
     # save results dict
-    json.dump(results_dict, open("./qm9_learning_results_dict.json", "w"), indent=4)
+    with open("./qm9_learning_results_dict.json", "w") as f:
+        json.dump(results_dict, f, indent=4)
 
 
 main()

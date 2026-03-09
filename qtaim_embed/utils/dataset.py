@@ -35,13 +35,13 @@ def gather_atom_level_stats(dataset_dev):
                 probe_ind = dataset_dev.exclude_names["atom"].index(
                     "chemical_symbol_" + probe_atom_type
                 )
-                probe_col = graph.ndata["feat"]["atom"][:, probe_ind]
+                probe_col = graph["atom"].feat[:, probe_ind]
 
                 probe_desc_ind = dataset_dev.include_names["atom"].index(
                     probe_descriptor
                 )
                 atom_type_positive_ind = np.where(probe_col == 1)[0]
-                feat_at_atom = graph.ndata["labels"]["atom"][
+                feat_at_atom = graph["atom"].labels[
                     atom_type_positive_ind, probe_desc_ind
                 ]
 
@@ -89,7 +89,7 @@ def gather_bond_level_stats(dataset_dev):
     for probe_descriptor in bond_feats_qtaim:
         for graph in dataset_dev.graphs:
             probe_desc_ind = dataset_dev.include_names["bond"].index(probe_descriptor)
-            feat_at_atom = graph.ndata["labels"]["bond"][:, probe_desc_ind]
+            feat_at_atom = graph["bond"].labels[:, probe_desc_ind]
 
             if probe_descriptor not in feat_dict_complete.keys():
                 feat_dict_complete[probe_descriptor] = []
@@ -361,7 +361,7 @@ def get_elements_from_ft(dataset):
             list_elements.append(name.split("_")[-1])
 
     for graph in dataset.graphs:
-        ft_atom = graph.ndata["feat"]["atom"]
+        ft_atom = graph["atom"].feat
         ft_un_atom_position = ft_atom[:, list_pos]
         ft_un_atom_position = ft_un_atom_position.argmax(axis=1)
         ft_atom_elements = [list_elements[i] for i in ft_un_atom_position]
@@ -382,7 +382,7 @@ def get_bond_lengths(dataset):
     ind_bond_length = dataset.exclude_names["bond"].index("bond_length")
     graphs_unscale = dataset.unscale_features(dataset.graphs)
     for graph in graphs_unscale:
-        ft_un = graph.ndata["feat"]["bond"][:, ind_bond_length]
+        ft_un = graph["bond"].feat[:, ind_bond_length]
         list_lens.append(ft_un.tolist())
     return list_lens
 

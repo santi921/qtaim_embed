@@ -910,7 +910,7 @@ class LMDBLinkDataModule(pl.LightningDataModule):
 
             self.val_dl = DataLoaderLinkLMDB(
                 dataset=self.val_ds,
-                batch_size=len(self.val_ds),
+                batch_size=self.config["optim"]["train_batch_size"],
                 shuffle=False,
                 num_workers=self.config["optim"]["num_workers"],
             )

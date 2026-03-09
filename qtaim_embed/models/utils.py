@@ -42,14 +42,15 @@ def load_graph_level_model_from_config(config):
                     )
                     print(":::MODEL LOADED:::")
                     return model
-                except Exception:
+                except Exception as e:
+                    print(f":::GCNGraphPred load failed: {e}, trying GCNGraphPredClassifier:::")
                     model = GCNGraphPredClassifier.load_from_checkpoint(
                         checkpoint_path=config["restore_path"]
                     )
                     print(":::MODEL LOADED:::")
                     return model
-            except Exception:
-                pass
+            except Exception as e:
+                print(f":::Checkpoint load failed: {e}:::")
             print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
             load_dir = config.get("restore_dir", "./")
@@ -59,7 +60,8 @@ def load_graph_level_model_from_config(config):
                 )
                 print(":::MODEL LOADED:::")
                 return model
-            except Exception:
+            except Exception as e:
+                print(f":::Checkpoint load failed: {e}:::")
                 print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
     shape_fc = config["shape_fc"]
@@ -186,8 +188,8 @@ def load_node_level_model_from_config(config):
                 )
                 print(":::MODEL LOADED:::")
                 return model
-            except Exception:
-                pass
+            except Exception as e:
+                print(f":::Checkpoint load failed: {e}:::")
             print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
             load_dir = config.get("restore_dir", "./")
@@ -197,7 +199,8 @@ def load_node_level_model_from_config(config):
                 )
                 print(":::MODEL LOADED:::")
                 return model
-            except Exception:
+            except Exception as e:
+                print(f":::Checkpoint load failed: {e}:::")
                 print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
     print(config)
@@ -270,8 +273,8 @@ def load_link_model_from_config(config):
                 )
                 print(":::MODEL LOADED:::")
                 return model
-            except Exception:
-                pass
+            except Exception as e:
+                print(f":::Checkpoint load failed: {e}:::")
             print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
         else:
             load_dir = config.get("restore_dir", "./")
@@ -281,7 +284,8 @@ def load_link_model_from_config(config):
                 )
                 print(":::MODEL LOADED:::")
                 return model
-            except Exception:
+            except Exception as e:
+                print(f":::Checkpoint load failed: {e}:::")
                 print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
 
     print(config)
@@ -361,7 +365,7 @@ class LogParameters(pl.Callback):
 
 
 def get_charge_spin_libe(batch_graph):
-    global_feats = batch_graph.ndata["feat"]["global"]
+    global_feats = batch_graph["global"].feat
     # 3th to 6th index inclusive
     ind_charges = (3, 6)
     ind_spins = (5, 8)
@@ -376,7 +380,7 @@ def get_charge_spin_libe(batch_graph):
 
 
 def get_charge_tmqm(batch_graph):
-    global_feats = batch_graph.ndata["feat"]["global"]
+    global_feats = batch_graph["global"].feat
     # 3th to 6th index inclusive
     ind_charges = (3, 6)
     charge_one_hot = global_feats[:, ind_charges[0] : ind_charges[1]]
@@ -390,17 +394,17 @@ def test_and_predict_libe(dataset_test, dataset_train, model):
     statistics_dict = {}
 
     ### Train set
-    data_loader = DataLoaderMoleculeGraphTask(
+    data_loader_train = DataLoaderMoleculeGraphTask(
         dataset_train, batch_size=len(dataset_train.graphs), shuffle=False
     )
-    batch_graph, batched_labels = next(iter(data_loader))
+    batch_graph, batched_labels = next(iter(data_loader_train))
     charge_list_train, spin_list_train = get_charge_spin_libe(batch_graph)
-    preds_train = model.forward(batch_graph, batch_graph.ndata["feat"])
+    feat_dict = {nt: batch_graph[nt].feat for nt in batch_graph.node_types if hasattr(batch_graph[nt], "feat")}
+    preds_train = model.forward(batch_graph, feat_dict)
     preds_train = preds_train.detach()
 
     r2_pre, mae, mse, _, _ = model.evaluate_manually(
-        batch_graph,
-        batched_labels,
+        data_loader_train,
         scaler_list=dataset_train.label_scalers,
     )
     r2_pre = r2_pre.numpy()[0]
@@ -416,14 +420,13 @@ def test_and_predict_libe(dataset_test, dataset_train, model):
     )
 
     ### Test set
-    data_loader = DataLoaderMoleculeGraphTask(
+    data_loader_test = DataLoaderMoleculeGraphTask(
         dataset_test, batch_size=len(dataset_test.graphs), shuffle=False
     )
-    batch_graph, batched_labels = next(iter(data_loader))
+    batch_graph, batched_labels = next(iter(data_loader_test))
     charge_list_test, spin_list_test = get_charge_spin_libe(batch_graph)
     r2_pre, mae, mse, _, _ = model.evaluate_manually(
-        batch_graph,
-        batched_labels,
+        data_loader_test,
         scaler_list=dataset_test.label_scalers,
     )
     r2_pre = r2_pre.numpy()[0]
@@ -438,12 +441,13 @@ def test_and_predict_libe(dataset_test, dataset_train, model):
     print("--" * 50)
     statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
 
-    preds_test = model.forward(batch_graph, batch_graph.ndata["feat"])
+    feat_dict = {nt: batch_graph[nt].feat for nt in batch_graph.node_types if hasattr(batch_graph[nt], "feat")}
+    preds_test = model.forward(batch_graph, feat_dict)
     label_list = torch.tensor(
-        [i.ndata["labels"]["global"].tolist()[0][0] for i in dataset_test.graphs]
+        [i["global"].labels.tolist()[0][0] for i in dataset_test.graphs]
     )
     label_list_train = torch.tensor(
-        [i.ndata["labels"]["global"].tolist()[0][0] for i in dataset_train.graphs]
+        [i["global"].labels.tolist()[0][0] for i in dataset_train.graphs]
     )
 
     for scaler in dataset_test.label_scalers:
@@ -456,7 +460,6 @@ def test_and_predict_libe(dataset_test, dataset_train, model):
             -1, 1
         )
 
-    # return preds_test, preds_train, label_list, label_list_train, statistics_dict, charge_list_test, spin_list_test, charge_list_train, spin_list_train
     return {
         "preds_test": preds_test.detach().numpy(),
         "preds_train": preds_train.detach().numpy(),
@@ -474,17 +477,17 @@ def test_and_predict_tmqm(dataset_test, dataset_train, model):
     statistics_dict = {}
 
     ### Train set
-    data_loader = DataLoaderMoleculeGraphTask(
+    data_loader_train = DataLoaderMoleculeGraphTask(
         dataset_train, batch_size=len(dataset_train.graphs), shuffle=False
     )
-    batch_graph, batched_labels = next(iter(data_loader))
+    batch_graph, batched_labels = next(iter(data_loader_train))
     charge_list_train = get_charge_tmqm(batch_graph)
-    preds_train = model.forward(batch_graph, batch_graph.ndata["feat"])
+    feat_dict = {nt: batch_graph[nt].feat for nt in batch_graph.node_types if hasattr(batch_graph[nt], "feat")}
+    preds_train = model.forward(batch_graph, feat_dict)
     preds_train = preds_train.detach()
 
     r2_pre, mae, mse, _, _ = model.evaluate_manually(
-        batch_graph,
-        batched_labels,
+        data_loader_train,
         scaler_list=dataset_train.label_scalers,
     )
     r2_pre = r2_pre.numpy()[0]
@@ -500,14 +503,13 @@ def test_and_predict_tmqm(dataset_test, dataset_train, model):
     )
 
     ### Test set
-    data_loader = DataLoaderMoleculeGraphTask(
+    data_loader_test = DataLoaderMoleculeGraphTask(
         dataset_test, batch_size=len(dataset_test.graphs), shuffle=False
     )
-    batch_graph, batched_labels = next(iter(data_loader))
+    batch_graph, batched_labels = next(iter(data_loader_test))
     charge_list_test = get_charge_tmqm(batch_graph)
     r2_pre, mae, mse, _, _ = model.evaluate_manually(
-        batch_graph,
-        batched_labels,
+        data_loader_test,
         scaler_list=dataset_test.label_scalers,
     )
     r2_pre = r2_pre.numpy()[0]
@@ -522,12 +524,13 @@ def test_and_predict_tmqm(dataset_test, dataset_train, model):
     print("--" * 50)
     statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
 
-    preds_test = model.forward(batch_graph, batch_graph.ndata["feat"])
+    feat_dict = {nt: batch_graph[nt].feat for nt in batch_graph.node_types if hasattr(batch_graph[nt], "feat")}
+    preds_test = model.forward(batch_graph, feat_dict)
     label_list = torch.tensor(
-        [i.ndata["labels"]["global"].tolist()[0][0] for i in dataset_test.graphs]
+        [i["global"].labels.tolist()[0][0] for i in dataset_test.graphs]
     )
     label_list_train = torch.tensor(
-        [i.ndata["labels"]["global"].tolist()[0][0] for i in dataset_train.graphs]
+        [i["global"].labels.tolist()[0][0] for i in dataset_train.graphs]
     )
 
     for scaler in dataset_test.label_scalers:
@@ -540,7 +543,6 @@ def test_and_predict_tmqm(dataset_test, dataset_train, model):
             -1, 1
         )
 
-    # return preds_test, preds_train, label_list, label_list_train, statistics_dict, charge_list_test, spin_list_test, charge_list_train, spin_list_train
     return {
         "preds_test": preds_test.detach().numpy(),
         "preds_train": preds_train.detach().numpy(),
@@ -556,13 +558,9 @@ def test_and_predict(dataset_test, dataset_train, model):
     statistics_dict = {}
 
     ### Train set
-    data_loader = DataLoaderMoleculeGraphTask(
+    data_loader_train = DataLoaderMoleculeGraphTask(
         dataset_train, batch_size=len(dataset_train.graphs), shuffle=False
     )
-    batch_graph, batched_labels = next(iter(data_loader))
-    # charge_list_train, spin_list_train = get_charge_spin_libe(batch_graph)
-    # preds_train = model.forward(batch_graph, batch_graph.ndata["feat"])
-    # preds_train = preds_train.detach()
 
     (
         r2_pre,
@@ -571,7 +569,7 @@ def test_and_predict(dataset_test, dataset_train, model):
         preds_unscaled_train,
         labels_unscaled_train,
     ) = model.evaluate_manually(
-        batch_graph, batched_labels, scaler_list=dataset_train.label_scalers
+        data_loader_train, scaler_list=dataset_train.label_scalers
     )
     r2_pre = r2_pre.numpy()[0]
     mae = mae.numpy()[0]
@@ -586,11 +584,10 @@ def test_and_predict(dataset_test, dataset_train, model):
     )
 
     ### Test set
-    data_loader = DataLoaderMoleculeGraphTask(
+    data_loader_test = DataLoaderMoleculeGraphTask(
         dataset_test, batch_size=len(dataset_test.graphs), shuffle=False
     )
-    batch_graph, batched_labels = next(iter(data_loader))
-    # charge_list_test, spin_list_test = get_charge_spin_libe(batch_graph)
+
     (
         r2_pre,
         mae,
@@ -598,7 +595,7 @@ def test_and_predict(dataset_test, dataset_train, model):
         preds_unscaled_test,
         labels_unscaled_test,
     ) = model.evaluate_manually(
-        batch_graph, batched_labels, scaler_list=dataset_test.label_scalers
+        data_loader_test, scaler_list=dataset_test.label_scalers
     )
     r2_pre = r2_pre.numpy()[0]
     mae = mae.numpy()[0]
@@ -651,7 +648,7 @@ def get_test_train_preds_as_df(results_dict, key="qtaim_full"):
 
 
 def get_charge_tmqm(batch_graph):
-    global_feats = batch_graph.ndata["feat"]["global"]
+    global_feats = batch_graph["global"].feat
     # 3th to 6th index inclusive
     ind_charges = (3, 6)
     charge_one_hot = global_feats[:, ind_charges[0] : ind_charges[1]]
@@ -668,25 +665,18 @@ def test_and_predict_tmqm(dataset_test, model, batch_size=100):
     data_loader = DataLoaderMoleculeGraphTask(
         dataset_test, batch_size=batch_size, shuffle=False
     )
-    pred_list = []
-    label_list = []
+
+    # Use evaluate_manually with the full dataloader to get unscaled preds/labels
+    _, _, _, preds_test, label_list = model.evaluate_manually(
+        data_loader,
+        scaler_list=dataset_test.label_scalers,
+    )
+
+    # Collect charge info per batch (requires iterating separately)
     charge_list = []
-
-    for i, (batch_graph, batched_labels) in enumerate(data_loader):
-        # batch_graph, batched_labels = next(iter(data_loader))
+    for batch_graph, batched_labels in data_loader:
         charge_list_test = get_charge_tmqm(batch_graph)
-
-        r2_pre, mae, mse, pred, labels = model.evaluate_manually(
-            batch_graph,
-            batched_labels,
-            scaler_list=dataset_test.label_scalers,
-        )
-        pred_list.append(pred)
-        label_list.append(labels)
         charge_list.append(charge_list_test)
-
-    preds_test = torch.cat(pred_list)
-    label_list = torch.cat(label_list)
     # charge list isn't a tensor , concat w numpy
     charge_list_test = np.concatenate(charge_list)
 

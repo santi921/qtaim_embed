@@ -9,7 +9,8 @@ from pathlib import Path
 
 # Load the baseline config
 baseline_path = Path(__file__).parent / "baseline_config_full.json"
-baseline = json.load(open(baseline_path))
+with open(baseline_path) as f:
+    baseline = json.load(f)
 
 # Update to use LMDB paths and batch_size=128
 baseline["optim"]["train_batch_size"] = 128

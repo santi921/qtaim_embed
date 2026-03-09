@@ -1388,7 +1388,7 @@ class LMDBBaseDataset(Dataset):
         env = lmdb.open(
             str(lmdb_path),
             subdir=False,
-            readonly=False,
+            readonly=True,
             lock=False,
             readahead=True,
             meminit=False,

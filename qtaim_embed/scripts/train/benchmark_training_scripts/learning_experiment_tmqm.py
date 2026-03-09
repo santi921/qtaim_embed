@@ -180,11 +180,8 @@ def main():
 
     print(results_dict)
     # save results dict
-    json.dump(
-        results_dict,
-        open("./tmqm_{}_learning_results_dict.json".format(level), "w"),
-        indent=4,
-    )
+    with open("./tmqm_{}_learning_results_dict.json".format(level), "w") as f:
+        json.dump(results_dict, f, indent=4)
 
 
 main()
