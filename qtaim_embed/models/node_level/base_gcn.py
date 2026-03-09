@@ -656,6 +656,7 @@ class GCNNodePred(pl.LightningModule):
 
         return scheduler
 
+    @torch.no_grad()
     def evaluate_manually(self, test_dataloader, scaler_list):
         """
         Evaluate a set of data manually

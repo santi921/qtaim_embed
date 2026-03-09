@@ -19,4 +19,8 @@ In addition, several global readout functions are implemented for size-intensive
 - Set2Set  
 
 
-TODO: some instructional notebooks 
+TODO: some instructional notebooks
+
+## Security Notice
+
+LMDB data files and scaler files use Python pickle-based serialization (`torch.save`/`torch.load`). Do not load LMDB datasets or scaler files from untrusted sources, as they may contain arbitrary code that executes during deserialization.

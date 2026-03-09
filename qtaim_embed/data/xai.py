@@ -1,6 +1,7 @@
 from copy import deepcopy
 import numpy as np
 import torch
+from torch_geometric.utils import to_networkx
 from qtaim_embed.utils.grapher import (
     get_bond_list_from_heterograph,
     get_fts_from_het_graph,
@@ -14,7 +15,7 @@ def get_networkx_explaination_graph(edge_mask, g, dataset, filter=False):
     Utility to convert a heterograph to a networkx graph with edge weights.
     Takes:
         - edge mask(dict)
-        - heterograph(dgl HeteroGraph)
+        - heterograph(PyG HeteroData)
         - dataset (HeteroGraphGraphLabelDataset)
         - filter (bool) - whether to filter out edges and nodes with low importance
     Returns:
@@ -37,19 +38,19 @@ def get_networkx_explaination_graph(edge_mask, g, dataset, filter=False):
     # get blank template
     homo_graph_empty = construct_homograph_blank(nodes, bonds)
     # add processed data
-    homo_graph_empty.ndata["feats"] = edge_mask_z_processed["atom"]
-    homo_graph_empty.edata["feats"] = edge_mask_z_processed["bond"]
+    homo_graph_empty.x = edge_mask_z_processed["atom"]
+    homo_graph_empty.edge_attr = edge_mask_z_processed["bond"]
     # convert to networkx
-    nxg = homo_graph_empty.to_networkx(node_attrs=["feats"], edge_attrs=["feats"])
+    nxg = to_networkx(homo_graph_empty, node_attrs=["x"], edge_attrs=["edge_attr"])
 
     # add global feat node to nx
     node_label_dict = {i: elems_in_graph[i] for i in range(len(nxg.nodes()))}
-    nxg.add_node(len(nxg.nodes()), feats=edge_mask_z_processed["global"])
+    nxg.add_node(len(nxg.nodes()), x=edge_mask_z_processed["global"])
     node_label_dict[len(nxg.nodes()) - 1] = "global"
     # process weights for scaling/visualization
 
     node_weights = np.array(
-        [float(v["feats"]) for k, v in dict(nxg.nodes(data=True)).items()]
+        [float(v["x"]) for k, v in dict(nxg.nodes(data=True)).items()]
     )
 
     shift = 0.0001
@@ -59,7 +60,7 @@ def get_networkx_explaination_graph(edge_mask, g, dataset, filter=False):
         e_large_vals = [
             [source, dest]
             for ind, (source, dest, d) in enumerate(nxg.edges(data=True))
-            if d["feats"] > 0.0
+            if d["edge_attr"] > 0.0
         ]
         nodes_important_bonds = list(
             set([item for row in e_large_vals for item in row])

@@ -764,6 +764,7 @@ class GCNGraphPred(pl.LightningModule):
 
         return scheduler
 
+    @torch.no_grad()
     def evaluate_manually(self, dataloader, scaler_list, per_atom=False):
         """
         Evaluate a set of data manually

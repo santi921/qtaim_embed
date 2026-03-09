@@ -12,6 +12,8 @@ from typing import List, Dict, Tuple, Optional, Union
 from scipy.spatial.distance import cdist
 from torch_geometric.data import HeteroData
 
+from qtaim_embed.data.grapher import build_hetero_graph_skeleton
+
 # Default element set for one-hot encoding (common organic + transition metals)
 DEFAULT_ELEMENT_SET = [
     "H", "C", "N", "O", "F", "P", "S", "Cl", "Br", "I",
@@ -142,69 +144,7 @@ class GeometryToGraph:
         - b2g, g2b: bond-global connections
         - a2a, b2b, g2g: self-loops (if enabled)
         """
-        num_bonds = len(edges)
-
-        # Handle case with no bonds
-        if num_bonds == 0:
-            num_bonds = 1
-            a2b_src, a2b_dst = [0], [0]
-            b2a_src, b2a_dst = [0], [0]
-        else:
-            a2b_src, a2b_dst = [], []
-            b2a_src, b2a_dst = [], []
-            for bond_idx, (u, v) in enumerate(edges):
-                a2b_src.extend([u, v])
-                a2b_dst.extend([bond_idx, bond_idx])
-                b2a_src.extend([bond_idx, bond_idx])
-                b2a_dst.extend([u, v])
-
-        a2g_src = list(range(num_atoms))
-        a2g_dst = [0] * num_atoms
-        g2a_src = [0] * num_atoms
-        g2a_dst = list(range(num_atoms))
-        b2g_src = list(range(num_bonds))
-        b2g_dst = [0] * num_bonds
-        g2b_src = [0] * num_bonds
-        g2b_dst = list(range(num_bonds))
-
-        data = HeteroData()
-        data["atom"].num_nodes = num_atoms
-        data["bond"].num_nodes = num_bonds
-        data["global"].num_nodes = 1
-
-        data["atom", "a2b", "bond"].edge_index = torch.tensor(
-            [a2b_src, a2b_dst], dtype=torch.long
-        )
-        data["bond", "b2a", "atom"].edge_index = torch.tensor(
-            [b2a_src, b2a_dst], dtype=torch.long
-        )
-        data["atom", "a2g", "global"].edge_index = torch.tensor(
-            [a2g_src, a2g_dst], dtype=torch.long
-        )
-        data["global", "g2a", "atom"].edge_index = torch.tensor(
-            [g2a_src, g2a_dst], dtype=torch.long
-        )
-        data["bond", "b2g", "global"].edge_index = torch.tensor(
-            [b2g_src, b2g_dst], dtype=torch.long
-        )
-        data["global", "g2b", "bond"].edge_index = torch.tensor(
-            [g2b_src, g2b_dst], dtype=torch.long
-        )
-
-        if self.self_loop:
-            a2a_nodes = list(range(num_atoms))
-            b2b_nodes = list(range(num_bonds))
-            data["atom", "a2a", "atom"].edge_index = torch.tensor(
-                [a2a_nodes, a2a_nodes], dtype=torch.long
-            )
-            data["bond", "b2b", "bond"].edge_index = torch.tensor(
-                [b2b_nodes, b2b_nodes], dtype=torch.long
-            )
-            data["global", "g2g", "global"].edge_index = torch.tensor(
-                [[0], [0]], dtype=torch.long
-            )
-
-        return data
+        return build_hetero_graph_skeleton(num_atoms, edges, self_loop=self.self_loop)
 
     def _add_atom_features(
         self,
@@ -436,63 +376,7 @@ def update_graph_topology(
     num_atoms = old_graph["atom"].num_nodes
     num_bonds = max(len(new_edges), 1)
 
-    if len(new_edges) == 0:
-        a2b_src, a2b_dst = [0], [0]
-        b2a_src, b2a_dst = [0], [0]
-    else:
-        a2b_src, a2b_dst = [], []
-        b2a_src, b2a_dst = [], []
-        for bond_idx, (u, v) in enumerate(new_edges):
-            a2b_src.extend([u, v])
-            a2b_dst.extend([bond_idx, bond_idx])
-            b2a_src.extend([bond_idx, bond_idx])
-            b2a_dst.extend([u, v])
-
-    a2g_src = list(range(num_atoms))
-    a2g_dst = [0] * num_atoms
-    g2a_src = [0] * num_atoms
-    g2a_dst = list(range(num_atoms))
-    b2g_src = list(range(num_bonds))
-    b2g_dst = [0] * num_bonds
-    g2b_src = [0] * num_bonds
-    g2b_dst = list(range(num_bonds))
-
-    new_graph = HeteroData()
-    new_graph["atom"].num_nodes = num_atoms
-    new_graph["bond"].num_nodes = num_bonds
-    new_graph["global"].num_nodes = 1
-
-    new_graph["atom", "a2b", "bond"].edge_index = torch.tensor(
-        [a2b_src, a2b_dst], dtype=torch.long
-    )
-    new_graph["bond", "b2a", "atom"].edge_index = torch.tensor(
-        [b2a_src, b2a_dst], dtype=torch.long
-    )
-    new_graph["atom", "a2g", "global"].edge_index = torch.tensor(
-        [a2g_src, a2g_dst], dtype=torch.long
-    )
-    new_graph["global", "g2a", "atom"].edge_index = torch.tensor(
-        [g2a_src, g2a_dst], dtype=torch.long
-    )
-    new_graph["bond", "b2g", "global"].edge_index = torch.tensor(
-        [b2g_src, b2g_dst], dtype=torch.long
-    )
-    new_graph["global", "g2b", "bond"].edge_index = torch.tensor(
-        [g2b_src, g2b_dst], dtype=torch.long
-    )
-
-    if self_loop:
-        a2a_nodes = list(range(num_atoms))
-        b2b_nodes = list(range(num_bonds))
-        new_graph["atom", "a2a", "atom"].edge_index = torch.tensor(
-            [a2a_nodes, a2a_nodes], dtype=torch.long
-        )
-        new_graph["bond", "b2b", "bond"].edge_index = torch.tensor(
-            [b2b_nodes, b2b_nodes], dtype=torch.long
-        )
-        new_graph["global", "g2g", "global"].edge_index = torch.tensor(
-            [[0], [0]], dtype=torch.long
-        )
+    new_graph = build_hetero_graph_skeleton(num_atoms, new_edges, self_loop=self_loop)
 
     # Copy atom and global features from old graph
     new_graph["atom"].feat = old_graph["atom"].feat.clone()
