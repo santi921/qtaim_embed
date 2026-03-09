@@ -237,14 +237,14 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
 
     print(f"...> streaming {num_graphs} molecules to lmdb")
 
+    WRITE_BATCH_SIZE = 1000
+
     def _write_metadata(db, length, global_dict):
         txn = db.begin(write=True)
         txn.put("length".encode("ascii"), pickle.dumps(length, protocol=-1))
-        txn.commit()
         for key, value in global_dict.items():
-            txn = db.begin(write=True)
             txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
-            txn.commit()
+        txn.commit()
 
     if chunk > 0:
         # Chunked streaming: one LMDB file per chunk
@@ -255,29 +255,41 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         db = lmdb.open(lmdb_chunk_path, map_size=_safe_map_size(lmdb_chunk_path),
                         subdir=False, meminit=False, map_async=True)
 
+        txn = db.begin(write=True)
+        batch_count = 0
         for ind, graph in enumerate(graph_iter):
             if local_ind >= chunk:
+                # Commit any pending writes before closing chunk
+                txn.commit()
                 # Close current chunk, write metadata
                 _write_metadata(db, local_ind, global_dict)
-                txn = db.begin(write=True)
-                txn.put("length_chunk".encode("ascii"), pickle.dumps(local_ind, protocol=-1))
-                txn.commit()
+                txn_meta = db.begin(write=True)
+                txn_meta.put("length_chunk".encode("ascii"), pickle.dumps(local_ind, protocol=-1))
+                txn_meta.commit()
                 db.sync()
                 db.close()
                 # Open next chunk
                 chunk_idx += 1
                 local_ind = 0
+                batch_count = 0
                 lmdb_chunk_name = f"molecule.lmdb_{chunk_idx}.lmdb"
                 lmdb_chunk_path = os.path.join(lmdb_dir, lmdb_chunk_name)
                 db = lmdb.open(lmdb_chunk_path, map_size=_safe_map_size(lmdb_chunk_path),
                                 subdir=False, meminit=False, map_async=True)
+                txn = db.begin(write=True)
 
             serialized = serialize_graph(graph)
             sample = {"molecule_graph": serialized}
-            txn = db.begin(write=True)
             txn.put(f"{local_ind}".encode("ascii"), pickle.dumps(sample, protocol=-1))
-            txn.commit()
+            batch_count += 1
             local_ind += 1
+
+            if batch_count >= WRITE_BATCH_SIZE:
+                txn.commit()
+                txn = db.begin(write=True)
+                batch_count = 0
+
+        txn.commit()
 
         # Close final chunk
         _write_metadata(db, local_ind, global_dict)
@@ -298,15 +310,21 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
             map_async=True,
         )
 
+        txn = db.begin(write=True)
+        batch_count = 0
         for ind, graph in enumerate(graph_iter):
             serialized = serialize_graph(graph)
             sample = {"molecule_graph": serialized}
-            txn = db.begin(write=True)
             txn.put(
                 f"{ind}".encode("ascii"),
                 pickle.dumps(sample, protocol=-1),
             )
-            txn.commit()
+            batch_count += 1
+            if batch_count >= WRITE_BATCH_SIZE:
+                txn.commit()
+                txn = db.begin(write=True)
+                batch_count = 0
+        txn.commit()
 
         _write_metadata(db, num_graphs, global_dict)
         db.sync()
