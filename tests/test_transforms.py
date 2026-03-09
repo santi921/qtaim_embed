@@ -1,5 +1,4 @@
 import torch
-import dgl
 
 from qtaim_embed.data.dataloader import DataLoaderMoleculeNodeTask
 from qtaim_embed.data.transforms import DropBondHeterograph
@@ -29,9 +28,9 @@ def test_edge_dropout():
     )
 
     for ind, batch in enumerate(batch_loader):
-        assert dataset_graph_level.graphs[ind].num_nodes(ntype="bond") > batch[
+        assert dataset_graph_level.graphs[ind]["bond"].num_nodes > batch[
             0
-        ].num_nodes(ntype="bond")
+        ]["bond"].num_nodes
 
 
 def test_homo_conversion():

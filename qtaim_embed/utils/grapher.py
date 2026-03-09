@@ -1,5 +1,4 @@
 import torch
-import dgl
 import numpy as np
 
 from qtaim_embed.data.grapher import HeteroCompleteGraphFromMolWrapper
@@ -60,29 +59,42 @@ def get_grapher(
 
 def compare_graphs(g1, g2):
     """
-        Compare two graphs, return true if they match in node types, number, and features
+        Compare two graphs, return true if they match in node types, number, and features.
     Takes
-        g2, g1(dgl.Heterograph)
+        g1, g2 (torch_geometric.data.HeteroData)
     Returns
-        compare(bool): whether they're equal or not.
+        compare(bool): whether they are equal or not.
     """
     node_types = ["atom", "bond", "global"]
-    edge_types = ["a2b", "b2a", "a2g", "g2a", "g2g", "a2a", "b2b"]
+    edge_types = [
+        ("atom", "a2b", "bond"),
+        ("bond", "b2a", "atom"),
+        ("atom", "a2g", "global"),
+        ("global", "g2a", "atom"),
+        ("global", "g2g", "global"),
+        ("atom", "a2a", "atom"),
+        ("bond", "b2b", "bond"),
+    ]
 
     for nt in node_types:
-        if g1.num_nodes(nt) != g2.num_nodes(nt):
+        if g1[nt].num_nodes != g2[nt].num_nodes:
             return False
-        ft1 = g1.nodes[nt].data["feat"]
-        ft2 = g2.nodes[nt].data["feat"]
+        ft1 = g1[nt].feat
+        ft2 = g2[nt].feat
         if torch.any(ft1 != ft2):
             return False
 
     for et in edge_types:
-        u1, v1 = g1.edges(etype=et)
-        u2, v2 = g2.edges(etype=et)
-        if torch.any(u1 != u2):
+        if et not in g1.edge_types or et not in g2.edge_types:
+            # If edge type missing from both, that is consistent
+            if et not in g1.edge_types and et not in g2.edge_types:
+                continue
             return False
-        if torch.any(v1 != v2):
+        ei1 = g1[et].edge_index
+        ei2 = g2[et].edge_index
+        if ei1.shape != ei2.shape:
+            return False
+        if torch.any(ei1 != ei2):
             return False
 
     return True
@@ -90,20 +102,22 @@ def compare_graphs(g1, g2):
 
 def get_bond_list_from_heterograph(het_graph):
     """
-    Get list of bonds from heterograph
+    Get list of bonds from heterograph.
     Takes:
-        het_graph(dgl heterograph): graph to convert
+        het_graph (torch_geometric.data.HeteroData): graph to convert
     Returns:
         a list of lists of bonds
     """
 
     edge_list = []
     id_list = []
-    nodes, bond_id = het_graph.edges(etype="a2b")
+    edge_index = het_graph["atom", "a2b", "bond"].edge_index
+    nodes = edge_index[0]  # source (atom) indices
+    bond_id = edge_index[1]  # destination (bond) indices
     for i in range(int(len(nodes) / 2)):
-        a = nodes[2 * i]  # .tolist()
-        b = nodes[2 * i + 1]  # .tolist()
-        id = bond_id[2 * i]  # .tolist()
+        a = nodes[2 * i]
+        b = nodes[2 * i + 1]
+        id = bond_id[2 * i]
         edge_list.append([a, b])
         id_list.append(id)
 
@@ -112,32 +126,41 @@ def get_bond_list_from_heterograph(het_graph):
 
 def get_fts_from_het_graph(het_graph):
     """
-    Just get features from hetereograph
+    Just get features from heterograph.
     Takes:
-        heterograph(dgl.Heterograph)
+        het_graph (torch_geometric.data.HeteroData)
     Returns:
         atom, bond, and global feature tensors
     """
-    atom_ft = het_graph.nodes["atom"].data["feat"]
-    bond_ft = het_graph.nodes["bond"].data["feat"]
-    global_ft = het_graph.nodes["global"].data["feat"]
+    atom_ft = het_graph["atom"].feat
+    bond_ft = het_graph["bond"].feat
+    global_ft = het_graph["global"].feat
     return atom_ft, bond_ft, global_ft
 
 
 def construct_homograph_blank(node_list, bond_list):
-    # construct graph with node list and bond list
-    g = dgl.graph(([], []))
-    for i in range(len(node_list)):
-        g.add_nodes(1)
-    g.add_edges(bond_list[:, 0], bond_list[:, 1])
+    """
+    Construct a simple homogeneous graph from a node list and bond list.
+    Uses torch_geometric.data.Data.
+    """
+    from torch_geometric.data import Data
+
+    num_nodes = len(node_list)
+    if len(bond_list) > 0:
+        edge_index = torch.tensor(
+            [bond_list[:, 0].tolist(), bond_list[:, 1].tolist()], dtype=torch.long
+        )
+    else:
+        edge_index = torch.zeros((2, 0), dtype=torch.long)
+    g = Data(num_nodes=num_nodes, edge_index=edge_index)
     return g
 
 
 def get_element_list_heterograph(g, dataset):
     """
-    Get element list from heterograph
+    Get element list from heterograph.
     Takes:
-        g: heterograph
+        g (torch_geometric.data.HeteroData): heterograph
         dataset: dataset object
     Returns:
         element_list: list of elements
@@ -153,7 +176,7 @@ def get_element_list_heterograph(g, dataset):
         for ind, i in enumerate(dataset.feature_names["atom"])
         if "chemical_symbol" in dataset.feature_names["atom"][ind]
     ]
-    element_info = g.ndata["feat"]["atom"]
+    element_info = g["atom"].feat
     element_info = element_info[:, elem_name_ind]
     element_list = []
     # iterate through vertical and add minimum of each column to element_info

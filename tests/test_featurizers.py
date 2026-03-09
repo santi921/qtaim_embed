@@ -41,13 +41,13 @@ class TestGrapher:
             graph_list.append(graph)
 
         for graph in graph_list:
-            shape_atom_feats = graph.ndata["feat"]["atom"].shape
-            num_atoms = graph.num_nodes("atom")
+            shape_atom_feats = graph["atom"].feat.shape
+            num_atoms = graph["atom"].num_nodes
             assert shape_atom_feats[0] == num_atoms
-            shape_bond_feats = graph.ndata["feat"]["bond"].shape
-            num_bonds = graph.num_nodes("bond")
+            shape_bond_feats = graph["bond"].feat.shape
+            num_bonds = graph["bond"].num_nodes
             assert shape_bond_feats[0] == num_bonds
-            shape_global_feats = graph.ndata["feat"]["global"].shape
+            shape_global_feats = graph["global"].feat.shape
             assert shape_global_feats[0] == 1
 
     def test_atom_featurizer(self):
@@ -103,10 +103,10 @@ class TestGrapher:
             graph_list_bare.append(graph_bare)
 
         for ind in range(len(graph_list)):
-            assert graph_list[ind].ndata["feat"]["atom"][0, -2] == test_vals[ind]
+            assert graph_list[ind]["atom"].feat[0, -2] == test_vals[ind]
             assert (
-                graph_list[ind].ndata["feat"]["atom"].shape[1]
-                == graph_list_bare[ind].ndata["feat"]["atom"].shape[1] + 8
+                graph_list[ind]["atom"].feat.shape[1]
+                == graph_list_bare[ind]["atom"].feat.shape[1] + 8
             )
 
     def test_bond_featurizer(self):  # check!
@@ -169,11 +169,11 @@ class TestGrapher:
             graph_list_bare.append(graph_bare)
 
         for ind in range(len(graph_list)):
-            assert graph_list[ind].ndata["feat"]["bond"][3, -2] == list_test[ind]
+            assert graph_list[ind]["bond"].feat[3, -2] == list_test[ind]
 
             assert (
-                graph_list[ind].ndata["feat"]["bond"].shape[1]
-                == graph_list_bare[ind].ndata["feat"]["bond"].shape[1] + 16
+                graph_list[ind]["bond"].feat.shape[1]
+                == graph_list_bare[ind]["bond"].feat.shape[1] + 16
             )
 
     def test_global_featurizers(self):
@@ -229,10 +229,10 @@ class TestGrapher:
         id_list = [2, 10, 300]
         for ind in range(len(graph_list)):
             assert (
-                graph_list[ind].ndata["feat"]["global"].shape[1]
-                == graph_list_bare[ind].ndata["feat"]["global"].shape[1] + 1
+                graph_list[ind]["global"].feat.shape[1]
+                == graph_list_bare[ind]["global"].feat.shape[1] + 1
             )
-            assert int(graph_list[ind].ndata["feat"]["global"][0][-1]) == id_list[ind]
+            assert int(graph_list[ind]["global"].feat[0][-1]) == id_list[ind]
 
     def test_spin_charge_encoding(self):
         global_keys = ["spin", "charge"]
@@ -321,14 +321,14 @@ class TestGrapher:
 
         for ind in range(len(graph_list)):
             assert (
-                graph_list[ind].ndata["feat"]["global"].shape[1]
-                == graph_list_bare[ind].ndata["feat"]["global"].shape[1] + 6
+                graph_list[ind]["global"].feat.shape[1]
+                == graph_list_bare[ind]["global"].feat.shape[1] + 6
             )
             assert (
-                graph_list_spin[ind].ndata["feat"]["global"].shape[1]
-                == graph_list_bare[ind].ndata["feat"]["global"].shape[1] + 3
+                graph_list_spin[ind]["global"].feat.shape[1]
+                == graph_list_bare[ind]["global"].feat.shape[1] + 3
             )
             assert (
-                graph_list_charge[ind].ndata["feat"]["global"].shape[1]
-                == graph_list_bare[ind].ndata["feat"]["global"].shape[1] + 3
+                graph_list_charge[ind]["global"].feat.shape[1]
+                == graph_list_bare[ind]["global"].feat.shape[1] + 3
             )

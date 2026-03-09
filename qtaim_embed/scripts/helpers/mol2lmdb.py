@@ -3,11 +3,6 @@ import argparse
 import torch
 import json
 import numpy as np
-import argparse
-import dgl
-import torch
-import tempfile
-from copy import deepcopy
 
 from qtaim_embed.data.lmdb import construct_lmdb_and_save_dataset
 from qtaim_embed.utils.data import train_validation_test_split
@@ -91,6 +86,11 @@ def main(argv=None):
         map_key=config["dataset"]["map_key"],
         num_workers=num_workers,
     )
+
+    # Free MoleculeWrapper objects -- no longer needed after graph construction.
+    import gc
+    dataset.data = None
+    gc.collect()
 
     if split == True:
         if config["dataset"]["test_prop"] > 0.0:

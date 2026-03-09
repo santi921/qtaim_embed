@@ -1,61 +1,53 @@
 import os
-import dgl
+import io
+import shutil
 import lmdb
 import pickle
-import tempfile
+import torch
+from torch_geometric.data import HeteroData
 from tqdm import tqdm
 
 from qtaim_embed.core.dataset import Subset
-#from qtaim_embed.data.processing import (
-#    HeteroGraphStandardScaler,
-#    HeteroGraphLogMagnitudeScaler,
-#)
 
 scalar = 1 / 1024
+
+# Default LMDB map size: 1 TB
+_DEFAULT_MAP_SIZE = 1099511627776
+
+
+def _safe_map_size(lmdb_path: str, desired: int = _DEFAULT_MAP_SIZE) -> int:
+    """Return a map_size that fits on disk, capped at 90% of free space."""
+    parent = os.path.dirname(os.path.abspath(lmdb_path)) or "."
+    os.makedirs(parent, exist_ok=True)
+    free = shutil.disk_usage(parent).free
+    safe = int(free * 0.9)
+    return min(desired, safe) if safe > 0 else desired
+
 
 
 def TransformMol(data_object):
     serialized_graph = data_object["molecule_graph"]
-    # check if serialized_graph is DGL graph or if it is chunk
-    if isinstance(serialized_graph, dgl.DGLGraph):
-        return data_object
-    elif isinstance(serialized_graph, dgl.DGLHeteroGraph):
+    # check if serialized_graph is already a PyG HeteroData or if it is bytes
+    if isinstance(serialized_graph, HeteroData):
         return data_object
 
-    dgl_graph = load_dgl_graph_from_serialized(serialized_graph)
-    # data_object["molecule_graph"] = dgl_graph
-    return dgl_graph
+    graph = load_graph_from_serialized(serialized_graph)
+    return graph
 
 
-def serialize_dgl_graph(dgl_graph, ret=True):
-    # import pdb
-    # pdb.set_trace()
-    # Create a temporary file
-    with tempfile.NamedTemporaryFile() as tmpfile:
-        # Save the graph to the temporary file
-
-        dgl.save_graphs(tmpfile.name, [dgl_graph])
-
-        # Read the content of the file
-        if ret:
-            tmpfile.seek(0)
-            serialized_data = tmpfile.read()
+def serialize_graph(graph, ret=True):
+    """Serialize a PyG HeteroData graph to bytes using torch.save with BytesIO."""
+    buf = io.BytesIO()
+    torch.save(graph, buf)
     if ret:
-        return serialized_data
+        return buf.getvalue()
 
 
-def load_dgl_graph_from_serialized(serialized_graph):
-    with tempfile.NamedTemporaryFile(mode="wb", delete=True) as tmpfile:
-        tmpfile.write(serialized_graph)
-        tmpfile.flush()  # Ensure all data is written
-
-        # Rewind the file to the beginning before reading
-        tmpfile.seek(0)
-
-        # Load the graph using the file handle
-        graphs, _ = dgl.load_graphs(tmpfile.name)
-
-    return graphs[0]  # Assuming there's only one graph
+def load_graph_from_serialized(serialized_graph):
+    """Load a PyG HeteroData graph from serialized bytes."""
+    buf = io.BytesIO(serialized_graph)
+    graph = torch.load(buf, weights_only=False)
+    return graph
 
 
 def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int = -1):
@@ -88,7 +80,7 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
             lmdb_chunk_dir = os.path.join(lmdb_dir, lmdb_chunk_name)
             db = lmdb.open(
                 lmdb_chunk_dir,
-                map_size=int(1099511627776 * 2),
+                map_size=_safe_map_size(lmdb_chunk_dir),
                 subdir=False,
                 meminit=False,
                 map_async=True,
@@ -126,7 +118,7 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
     else:
         db = lmdb.open(
             lmdb_dir + lmdb_name,
-            map_size=int(1099511627776 * 2),
+            map_size=_safe_map_size(lmdb_dir + lmdb_name),
             subdir=False,
             meminit=False,
             map_async=True,
@@ -161,10 +153,10 @@ def write_molecule_lmdb(graphs, lmdb_dir, lmdb_name, global_values, chunk: int =
 
 def _serialize_graphs_parallel(graphs, num_workers):
     """
-    Serialize DGL graphs in parallel (LMDB conversion only).
+    Serialize PyG graphs in parallel (LMDB conversion only).
 
     Args:
-        graphs: List of DGL graphs
+        graphs: List of PyG HeteroData graphs
         num_workers: Number of parallel workers
 
     Returns:
@@ -197,7 +189,8 @@ def _serialize_graphs_parallel(graphs, num_workers):
 
 def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1, save_scalers=False, num_workers: int = 1):
     """
-    Converts dataset to lmdb and saves it to the specified directory
+    Converts dataset to lmdb and saves it to the specified directory.
+    Streams graphs one at a time to avoid holding all serialized data in memory.
     Takes:
         dataset: dataset object
         lmdb_dir: directory to save the lmdb
@@ -206,51 +199,27 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
     """
 
     if type(dataset) == Subset:
-        feature_size = dataset.dataset.feature_size
-        feature_names = dataset.dataset.feature_names
-        element_set = dataset.dataset.element_set
-        log_scale_features = dataset.dataset.log_scale_features
-        allowed_charges = dataset.dataset.allowed_charges
-        allowed_spins = dataset.dataset.allowed_spins
-        allowed_ring_size = dataset.dataset.allowed_ring_size
-        target_dict = dataset.dataset.target_dict
-        extra_dataset_info = dataset.dataset.extra_dataset_info
-        # List of Molecules - serialize graphs
-        if num_workers > 1:
-            # Parallel serialization
-            graphs_to_serialize = [dataset.dataset.graphs[ind] for ind in dataset.indices]
-            dgl_graphs_serialized = _serialize_graphs_parallel(graphs_to_serialize, num_workers)
-        else:
-            # Serial serialization (original behavior)
-            dgl_graphs_serialized = [
-                serialize_dgl_graph(dataset.dataset.graphs[ind]) for ind in dataset.indices
-            ]
-
-        if save_scalers: 
-            feature_scalers = dataset.dataset.feature_scalers
-            label_scalers = dataset.dataset.label_scalers
-
+        src = dataset.dataset
+        graph_iter = (src.graphs[ind] for ind in dataset.indices)
+        num_graphs = len(dataset.indices)
     else:
-        feature_size = dataset.feature_size
-        feature_names = dataset.feature_names
-        element_set = dataset.element_set
-        log_scale_features = dataset.log_scale_features
-        allowed_charges = dataset.allowed_charges
-        allowed_spins = dataset.allowed_spins
-        allowed_ring_size = dataset.allowed_ring_size
-        target_dict = dataset.target_dict
-        extra_dataset_info = dataset.extra_dataset_info
-        # List of Molecules - serialize graphs
-        if num_workers > 1:
-            # Parallel serialization
-            dgl_graphs_serialized = _serialize_graphs_parallel(dataset.graphs, num_workers)
-        else:
-            # Serial serialization (original behavior)
-            dgl_graphs_serialized = [serialize_dgl_graph(g) for g in dataset.graphs]
+        src = dataset
+        graph_iter = iter(dataset.graphs)
+        num_graphs = len(dataset.graphs)
 
-        if save_scalers: 
-            feature_scalers = dataset.feature_scalers
-            label_scalers = dataset.label_scalers
+    feature_size = src.feature_size
+    feature_names = src.feature_names
+    element_set = src.element_set
+    log_scale_features = src.log_scale_features
+    allowed_charges = src.allowed_charges
+    allowed_spins = src.allowed_spins
+    allowed_ring_size = src.allowed_ring_size
+    target_dict = src.target_dict
+    extra_dataset_info = src.extra_dataset_info
+
+    if save_scalers:
+        feature_scalers = src.feature_scalers
+        label_scalers = src.label_scalers
 
     global_dict = {
         "feature_size": feature_size,
@@ -264,25 +233,112 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         "log_scale_features": log_scale_features,
     }
 
-    print("...> writing molecules to lmdb")
-    # print("number of molecules to write: ", len(molecule_ind_list))
-    write_molecule_lmdb(
-        graphs=dgl_graphs_serialized,
-        lmdb_dir=lmdb_dir,
-        lmdb_name="molecule.lmdb",
-        global_values=global_dict,
-        chunk=chunk,    
-    )
+    os.makedirs(lmdb_dir, exist_ok=True)
+
+    print(f"...> streaming {num_graphs} molecules to lmdb")
+
+    WRITE_BATCH_SIZE = 1000
+
+    def _write_metadata(db, length, global_dict):
+        txn = db.begin(write=True)
+        txn.put("length".encode("ascii"), pickle.dumps(length, protocol=-1))
+        for key, value in global_dict.items():
+            txn.put(key.encode("ascii"), pickle.dumps(value, protocol=-1))
+        txn.commit()
+
+    if chunk > 0:
+        # Chunked streaming: one LMDB file per chunk
+        chunk_idx = 0
+        local_ind = 0
+        lmdb_chunk_name = f"molecule.lmdb_{chunk_idx}.lmdb"
+        lmdb_chunk_path = os.path.join(lmdb_dir, lmdb_chunk_name)
+        db = lmdb.open(lmdb_chunk_path, map_size=_safe_map_size(lmdb_chunk_path),
+                        subdir=False, meminit=False, map_async=True)
+
+        txn = db.begin(write=True)
+        batch_count = 0
+        for ind, graph in enumerate(graph_iter):
+            if local_ind >= chunk:
+                # Commit any pending writes before closing chunk
+                txn.commit()
+                # Close current chunk, write metadata
+                _write_metadata(db, local_ind, global_dict)
+                txn_meta = db.begin(write=True)
+                txn_meta.put("length_chunk".encode("ascii"), pickle.dumps(local_ind, protocol=-1))
+                txn_meta.commit()
+                db.sync()
+                db.close()
+                # Open next chunk
+                chunk_idx += 1
+                local_ind = 0
+                batch_count = 0
+                lmdb_chunk_name = f"molecule.lmdb_{chunk_idx}.lmdb"
+                lmdb_chunk_path = os.path.join(lmdb_dir, lmdb_chunk_name)
+                db = lmdb.open(lmdb_chunk_path, map_size=_safe_map_size(lmdb_chunk_path),
+                                subdir=False, meminit=False, map_async=True)
+                txn = db.begin(write=True)
+
+            serialized = serialize_graph(graph)
+            sample = {"molecule_graph": serialized}
+            txn.put(f"{local_ind}".encode("ascii"), pickle.dumps(sample, protocol=-1))
+            batch_count += 1
+            local_ind += 1
+
+            if batch_count >= WRITE_BATCH_SIZE:
+                txn.commit()
+                txn = db.begin(write=True)
+                batch_count = 0
+
+        txn.commit()
+
+        # Close final chunk
+        _write_metadata(db, local_ind, global_dict)
+        txn = db.begin(write=True)
+        txn.put("length_chunk".encode("ascii"), pickle.dumps(local_ind, protocol=-1))
+        txn.commit()
+        db.sync()
+        db.close()
+
+    else:
+        # Single file streaming
+        lmdb_path = os.path.join(lmdb_dir, "molecule.lmdb")
+        db = lmdb.open(
+            lmdb_path,
+            map_size=_safe_map_size(lmdb_path),
+            subdir=False,
+            meminit=False,
+            map_async=True,
+        )
+
+        txn = db.begin(write=True)
+        batch_count = 0
+        for ind, graph in enumerate(graph_iter):
+            serialized = serialize_graph(graph)
+            sample = {"molecule_graph": serialized}
+            txn.put(
+                f"{ind}".encode("ascii"),
+                pickle.dumps(sample, protocol=-1),
+            )
+            batch_count += 1
+            if batch_count >= WRITE_BATCH_SIZE:
+                txn.commit()
+                txn = db.begin(write=True)
+                batch_count = 0
+        txn.commit()
+
+        _write_metadata(db, num_graphs, global_dict)
+        db.sync()
+        db.close()
 
     if save_scalers:
-        if feature_scalers == []: 
+        if feature_scalers == []:
             print("No feature scalers found in dataset. Skipping scaler save.")
-        else: 
+        else:
             for scaler in feature_scalers:
                 scaler.save_scaler(os.path.join(lmdb_dir, "feature_scaler_{}.pt".format(scaler.name)))
         if label_scalers == []:
             print("No label scalers found in dataset. Skipping label scaler save.")
-        else: 
+        else:
             for scaler in label_scalers:
                 scaler.save_scaler(os.path.join(lmdb_dir, "label_scaler_{}.pt".format(scaler.name)))
 

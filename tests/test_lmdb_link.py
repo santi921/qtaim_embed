@@ -106,14 +106,36 @@ def test_model_lmdb():
     trainer = pl.Trainer(
         max_epochs=1,
         accelerator="auto",
+        devices=1,
         enable_progress_bar=True,
-        strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
         precision=16,
+        log_every_n_steps=1,
     )
 
     trainer.fit(model, dl)
+
+
+def test_lmdb_link_test_stage():
+    """Test that LMDBLinkDataModule.setup('test') works and produces a valid test dataloader."""
+    config = get_default_link_level_config()
+
+    config["dataset"] = {
+        "train_lmdb": "./data/lmdb_link/train/",
+        "val_lmdb": "./data/lmdb_link/val/",
+        "test_lmdb": "./data/lmdb_link/test/",
+    }
+
+    dm_lmdb = LMDBLinkDataModule(config=config)
+    dm_lmdb.prepare_data()
+    dm_lmdb.setup("test")
+
+    dl = dm_lmdb.test_dataloader()
+    batched_graphs, batched_neg_graphs, feats = next(iter(dl))
+    assert feats.ndim == 2
+    assert batched_graphs.edge_index.ndim == 2
+    assert batched_neg_graphs.edge_index.ndim == 2
 
 
 # test_write()

@@ -1,6 +1,5 @@
 import torch
 from typing import Optional, Dict, Any
-from dgl import batch
 
 
 def get_layer_args(
@@ -416,115 +415,105 @@ def get_layer_args(
             if "global" in hparams.target_dict.keys():
                 global_out = len(hparams.target_dict["global"])
 
+        # PyG GATConv uses: in_channels, out_channels, heads, dropout, add_self_loops, bias, residual, concat
         layer_args["a2b"] = {
-            "in_feats": atom_in,
-            "out_feats": bond_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": atom_in,
+            "out_channels": bond_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["b2a"] = {
-            "in_feats": bond_in,
-            "out_feats": atom_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": bond_in,
+            "out_channels": atom_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["a2g"] = {
-            "in_feats": atom_in,
-            "out_feats": global_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": atom_in,
+            "out_channels": global_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["b2g"] = {
-            "in_feats": bond_in,
-            "out_feats": global_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": bond_in,
+            "out_channels": global_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["g2a"] = {
-            "in_feats": global_in,
-            "out_feats": atom_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": global_in,
+            "out_channels": atom_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["g2b"] = {
-            "in_feats": global_in,
-            "out_feats": bond_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": global_in,
+            "out_channels": bond_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["a2a"] = {
-            "in_feats": atom_in,
-            "out_feats": atom_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": atom_in,
+            "out_channels": atom_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["b2b"] = {
-            "in_feats": bond_in,
-            "out_feats": bond_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": bond_in,
+            "out_channels": bond_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
         layer_args["g2g"] = {
-            "in_feats": global_in,
-            "out_feats": global_out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": global_in,
+            "out_channels": global_out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": False,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
-
-        # print("layer args: ", layer_args)
 
     return layer_args
 
@@ -625,16 +614,16 @@ def get_layer_args_homo(
 
         out = hparams.hidden_size
 
+        # PyG GATConv: in_channels, out_channels, heads, dropout, add_self_loops, bias, residual, concat
         layer_args["conv"] = {
-            "in_feats": in_feats,
-            "out_feats": out,
-            "num_heads": num_heads,
-            "feat_drop": hparams.feat_drop,
-            "attn_drop": hparams.attn_drop,
-            "residual": hparams.residual,
-            "allow_zero_in_degree": True,
+            "in_channels": in_feats,
+            "out_channels": out,
+            "heads": num_heads,
+            "dropout": hparams.feat_drop,
+            "add_self_loops": True,
             "bias": hparams.bias,
-            "activation": activation,
+            "residual": hparams.residual,
+            "concat": True,
         }
 
     elif hparams.conv_fn == "GraphSAGE":
@@ -648,14 +637,13 @@ def get_layer_args_homo(
 
         out = hparams.hidden_size
 
+        # PyG SAGEConv: in_channels, out_channels, aggr, normalize, bias
         layer_args["conv"] = {
-            "in_feats": in_feats,
-            "out_feats": out,
-            "aggregator_type": hparams.aggregator_type,
+            "in_channels": in_feats,
+            "out_channels": out,
+            "aggr": hparams.aggregator_type,
+            "normalize": False,
             "bias": hparams.bias,
-            "activation": activation,
-            "feat_drop": hparams.dropout,
-            "norm": None,
         }
 
     return layer_args
@@ -686,21 +674,22 @@ def link_fmt_to_node_fmt(
     return ret_dict
 
 
-def _split_batched_output(graph: batch, value: torch.Tensor, key: str = "global"):
+def _split_batched_output(graph, value: torch.Tensor, key: str = "global"):
     """
     Split a tensor into `num_graphs` chunks, the size of each chunk equals the
-    number of bonds in the graph.
+    number of nodes of the given type in each graph.
+
+    For PyG HeteroData batches, uses torch.bincount on the batch assignment vector.
 
     Args:
-        graph (dgl.DGLGraph): Batched graph.
+        graph: PyG Batch (HeteroData).
         value (torch.Tensor): Tensor to be split.
-        key (str): Key for the graph.
+        key (str): Node type key.
 
     Returns:
-        list of tensor.
+        tuple of tensor.
 
     """
-    n_nodes = graph.batch_num_nodes(key)
-    # convert to tuple
-    n_nodes = tuple(n_nodes)
+    n_nodes = torch.bincount(graph[key].batch)
+    n_nodes = tuple(n_nodes.tolist())
     return torch.split(value, n_nodes)

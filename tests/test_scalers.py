@@ -24,23 +24,23 @@ def test_log_scaler():
 
     # get the graphs at those indices
     graphs_test = [dataset_log.graphs[idx] for idx in idxs]
-    node_types_feats = list(graphs_test[0].ndata["feat"].keys())
-    node_types_labels = list(graphs_test[0].ndata["labels"].keys())
+    node_types_feats = list(graphs_test[0].node_types)
+    node_types_labels = [nt for nt in graphs_test[0].node_types if hasattr(graphs_test[0][nt], 'labels')]
 
     # get the node features at those indices
-    scaled_node_feats = deepcopy([graph.ndata["feat"] for graph in graphs_test])
+    scaled_node_feats = deepcopy([{nt: graph[nt].feat for nt in graph.node_types} for graph in graphs_test])
     # get the targets at those indices
-    scaled_target_feats = deepcopy([graph.ndata["labels"] for graph in graphs_test])
+    scaled_target_feats = deepcopy([{nt: graph[nt].labels for nt in graph.node_types if hasattr(graph[nt], 'labels')} for graph in graphs_test])
 
     # graphs_unscaled = feat_scaler.inverse(graphs_test)
     # graphs_unscaled = label_scaler.inverse(graphs_unscaled)
     graphs_unscaled = dataset_log.unscale_features(graphs_test)
     graphs_unscaled = dataset_log.unscale_targets(graphs_unscaled)
     # get the node features at those indices
-    unscaled_node_feats = deepcopy([graph.ndata["feat"] for graph in graphs_unscaled])
+    unscaled_node_feats = deepcopy([{nt: graph[nt].feat for nt in graph.node_types} for graph in graphs_unscaled])
     # get the targets at those indices
     unscaled_target_feats = deepcopy(
-        [graph.ndata["labels"] for graph in graphs_unscaled]
+        [{nt: graph[nt].labels for nt in graph.node_types if hasattr(graph[nt], 'labels')} for graph in graphs_unscaled]
     )
 
     # test forward scaling - feats
@@ -96,13 +96,13 @@ def test_standard_scaler():
     idxs = np.random.choice(len(dataset_standard), 10, replace=False)
     # get the graphs at those indices
     graphs_test = [dataset_standard.graphs[idx] for idx in idxs]
-    node_types_feats = list(graphs_test[0].ndata["feat"].keys())
-    node_types_labels = list(graphs_test[0].ndata["labels"].keys())
+    node_types_feats = list(graphs_test[0].node_types)
+    node_types_labels = [nt for nt in graphs_test[0].node_types if hasattr(graphs_test[0][nt], 'labels')]
 
     # get the node features at those indices
-    scaled_node_feats = deepcopy([graph.ndata["feat"] for graph in graphs_test])
+    scaled_node_feats = deepcopy([{nt: graph[nt].feat for nt in graph.node_types} for graph in graphs_test])
     # get the targets at those indices
-    scaled_target_feats = deepcopy([graph.ndata["labels"] for graph in graphs_test])
+    scaled_target_feats = deepcopy([{nt: graph[nt].labels for nt in graph.node_types if hasattr(graph[nt], 'labels')} for graph in graphs_test])
 
     feat_scaler = dataset_standard.feature_scalers[0]
     label_scaler = dataset_standard.label_scalers[0]
@@ -112,10 +112,10 @@ def test_standard_scaler():
     # graphs_unscaled = label_scaler.inverse(graphs_unscaled)
     graphs_unscaled = dataset_standard.unscale_targets(graphs_unscaled)
     # get the node features at those indices
-    unscaled_node_feats = deepcopy([graph.ndata["feat"] for graph in graphs_unscaled])
+    unscaled_node_feats = deepcopy([{nt: graph[nt].feat for nt in graph.node_types} for graph in graphs_unscaled])
     # get the targets at those indices
     unscaled_target_feats = deepcopy(
-        [graph.ndata["labels"] for graph in graphs_unscaled]
+        [{nt: graph[nt].labels for nt in graph.node_types if hasattr(graph[nt], 'labels')} for graph in graphs_unscaled]
     )
 
     for feat_ind in range(len(unscaled_target_feats)):
@@ -162,13 +162,13 @@ def test_standard_log_scaler():
     idxs = np.random.choice(len(dataset_standard_log), 10, replace=False)
     # get the graphs at those indices
     graphs_test = [dataset_standard_log.graphs[idx] for idx in idxs]
-    node_types_feats = list(graphs_test[0].ndata["feat"].keys())
-    node_types_labels = list(graphs_test[0].ndata["labels"].keys())
+    node_types_feats = list(graphs_test[0].node_types)
+    node_types_labels = [nt for nt in graphs_test[0].node_types if hasattr(graphs_test[0][nt], 'labels')]
 
     # get the node features at those indices
-    scaled_node_feats = deepcopy([graph.ndata["feat"] for graph in graphs_test])
+    scaled_node_feats = deepcopy([{nt: graph[nt].feat for nt in graph.node_types} for graph in graphs_test])
     # get the targets at those indices
-    scaled_target_feats = deepcopy([graph.ndata["labels"] for graph in graphs_test])
+    scaled_target_feats = deepcopy([{nt: graph[nt].labels for nt in graph.node_types if hasattr(graph[nt], 'labels')} for graph in graphs_test])
 
     feat_scalers = dataset_standard_log.feature_scalers
     label_scalers = dataset_standard_log.label_scalers
@@ -180,10 +180,10 @@ def test_standard_log_scaler():
     # graphs_unscaled = label_scalers[1].inverse(graphs_unscaled)
 
     # get the node features at those indices
-    unscaled_node_feats = deepcopy([graph.ndata["feat"] for graph in graphs_unscaled])
+    unscaled_node_feats = deepcopy([{nt: graph[nt].feat for nt in graph.node_types} for graph in graphs_unscaled])
     # get the targets at those indices
     unscaled_target_feats = deepcopy(
-        [graph.ndata["labels"] for graph in graphs_unscaled]
+        [{nt: graph[nt].labels for nt in graph.node_types if hasattr(graph[nt], 'labels')} for graph in graphs_unscaled]
     )
 
     for feat_ind in range(len(unscaled_node_feats)):
@@ -591,5 +591,3 @@ def test_iterative_standard_scaler_merge():
         ), "feature std not equal"
 
 
-# test_iterative_standard_scaler()
-# test_iterative_standard_scaler_merge()

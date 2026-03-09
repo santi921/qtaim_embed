@@ -1,4 +1,4 @@
-# baseline GNN model for node-level regression
+# baseline GNN model for graph-level regression
 from copy import deepcopy
 import torch
 import torch.nn as nn
@@ -6,11 +6,10 @@ import torch.nn.functional as F
 from torch.optim import lr_scheduler
 
 import pytorch_lightning as pl
-import dgl.nn.pytorch as dglnn
+from torch_geometric.nn import HeteroConv, GATConv
+from torch_geometric.data import HeteroData
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
-from dgl.nn.pytorch import GATConv
-from dgl import DGLHeteroGraph
 
 from qtaim_embed.utils.models import (
     get_layer_args,
@@ -28,6 +27,7 @@ from qtaim_embed.models.layers import (
     GlobalAttentionPoolingThenCat,
     MeanPoolingThenCat,
     WeightAndMeanThenCat,
+    EDGE_TYPE_MAP,
 )
 
 from typing import List, Tuple, Dict, Optional
@@ -195,32 +195,21 @@ class GCNGraphPred(pl.LightningModule):
 
         self.conv_layers = nn.ModuleList()
 
+        # All short edge type names used for building HeteroConv dicts
+        edge_types = ["a2b", "b2a", "a2g", "g2a", "b2g", "g2b", "a2a", "b2b", "g2g"]
+
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             for i in range(self.hparams.n_conv_layers):
-                # embedding_in = False
-                # if i == 0:
-                # embedding_in = True
-
                 layer_args = get_layer_args(
                     self.hparams, i, activation=self.activation, embedding_in=True
                 )
-                # print("resid layer args", layer_args)
 
+                conv_dict = {
+                    EDGE_TYPE_MAP[et]: GraphConvDropoutBatch(**layer_args[et])
+                    for et in edge_types
+                }
                 self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
-                        {
-                            "a2b": GraphConvDropoutBatch(**layer_args["a2b"]),
-                            "b2a": GraphConvDropoutBatch(**layer_args["b2a"]),
-                            "a2g": GraphConvDropoutBatch(**layer_args["a2g"]),
-                            "g2a": GraphConvDropoutBatch(**layer_args["g2a"]),
-                            "b2g": GraphConvDropoutBatch(**layer_args["b2g"]),
-                            "g2b": GraphConvDropoutBatch(**layer_args["g2b"]),
-                            "a2a": GraphConvDropoutBatch(**layer_args["a2a"]),
-                            "b2b": GraphConvDropoutBatch(**layer_args["b2b"]),
-                            "g2g": GraphConvDropoutBatch(**layer_args["g2g"]),
-                        },
-                        aggregate=self.hparams.aggregate,
-                    )
+                    HeteroConv(conv_dict, aggr=self.hparams.aggregate)
                 )
 
         elif self.hparams.conv_fn == "ResidualBlock":
@@ -262,29 +251,16 @@ class GCNGraphPred(pl.LightningModule):
 
         elif self.hparams.conv_fn == "GATConv":
             for i in range(self.hparams.n_conv_layers):
-
-                embedding_in = True
-
                 layer_args = get_layer_args(
                     self.hparams, i, activation=self.activation, embedding_in=True
                 )
-                # print("resid layer args", layer_args)
 
+                conv_dict = {
+                    EDGE_TYPE_MAP[et]: GATConv(**layer_args[et])
+                    for et in edge_types
+                }
                 self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
-                        {
-                            "a2b": GATConv(**layer_args["a2b"]),
-                            "b2a": GATConv(**layer_args["b2a"]),
-                            "a2g": GATConv(**layer_args["a2g"]),
-                            "g2a": GATConv(**layer_args["g2a"]),
-                            "b2g": GATConv(**layer_args["b2g"]),
-                            "g2b": GATConv(**layer_args["g2b"]),
-                            "a2a": GATConv(**layer_args["a2a"]),
-                            "b2b": GATConv(**layer_args["b2b"]),
-                            "g2g": GATConv(**layer_args["g2g"]),
-                        },
-                        aggregate=self.hparams.aggregate,
-                    )
+                    HeteroConv(conv_dict, aggr=self.hparams.aggregate)
                 )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
@@ -295,16 +271,18 @@ class GCNGraphPred(pl.LightningModule):
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             conv_out_size = {}
-            for k, v in self.conv_layers[-1].mods.items():
-                conv_out_size[k] = v.out_feats
+            for triplet_key, conv_module in self.conv_layers[-1].convs.items():
+                short_name = triplet_key[1]  # e.g., ("atom", "a2b", "bond") -> "a2b"
+                conv_out_size[short_name] = conv_module.out_feats
 
         elif self.hparams.conv_fn == "ResidualBlock":
             conv_out_size = self.conv_layers[-1].out_feats
 
         elif self.hparams.conv_fn == "GATConv":
             conv_out_size = {}
-            for k, v in self.conv_layers[-1].mods.items():
-                conv_out_size[k] = v._out_feats
+            for triplet_key, conv_module in self.conv_layers[-1].convs.items():
+                short_name = triplet_key[1]
+                conv_out_size[short_name] = conv_module.out_channels
 
         self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
 
@@ -423,13 +401,28 @@ class GCNGraphPred(pl.LightningModule):
             else self.compiled_forward
         )
 
-    def compiled_forward(self, graph: DGLHeteroGraph, feat: dict, eweight: str = None):
-        # print("graph type: ", type(graph))
-        # print("feat type: ", type(feat))
+    def compiled_forward(self, graph: HeteroData, feat: dict):
+        """
+        Core forward computation.
 
+        Args:
+            graph: PyG HeteroData batch containing edge_index for each edge type
+                and batch vectors for each node type.
+            feat: dict mapping node type names to feature tensors.
+        """
         feats = self.embedding(feat)
+
+        # Build edge_index_dict with triplet keys from the PyG HeteroData batch
+        edge_index_dict = {
+            et: graph[et].edge_index
+            for et in graph.edge_types
+        }
+
         for ind, conv in enumerate(self.conv_layers):
-            feats = conv(graph, feats)
+            if self.hparams.conv_fn == "ResidualBlock":
+                feats = conv(feats, edge_index_dict)
+            else:
+                feats = conv(feats, edge_index_dict)
 
             if self.hparams.conv_fn == "GATConv":
                 reshaped_feats = {}
@@ -437,29 +430,35 @@ class GCNGraphPred(pl.LightningModule):
                     if ind < self.hparams.n_conv_layers - 1:
                         reshaped_feats[k] = v.view(
                             v.size(0),
-                            -1,
                             self.hparams.num_heads * self.hparams.hidden_size,
                         )
                     else:
                         reshaped_feats[k] = v.view(
-                            v.size(0), -1, self.hparams.input_size[k]
+                            v.size(0), self.conv_out_size[k],
                         )
                 feats = reshaped_feats
 
-        readout_feats = self.readout(graph, feats)
+        # Build batch_dict for pooling layers
+        batch_dict = {
+            nt: graph[nt].batch
+            for nt in graph.node_types
+        }
+
+        readout_feats = self.readout(feats, batch_dict)
         for layer in self.fc_layers:
             readout_feats = layer(readout_feats)
 
         return readout_feats
 
-    def forward(self, graph: DGLHeteroGraph, feat: dict, eweight: str = None):
+    def forward(self, graph: HeteroData, feat: dict):
         """
-        Forward pass
+        Forward pass.
+
+        Args:
+            graph: PyG HeteroData batch.
+            feat: dict mapping node type names to feature tensors.
         """
-        # just use the compiled forward function
-        # print("graph type: ", type(graph))
-        # print("feat type: ", type(feat))
-        return self.forward_fn(graph, feat, eweight)
+        return self.forward_fn(graph, feat)
 
     def loss_function(self):
         """
@@ -511,6 +510,10 @@ class GCNGraphPred(pl.LightningModule):
 
         This is used for feature visualization to see how the model learns.
 
+        Args:
+            graph: PyG HeteroData batch.
+            feats: dict mapping node type names to feature tensors.
+
         Returns:
             dict: (layer_idx, feats), each feats is a list of
         """
@@ -527,9 +530,19 @@ class GCNGraphPred(pl.LightningModule):
 
         layer_idx += 1
 
+        # Build edge_index_dict with triplet keys from the PyG HeteroData batch
+        edge_index_dict = {
+            et: graph[et].edge_index
+            for et in graph.edge_types
+        }
+
         # gated layer
         for layer in self.conv_layers[:-1]:
-            feats = layer(graph, feats)
+            if self.hparams.conv_fn == "ResidualBlock":
+                feats = layer(feats, edge_index_dict)
+            else:
+                feats = layer(feats, edge_index_dict)
+
             # store bond feature of each molecule
             bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
 
@@ -543,10 +556,13 @@ class GCNGraphPred(pl.LightningModule):
     def shared_step(self, batch: tuple, mode: str, scalers: Optional[list] = None):
 
         batch_graph, batch_label = batch
-        # print("batch label: ", batch_label)
-        logits = self.forward(
-            batch_graph, batch_graph.ndata["feat"]
-        )  # returns a dict of node types
+        # Extract node features from PyG HeteroData batch
+        feat_dict = {
+            nt: batch_graph[nt].feat
+            for nt in batch_graph.node_types
+            if hasattr(batch_graph[nt], "feat")
+        }
+        logits = self.forward(batch_graph, feat_dict)
         labels = batch_label["global"]
         # print("labels shape: ", labels.shape)
         # print("logits shape: ", logits.shape)
@@ -661,26 +677,55 @@ class GCNGraphPred(pl.LightningModule):
         Compute metrics using torchmetrics interfaces
         """
 
+        _nan = torch.tensor([float("nan")])
+
         if mode == "train":
-            r2 = self.train_r2.compute()
-            torch_l1 = self.train_torch_l1.compute()
-            torch_mse = self.train_torch_mse.compute()
+            try:
+                r2 = self.train_r2.compute()
+            except ValueError:
+                r2 = _nan
+            try:
+                torch_l1 = self.train_torch_l1.compute()
+            except ValueError:
+                torch_l1 = _nan
+            try:
+                torch_mse = self.train_torch_mse.compute()
+            except ValueError:
+                torch_mse = _nan
             self.train_r2.reset()
             self.train_torch_l1.reset()
             self.train_torch_mse.reset()
 
         elif mode == "val":
-            r2 = self.val_r2.compute()
-            torch_l1 = self.val_torch_l1.compute()
-            torch_mse = self.val_torch_mse.compute()
+            try:
+                r2 = self.val_r2.compute()
+            except ValueError:
+                r2 = _nan
+            try:
+                torch_l1 = self.val_torch_l1.compute()
+            except ValueError:
+                torch_l1 = _nan
+            try:
+                torch_mse = self.val_torch_mse.compute()
+            except ValueError:
+                torch_mse = _nan
             self.val_r2.reset()
             self.val_torch_l1.reset()
             self.val_torch_mse.reset()
 
         elif mode == "test":
-            r2 = self.test_r2.compute()
-            torch_l1 = self.test_torch_l1.compute()
-            torch_mse = self.test_torch_mse.compute()
+            try:
+                r2 = self.test_r2.compute()
+            except ValueError:
+                r2 = _nan
+            try:
+                torch_l1 = self.test_torch_l1.compute()
+            except ValueError:
+                torch_l1 = _nan
+            try:
+                torch_mse = self.test_torch_mse.compute()
+            except ValueError:
+                torch_mse = _nan
             self.test_r2.reset()
             self.test_torch_l1.reset()
             self.test_torch_mse.reset()
@@ -719,6 +764,7 @@ class GCNGraphPred(pl.LightningModule):
 
         return scheduler
 
+    @torch.no_grad()
     def evaluate_manually(self, dataloader, scaler_list, per_atom=False):
         """
         Evaluate a set of data manually
@@ -736,8 +782,13 @@ class GCNGraphPred(pl.LightningModule):
         self.eval()
 
         for batch_graph, batched_labels in dataloader:
-
-            preds = self.forward(batch_graph, batch_graph.ndata["feat"])
+            # Extract node features from PyG HeteroData batch
+            feat_dict = {
+                nt: batch_graph[nt].feat
+                for nt in batch_graph.node_types
+                if hasattr(batch_graph[nt], "feat")
+            }
+            preds = self.forward(batch_graph, feat_dict)
             preds_raw = deepcopy(preds.detach())
             labels_raw = deepcopy(batched_labels)["global"]
 
@@ -745,7 +796,7 @@ class GCNGraphPred(pl.LightningModule):
             labels_list_raw.append(labels_raw)
 
             if per_atom:
-                n_atoms = batch_graph.batch_num_nodes("atom")
+                n_atoms = torch.bincount(batch_graph["atom"].batch)
                 n_atom_list.append(n_atoms)
 
         preds_raw = torch.cat(preds_list_raw, dim=0)

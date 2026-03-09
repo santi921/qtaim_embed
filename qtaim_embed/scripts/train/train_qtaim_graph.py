@@ -51,7 +51,8 @@ def main(argv=None):
     if config is None:
         config = get_default_graph_level_config()
     else:
-        config = json.load(open(config, "r"))
+        with open(config, "r") as f:
+            config = json.load(f)
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir

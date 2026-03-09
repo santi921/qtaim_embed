@@ -910,7 +910,7 @@ class LMDBLinkDataModule(pl.LightningDataModule):
 
             self.val_dl = DataLoaderLinkLMDB(
                 dataset=self.val_ds,
-                batch_size=len(self.val_ds),
+                batch_size=self.config["optim"]["train_batch_size"],
                 shuffle=False,
                 num_workers=self.config["optim"]["num_workers"],
             )
@@ -919,9 +919,10 @@ class LMDBLinkDataModule(pl.LightningDataModule):
             self.node_len = ft.shape[1]
 
         if stage in ("test", "predict"):
+            self.test_ds = self.test_dataset
             self.test_dl = DataLoaderLinkLMDB(
                 dataset=self.test_ds,
-                batch_size=len(self.test_ds),
+                batch_size=self.config["optim"]["train_batch_size"],
                 shuffle=False,
                 num_workers=self.config["optim"]["num_workers"],
             )

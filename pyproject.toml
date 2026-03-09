@@ -38,6 +38,7 @@ qtaim-embed-bayes-opt-graph-classifier = "qtaim_embed.scripts.train.bayes_opt_gr
 qtaim-embed-data-summary = "qtaim_embed.scripts.vis.data_summary:main"
 qtaim-embed-mol2lmdb = "qtaim_embed.scripts.helpers.mol2lmdb:main"
 qtaim-embed-mol2lmdb-node = "qtaim_embed.scripts.helpers.mol2lmdb_node:main"
+qtaim-embed-train-link = "qtaim_embed.scripts.train.train_qtaim_link:main"
 
 # Optional: add project URLs
 [project.urls]

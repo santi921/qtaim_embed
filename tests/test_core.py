@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import torch
+from pathlib import Path
+
 
 from qtaim_embed.core.datamodule import (
     QTAIMNodeTaskDataModule,
@@ -13,6 +15,9 @@ from qtaim_embed.utils.data import (
     get_default_graph_level_config,
 )
 
+# get root dir for repo 
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+DATA_DIR = PROJECT_ROOT / "tests" / "data"
 
 def test_classifier_dataset():
     # test single class
@@ -36,8 +41,8 @@ def test_classifier_dataset():
         "SR-p53",
     ]
     target_multi = ["NR-AR", "SR-p53"]
-
-    df = pd.read_pickle("./data/test_classifier_labelled.pkl")
+    
+    df = pd.read_pickle(str(DATA_DIR / "test_classifier_labelled.pkl"))
     list_target_single = df[target_single].values.tolist()
     list_target_multi = df[target_multi].values.tolist()
     # find the number of classes
@@ -58,7 +63,7 @@ def test_classifier_dataset():
     assert len_dataset_multi == 100 - nan_count_multi, "Dataset size mismatch"
     ind_check_shift = 0
     for ind, graph in enumerate(dataset_single.graphs):
-        label_single = graph.ndata["labels"]["global"]
+        label_single = graph["global"].labels
         check_val = list_target_single[ind + ind_check_shift]
         un_one_hot = torch.argmax(label_single[0], dim=1)
         if not np.isnan(check_val[0]):
@@ -70,7 +75,7 @@ def test_classifier_dataset():
 
     graph_ind = 0
     for ind, check_vals_raw in enumerate(list_target_multi):
-        label_multi = dataset_multi.graphs[graph_ind].ndata["labels"]["global"]
+        label_multi = dataset_multi.graphs[graph_ind]["global"].labels
         check_vals = [i for i in check_vals_raw]
         if not np.isnan(np.array(check_vals)).any():
             check_vals = [int(i) for i in check_vals_raw]
@@ -87,7 +92,7 @@ def test_node_datamodule():
     # print(config)
     config["dataset"]["allowed_charges"] = [0, 1, -1]
     config["dataset"]["allowed_spins"] = [1, 2, 3]
-    config["dataset"]["train_dataset_loc"] = "./data/labelled_spin_charge.pkl"
+    config["dataset"]["train_dataset_loc"] = str(DATA_DIR / "labelled_spin_charge.pkl")
     config["dataset"]["extra_keys"]["global"] = ["charge", "spin"]
     config["dataset"]["edge_dropout"] = None
     config["dataset"]["element_set"] = []

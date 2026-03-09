@@ -92,16 +92,16 @@ def test_write_chunked():
     train_lmdb = LMDBMoleculeDataset({"src": "./data/lmdb/train_chunk/"})
     # compare tensors
     assert torch.equal(
-        TransformMol(train_lmdb.__getitem__(27)).ndata["labels"]["global"],
-        dm.train_dataset[27].ndata["labels"]["global"],
+        TransformMol(train_lmdb.__getitem__(27))["global"].labels,
+        dm.train_dataset[27]["global"].labels,
     )
     assert torch.equal(
-        TransformMol(train_lmdb.__getitem__(2)).ndata["labels"]["global"],
-        dm.train_dataset[2].ndata["labels"]["global"],
+        TransformMol(train_lmdb.__getitem__(2))["global"].labels,
+        dm.train_dataset[2]["global"].labels,
     )
     assert torch.equal(
-        TransformMol(train_lmdb.__getitem__(40)).ndata["labels"]["global"],
-        dm.train_dataset[40].ndata["labels"]["global"],
+        TransformMol(train_lmdb.__getitem__(40))["global"].labels,
+        dm.train_dataset[40]["global"].labels,
     )
     assert train_lmdb.__len__() == train_dl_size
 
@@ -161,7 +161,8 @@ def test_multi_out():
         break
 
 
-def test_model_lmdb():
+def test_model_lmdb(device_config):
+    """Test LMDB model with automatic device selection (CPU or single GPU)."""
     config = get_default_graph_level_config()
 
     config["dataset"] = {
@@ -190,18 +191,19 @@ def test_model_lmdb():
 
     trainer = pl.Trainer(
         max_epochs=1,
-        accelerator="auto",
+        **device_config,
         enable_progress_bar=True,
-        strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
         precision=16,
+        log_every_n_steps=1,
     )
 
     trainer.fit(model, dl)
 
 
-def test_model_lmdb_multi_file():
+def test_model_lmdb_multi_file(device_config):
+    """Test LMDB model with multi-file dataset and automatic device selection."""
     config = get_default_graph_level_config()
 
     config["dataset"] = {
@@ -230,12 +232,12 @@ def test_model_lmdb_multi_file():
 
     trainer = pl.Trainer(
         max_epochs=1,
-        accelerator="auto",
+        **device_config,
         enable_progress_bar=True,
-        strategy="auto",
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
         precision=16,
+        log_every_n_steps=1,
     )
 
     trainer.fit(model, dl)

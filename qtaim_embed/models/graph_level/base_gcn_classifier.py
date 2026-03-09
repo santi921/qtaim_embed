@@ -1,4 +1,4 @@
-# baseline GNN model for node-level regression
+# baseline GNN model for graph-level classification
 from copy import deepcopy
 import numpy as np
 import torch
@@ -7,10 +7,10 @@ import torch.nn.functional as F
 from torch.optim import lr_scheduler
 
 import pytorch_lightning as pl
-import dgl.nn.pytorch as dglnn
+from torch_geometric.nn import HeteroConv, GATConv
+from torch_geometric.data import HeteroData, Batch
 from torchmetrics.wrappers import MultioutputWrapper
 import torchmetrics
-from dgl.nn.pytorch import GATConv
 
 from qtaim_embed.utils.models import (
     get_layer_args,
@@ -29,6 +29,7 @@ from qtaim_embed.models.layers import (
     MeanPoolingThenCat,
     WeightAndMeanThenCat,
     MultitaskLinearSoftmax,
+    EDGE_TYPE_MAP,
 )
 
 
@@ -213,19 +214,12 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
+                    HeteroConv(
                         {
-                            "a2b": GraphConvDropoutBatch(**layer_args["a2b"]),
-                            "b2a": GraphConvDropoutBatch(**layer_args["b2a"]),
-                            "a2g": GraphConvDropoutBatch(**layer_args["a2g"]),
-                            "g2a": GraphConvDropoutBatch(**layer_args["g2a"]),
-                            "b2g": GraphConvDropoutBatch(**layer_args["b2g"]),
-                            "g2b": GraphConvDropoutBatch(**layer_args["g2b"]),
-                            "a2a": GraphConvDropoutBatch(**layer_args["a2a"]),
-                            "b2b": GraphConvDropoutBatch(**layer_args["b2b"]),
-                            "g2g": GraphConvDropoutBatch(**layer_args["g2g"]),
+                            EDGE_TYPE_MAP[et]: GraphConvDropoutBatch(**layer_args[et])
+                            for et in EDGE_TYPE_MAP
                         },
-                        aggregate=self.hparams.aggregate,
+                        aggr=self.hparams.aggregate,
                     )
                 )
 
@@ -282,19 +276,12 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 # print("resid layer args", layer_args)
 
                 self.conv_layers.append(
-                    dglnn.HeteroGraphConv(
+                    HeteroConv(
                         {
-                            "a2b": GATConv(**layer_args["a2b"]),
-                            "b2a": GATConv(**layer_args["b2a"]),
-                            "a2g": GATConv(**layer_args["a2g"]),
-                            "g2a": GATConv(**layer_args["g2a"]),
-                            "b2g": GATConv(**layer_args["b2g"]),
-                            "g2b": GATConv(**layer_args["g2b"]),
-                            "a2a": GATConv(**layer_args["a2a"]),
-                            "b2b": GATConv(**layer_args["b2b"]),
-                            "g2g": GATConv(**layer_args["g2g"]),
+                            EDGE_TYPE_MAP[et]: GATConv(**layer_args[et])
+                            for et in EDGE_TYPE_MAP
                         },
-                        aggregate=self.hparams.aggregate,
+                        aggr=self.hparams.aggregate,
                     )
                 )
 
@@ -306,16 +293,18 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         if self.hparams.conv_fn == "GraphConvDropoutBatch":
             conv_out_size = {}
-            for k, v in self.conv_layers[-1].mods.items():
-                conv_out_size[k] = v.out_feats
+            for triplet_key, conv_module in self.conv_layers[-1].convs.items():
+                short_name = triplet_key[1]  # e.g., ("atom", "a2b", "bond") -> "a2b"
+                conv_out_size[short_name] = conv_module.out_feats
 
         elif self.hparams.conv_fn == "ResidualBlock":
             conv_out_size = self.conv_layers[-1].out_feats
 
         elif self.hparams.conv_fn == "GATConv":
             conv_out_size = {}
-            for k, v in self.conv_layers[-1].mods.items():
-                conv_out_size[k] = v._out_feats
+            for triplet_key, conv_module in self.conv_layers[-1].convs.items():
+                short_name = triplet_key[1]
+                conv_out_size[short_name] = conv_module.out_channels
 
         # print("conv out raw", conv_out_size)
         self.conv_out_size = link_fmt_to_node_fmt(conv_out_size)
@@ -453,9 +442,18 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
 
         feats = self.embedding(inputs)
+
+        # Extract edge_index_dict from PyG HeteroData
+        edge_index_dict = {
+            key: graph[key].edge_index
+            for key in graph.edge_types
+        }
+
         for ind, conv in enumerate(self.conv_layers):
-            # print("conv layer", ind)
-            feats = conv(graph, feats)
+            if self.hparams.conv_fn == "ResidualBlock":
+                feats = conv(feats, edge_index_dict)
+            else:
+                feats = conv(feats, edge_index_dict)
             if self.hparams.conv_fn == "GATConv":
                 if ind < self.hparams.n_conv_layers - 1:
                     for k, v in feats.items():
@@ -466,11 +464,16 @@ class GCNGraphPredClassifier(pl.LightningModule):
                     for k, v in feats.items():
                         feats[k] = v.reshape(-1, self.hparams.input_size[k])
 
-        readout_feats = self.readout(graph, feats)
+        # Build batch_dict for pooling
+        batch_dict = {
+            key: graph[key].batch
+            for key in graph.node_types
+        }
+
+        readout_feats = self.readout(feats, batch_dict)
         for ind, layer in enumerate(self.fc_layers):
             readout_feats = layer(readout_feats)
 
-        # print("preds shape:", readout_feats.shape)
         return readout_feats
 
     def loss_function(self):
@@ -502,7 +505,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             return loss / int(self.hparams.ntasks)
         return self.loss(target=target, input=pred)
 
-    def feature_at_each_layer(model, graph, feats):
+    def feature_at_each_layer(self, graph, feats):
         """
         Get the features at each layer before the final fully-connected layer.
 
@@ -515,7 +518,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         layer_idx = 0
         atom_feats, bond_feats, global_feats = {}, {}, {}
 
-        feats = model.embedding(feats)
+        feats = self.embedding(feats)
         bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
         atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
         global_feats[layer_idx] = _split_batched_output(
@@ -524,9 +527,18 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         layer_idx += 1
 
+        # Extract edge_index_dict from PyG HeteroData
+        edge_index_dict = {
+            key: graph[key].edge_index
+            for key in graph.edge_types
+        }
+
         # gated layer
-        for layer in model.conv_layers[:-1]:
-            feats = layer(graph, feats)
+        for layer in self.conv_layers[:-1]:
+            if self.hparams.conv_fn == "ResidualBlock":
+                feats = layer(feats, edge_index_dict)
+            else:
+                feats = layer(feats, edge_index_dict)
             # store bond feature of each molecule
             bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
 
@@ -541,7 +553,9 @@ class GCNGraphPredClassifier(pl.LightningModule):
         batch_graph, batch_label = batch
         labels = batch_label["global"]
         labels_one_hot = torch.argmax(labels, axis=2)
-        logits = self.forward(batch_graph, batch_graph.ndata["feat"])
+        # Extract node features from PyG HeteroData
+        x_dict = {ntype: batch_graph[ntype].feat for ntype in batch_graph.node_types}
+        logits = self.forward(batch_graph, x_dict)
         logits_one_hot = torch.argmax(logits, axis=-1)
 
         if self.hparams.ntasks < 2:
@@ -683,6 +697,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         return scheduler
 
+    @torch.no_grad()
     def evaluate_manually(self, batch):
         """
         Evaluate a set of data manually
@@ -694,7 +709,9 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         labels = batch_label["global"]
         labels_one_hot = torch.argmax(labels, axis=2)
-        logits = self.forward(batch_graph, batch_graph.ndata["feat"])
+        # Extract node features from PyG HeteroData
+        x_dict = {ntype: batch_graph[ntype].feat for ntype in batch_graph.node_types}
+        logits = self.forward(batch_graph, x_dict)
         logits_one_hot = torch.argmax(logits, axis=-1)
 
         if self.hparams.ntasks > 1:
