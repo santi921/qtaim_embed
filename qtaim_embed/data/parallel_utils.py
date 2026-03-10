@@ -55,13 +55,13 @@ def serialize_graph_worker(args_tuple):
     """
     Worker function for parallel graph serialization (LMDB conversion only).
 
-    This function serializes DGL graphs to bytes for storage in LMDB.
+    This function serializes PyG graphs to bytes for storage in LMDB.
     Must be at module level for multiprocessing pickling.
 
     Args:
         args_tuple: Tuple containing:
             - idx: Integer index for maintaining ordering
-            - graph: DGL graph to serialize
+            - graph: PyG HeteroData graph to serialize
 
     Returns:
         Tuple of (idx, serialized_bytes) on success, or

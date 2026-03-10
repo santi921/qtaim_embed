@@ -86,7 +86,7 @@ Molecules are represented as heterogeneous graphs with three node types:
 ### Model Components
 
 - **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`
-- **Global pooling**: `SumPoolingThenCat`, `MeanPoolingThenCat`, `WeightAndSumThenCat`, `GlobalAttentionPoolingThenCat`, `Set2SetThenCat`
+- **Global pooling**: `SumPoolingThenCat`, `MeanPoolingThenCat`, `WeightAndSumThenCat`, `WeightAndMeanThenCat`, `GlobalAttentionPoolingThenCat`, `Set2SetThenCat`
 - **Scalers**: `HeteroGraphStandardScaler`, `HeteroGraphLogMagnitudeScaler`
 
 ## Configuration System
@@ -229,7 +229,7 @@ qtaim-embed-bayes-opt-graph \
 **Core:**
 - Python 3.11
 - PyTorch 2.4.1 (CUDA 12.4)
-- DGL (Deep Graph Library)
+- PyTorch Geometric (PyG)
 - PyTorch Lightning
 
 **Chemistry:**
@@ -274,9 +274,9 @@ qtaim-embed-bayes-opt-graph \
 1. **Input**: Molecular structures (RDKit molecules in pickle files)
 2. **Wrapping**: Convert to `MoleculeWrapper` objects with metadata
 3. **Featurization**: Generate atom, bond, and global features
-4. **Graph Construction**: Build heterogeneous DGL graphs
+4. **Graph Construction**: Build heterogeneous PyG graphs
 5. **Scaling**: Normalize features (standard/log scales)
-6. **Batching**: Collate multiple graphs into batched DGL graphs
+6. **Batching**: Collate multiple graphs into batched PyG graphs
 7. **Model Prediction**: Pass through GNN layers with message passing
 8. **Pooling**: Aggregate node features to graph-level predictions
 9. **Loss & Optimization**: Compute loss, backpropagate, update weights

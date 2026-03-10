@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def _get_ndata(graph: HeteroData, key: str) -> Dict[str, torch.Tensor]:
     """
-    Helper to get a feature dict from PyG HeteroData, equivalent to DGL's g.ndata[key].
+    Helper to get a feature dict from PyG HeteroData.
     Returns a dict mapping node type -> tensor for all node types that have the attribute.
     """
     return {
@@ -36,7 +36,7 @@ def _get_ndata(graph: HeteroData, key: str) -> Dict[str, torch.Tensor]:
 
 def _set_ndata(graph: HeteroData, key: str, data_dict: Dict[str, torch.Tensor]) -> None:
     """
-    Helper to set a feature dict on PyG HeteroData, equivalent to DGL's g.ndata[key] = dict.
+    Helper to set a feature dict on PyG HeteroData.
     Sets the attribute on each node type present in data_dict.
     """
     for nt, tensor in data_dict.items():

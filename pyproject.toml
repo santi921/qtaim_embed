@@ -55,15 +55,14 @@ channels = ["conda-forge", "defaults"]
 # Custom pip dependencies or indexes can be specified here for documentation purposes.
 # To install with CUDA 12.4, use:
 # pip install torch==2.4.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu124
-# pip install dgl --index-url https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html
+# pip install torch_geometric torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
 dependencies = [
     "torch==2.4.1",
-    "dgl"
+    "torch_geometric"
 ]
 # The following index URLs are informational; pip only supports one --index-url per install command.
 # Use the appropriate index URL for each package as needed.
 index-urls = [
     "https://download.pytorch.org/whl/cu124",
-    "https://data.dgl.ai/wheels/torch-2.4/cu124/repo.html"
 ]
 

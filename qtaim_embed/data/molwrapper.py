@@ -24,7 +24,7 @@ def mol_wrappers_from_df(
     Creates a list of MoleculeWrapper objects from a dataframe
     Takes:
         df: dataframe with the following columns:
-            - molecule_graph: dgl graph
+            - molecule_graph: PyG HeteroData
             - molecule: pymatgen molecule
             - ids: molecule id
             - names: molecule name
