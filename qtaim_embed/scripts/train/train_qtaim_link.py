@@ -108,9 +108,12 @@ def main(argv=None):
             dm_test = QTAIMLinkTaskDataModule(
                 config=test_config,
             )
-            dm_test.prepare_data(stage="test")
+            dm_test.setup(stage="test")
 
-    feature_names, feature_size = dm.prepare_data(stage="fit")
+    # setup() runs on all ranks (DDP-safe); prepare_data() is a no-op
+    dm.setup(stage="fit")
+    feature_names = dm.train_dataset.feature_names
+    feature_size = dm.train_dataset.feature_size
     if hasattr(dm, "node_len") and dm.node_len is not None:
         config["model"]["input_size"] = dm.node_len
     else:

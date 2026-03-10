@@ -30,8 +30,6 @@ def test_write():
     }
 
     dm = QTAIMGraphTaskDataModule(config=config_w_test)
-    feature_size, feat_name = dm.prepare_data("fit")
-    print(feature_size, feat_name)
     dm.setup("fit")
 
     train_dl_size = len(dm.train_dataset)
@@ -80,9 +78,6 @@ def test_write_chunked():
     }
 
     dm = QTAIMGraphTaskDataModule(config=config_w_test)
-
-    feature_size, feat_name = dm.prepare_data("fit")
-    print(feature_size, feat_name)
     dm.setup("fit")
     train_dl_size = len(dm.train_dataset)
 
@@ -125,7 +120,6 @@ def test_multi_out():
     ]
 
     dm = QTAIMGraphTaskDataModule(config=config_w_test)
-    feature_size, feat_name = dm.prepare_data("fit")
     dm.setup("fit")
     construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb/train/")
 
@@ -151,8 +145,6 @@ def test_multi_out():
 
     # check that the folders have been created with the correct number of files
     dm_lmdb = LMDBDataModule(config=config)
-
-    dm_lmdb.prepare_data()
     dm_lmdb.setup("fit")
     dl = dm_lmdb.train_dataloader()
 
@@ -177,16 +169,14 @@ def test_model_lmdb(device_config):
     # check that the folders have been created with the correct number of files
     config["optim"]["train_batch_size"] = 4
     dm_lmdb = LMDBDataModule(config=config)
-    feat_name, feature_size = dm_lmdb.prepare_data()
-    # print(feature_size)
+    dm_lmdb.setup("fit")
+    feature_size = dm_lmdb.train_dataset.feature_size
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
     config["model"]["target_dict"] = config["dataset"]["target_dict"]
-    # print(config["model"])
 
     model = load_graph_level_model_from_config(config["model"])
-    dm_lmdb.setup("fit")
     dl = dm_lmdb.train_dataloader()
 
     trainer = pl.Trainer(
@@ -218,16 +208,14 @@ def test_model_lmdb_multi_file(device_config):
     # check that the folders have been created with the correct number of files
     config["optim"]["train_batch_size"] = 4
     dm_lmdb = LMDBDataModule(config=config)
-    feat_name, feature_size = dm_lmdb.prepare_data()
-    print(feature_size, feat_name)
+    dm_lmdb.setup("fit")
+    feature_size = dm_lmdb.train_dataset.feature_size
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
     config["model"]["target_dict"] = config["dataset"]["target_dict"]
 
-    # print(config["model"])
     model = load_graph_level_model_from_config(config["model"])
-    dm_lmdb.setup("fit")
     dl = dm_lmdb.train_dataloader()
 
     trainer = pl.Trainer(

@@ -90,9 +90,12 @@ def main(argv=None):
             dm_test = QTAIMGraphTaskDataModule(
                 config=test_config,
             )
-            dm_test.prepare_data(stage="test")
+            dm_test.setup(stage="test")
 
-    feature_names, feature_size = dm.prepare_data(stage="fit")
+    # setup() runs on all ranks (DDP-safe); prepare_data() is a no-op
+    dm.setup(stage="fit")
+    feature_names = dm.train_dataset.feature_names
+    feature_size = dm.train_dataset.feature_size
     print(feature_names, feature_size)
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]

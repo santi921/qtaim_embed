@@ -157,7 +157,7 @@ class TrainingObject:
                     print("{}\t\t{}".format(str(kk).ljust(20), str(vv).ljust(20)))
             self.dm = QTAIMLinkTaskDataModule(config=dm_config)
 
-        feature_names, feature_size = self.dm.prepare_data(stage="fit")
+        self.dm.setup(stage="fit")
         dm_config["input_size"] = self.dm.node_len
         self.input_size = self.dm.node_len
         self.config = dm_config

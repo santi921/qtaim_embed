@@ -348,6 +348,8 @@ class LogParameters(pl.Callback):
             self.d_parameters[n] = []
 
     def on_validation_epoch_end(self, trainer, pl_module):
+        if not trainer.is_global_zero:
+            return
         if not trainer.sanity_checking:  # WARN: sanity_check is turned on by default
             lp = []
             tensorboard_logger_index = 0

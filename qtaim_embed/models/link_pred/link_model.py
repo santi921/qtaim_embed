@@ -473,27 +473,28 @@ class GCNLinkPred(pl.LightningModule):
 
         if self.trainer.current_epoch < 2:
             self.log("val_f1", 0.0, prog_bar=False)
-        self.log("train_f1", f1, prog_bar=True, sync_dist=True)
-        self.log("train_auc", auc, prog_bar=False, sync_dist=True)
-        self.log("train_accuracy", acc, prog_bar=False, sync_dist=True)
+        # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
+        self.log("train_f1", f1, prog_bar=True, sync_dist=False)
+        self.log("train_auc", auc, prog_bar=False, sync_dist=False)
+        self.log("train_accuracy", acc, prog_bar=False, sync_dist=False)
 
     def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
         acc, f1, auc = self.compute_metrics(mode="val")
-        self.log("val_f1", f1, prog_bar=True, sync_dist=True)
-        self.log("val_auc", auc, prog_bar=False, sync_dist=True)
-        self.log("val_accuracy", acc, prog_bar=False, sync_dist=True)
+        self.log("val_f1", f1, prog_bar=True, sync_dist=False)
+        self.log("val_auc", auc, prog_bar=False, sync_dist=False)
+        self.log("val_accuracy", acc, prog_bar=False, sync_dist=False)
 
     def on_test_epoch_end(self):
         """
         Test epoch end
         """
         acc, f1, auc = self.compute_metrics(mode="test")
-        self.log("test_f1", f1, prog_bar=True, sync_dist=True)
-        self.log("test_auc", auc, prog_bar=False, sync_dist=True)
-        self.log("test_accuracy", acc, prog_bar=False, sync_dist=True)
+        self.log("test_f1", f1, prog_bar=True, sync_dist=False)
+        self.log("test_auc", auc, prog_bar=False, sync_dist=False)
+        self.log("test_accuracy", acc, prog_bar=False, sync_dist=False)
 
     def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
         """

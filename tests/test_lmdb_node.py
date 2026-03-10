@@ -17,8 +17,6 @@ def test_write():
     config_w_test = get_default_node_level_config()
 
     dm = QTAIMNodeTaskDataModule(config=config_w_test)
-    feature_size, feat_name = dm.prepare_data("fit")
-
     dm.setup("fit")
 
     train_dl_size = len(dm.train_dataset)
@@ -50,8 +48,6 @@ def test_multi_out():
     config_w_test = get_default_node_level_config()
     config_w_test["dataset"]["verbose"] = False
     dm = QTAIMNodeTaskDataModule(config=config_w_test)
-    feature_size, feat_name = dm.prepare_data("fit")
-
     dm.setup("fit")
     construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb_node/train/")
 
@@ -77,8 +73,6 @@ def test_multi_out():
 
     # check that the folders have been created with the correct number of files
     dm_lmdb = LMDBDataModule(config=config)
-
-    dm_lmdb.prepare_data()
     dm_lmdb.setup("fit")
     dl = dm_lmdb.train_dataloader()
 
@@ -102,15 +96,13 @@ def test_model_lmdb():
 
     # check that the folders have been created with the correct number of files
     dm_lmdb = LMDBDataModule(config=config)
-    feat_name, feature_size = dm_lmdb.prepare_data()
+    dm_lmdb.setup("fit")
+    feature_size = dm_lmdb.train_dataset.feature_size
 
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
-    # config["model"]["target_dict"] = config["dataset"]["target_dict"]
-    # print(config["model"])
     model = load_node_level_model_from_config(config["model"])
-    dm_lmdb.setup("fit")
     dl = dm_lmdb.train_dataloader()
 
     trainer = pl.Trainer(

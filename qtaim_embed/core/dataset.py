@@ -1289,9 +1289,11 @@ class LMDBBaseDataset(Dataset):
         if not self.path.is_file():
             db_paths = sorted(self.path.glob("*.lmdb"))
             assert len(db_paths) > 0, f"No LMDBs found in '{self.path}'"
-            # self.metadata_path = self.path / "metadata.npz"
+            self._db_paths = list(db_paths)
 
             self._keys = []
+            # Open envs in main process to read metadata; kept for property access.
+            # __getitem__ lazily reopens per-worker to support num_workers > 0.
             self.envs = []
             for db_path in db_paths:
                 cur_env = self.connect_db(db_path)
@@ -1313,8 +1315,8 @@ class LMDBBaseDataset(Dataset):
             self.num_samples = sum(keylens)
 
         else:
-            # Get metadata in case
-            # self.metadata_path = self.path.parent / "metadata.npz"
+            self._db_paths = None
+            # Open env in main process for metadata; kept for property access.
             self.env = self.connect_db(self.path)
 
             # If "length" encoded as ascii is present, use that
@@ -1354,6 +1356,11 @@ class LMDBBaseDataset(Dataset):
             idx = self.available_indices[idx]
 
         if not self.path.is_file():
+            # Lazy per-worker init: each DataLoader worker opens its own env
+            # after fork, avoiding shared-handle conflicts with max_readers > 1.
+            if not hasattr(self, "_worker_envs") or self._worker_envs is None:
+                self._worker_envs = [self.connect_db(p) for p in self._db_paths]
+
             # Figure out which db this should be indexed from.
             db_idx = bisect.bisect(self._keylen_cumulative, idx)
             # Extract index of element within that db.
@@ -1364,16 +1371,18 @@ class LMDBBaseDataset(Dataset):
 
             # Return features.
             datapoint_pickled = (
-                self.envs[db_idx]
+                self._worker_envs[db_idx]
                 .begin()
                 .get(f"{self._keys[db_idx][el_idx]}".encode("ascii"))
             )
             data_object = pickle.loads(datapoint_pickled)
-            # data_object.id = f"{db_idx}_{el_idx}"
 
         else:
-            #!CHECK, _keys should be less then total numbers of keys as there are more properties.
-            datapoint_pickled = self.env.begin().get(
+            # Lazy per-worker init: each DataLoader worker opens its own env.
+            if not hasattr(self, "_worker_env") or self._worker_env is None:
+                self._worker_env = self.connect_db(self.path)
+
+            datapoint_pickled = self._worker_env.begin().get(
                 f"{self._keys[idx]}".encode("ascii")
             )
 

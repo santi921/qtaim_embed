@@ -98,8 +98,8 @@ def test_node_datamodule():
     config["dataset"]["element_set"] = []
 
     dm = QTAIMNodeTaskDataModule(config=config)
-    # print(dm.config)
-    feat_name, feature_size = dm.prepare_data("fit")
+    dm.setup("fit")
+    feat_name = dm.train_dataset.feature_names
     global_feats = feat_name["global"]
     assert "charge one hot" in global_feats, "Charge not in global feats"
     assert "spin one hot" in global_feats, "Spin not in global feats"
@@ -108,7 +108,6 @@ def test_node_datamodule():
 def test_graph_classifier_datamodule():
     dm = QTAIMGraphTaskDataModule()
     print(dm.config)
-    feature_size, feat_name = dm.prepare_data("fit")
     dm.setup("fit")
     train_dl = dm.train_dataloader()
     val_dl = dm.val_dataloader()
@@ -121,7 +120,7 @@ def test_graph_datamodule():
     config_w_test["dataset"]["test_prop"] = 0.15
 
     dm = QTAIMGraphTaskClassifyDataModule(config=config_w_test)
-    dm.prepare_data("fit")
+    dm.setup("fit")
 
     train_dl_size = len(dm.train_dataset)
     val_dl_size = len(dm.val_dataset)
@@ -132,7 +131,7 @@ def test_graph_datamodule():
     config_w_test["dataset"]["val_prop"] = 0.25
     config_w_test["dataset"]["test_prop"] = 0.0
     dm = QTAIMGraphTaskClassifyDataModule(config=config_w_test)
-    dm.prepare_data("fit")
+    dm.setup("fit")
 
     train_dl_2_size = len(dm.train_dataset)
     val_dl_2_size = len(dm.val_dataset)

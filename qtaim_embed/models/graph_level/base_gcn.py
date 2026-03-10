@@ -618,9 +618,10 @@ class GCNGraphPred(pl.LightningModule):
 
         if self.trainer.current_epoch < 2:
             self.log("val_mae", 10**10, prog_bar=False)
-        self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
-        self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
+        self.log("train_r2", r2.median(), prog_bar=False, sync_dist=False)
+        self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=False)
 
     def on_validation_epoch_end(self):
         """
@@ -634,9 +635,9 @@ class GCNGraphPred(pl.LightningModule):
         if type(mse) == list:
             mse = torch.stack(mse)
         r2_median = r2.median().type(torch.float32)
-        self.log("val_r2", r2_median, prog_bar=True, sync_dist=True)
-        self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        self.log("val_r2", r2_median, prog_bar=True, sync_dist=False)
+        self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=False)
 
     def on_test_epoch_end(self):
         """
@@ -649,9 +650,9 @@ class GCNGraphPred(pl.LightningModule):
             mae = torch.stack(mae)
         if type(mse) == list:
             mse = torch.stack(mse)
-        self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
-        self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
+        self.log("test_r2", r2.median(), prog_bar=False, sync_dist=False)
+        self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=False)
 
     def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
         """

@@ -150,9 +150,9 @@ class TrainingObject:
                     print("{}\t\t{}".format(str(kk).ljust(20), str(vv).ljust(20)))
             self.dm = QTAIMGraphTaskDataModule(config=dm_config)
 
-        feature_names, feature_size = self.dm.prepare_data(stage="fit")
-        self.feature_names = feature_names
-        self.feature_size = feature_size
+        self.dm.setup(stage="fit")
+        self.feature_names = self.dm.train_dataset.feature_names
+        self.feature_size = self.dm.train_dataset.feature_size
 
     def make_model(self, config):
         # config["model"]["in_feats"] = self.in_feats

@@ -71,7 +71,10 @@ def main(argv=None):
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
     dm = QTAIMGraphTaskClassifyDataModule(config=config)
 
-    feature_names, feature_size = dm.prepare_data(stage="fit")
+    # setup() runs on all ranks (DDP-safe); prepare_data() is a no-op
+    dm.setup(stage="fit")
+    feature_names = dm.train_dataset.feature_names
+    feature_size = dm.train_dataset.feature_size
     config["model"]["classifier"] = True
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]

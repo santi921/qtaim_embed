@@ -573,7 +573,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             batch_size=len(labels),
-            sync_dist=False,
+            sync_dist=True,
             logger=True,
         )
 
@@ -602,17 +602,17 @@ class GCNGraphPredClassifier(pl.LightningModule):
         Training epoch end
         """
         f1, auroc = self.compute_metrics(mode="train")
-        self.log("train_f1", f1.mean(), prog_bar=False, sync_dist=True)
-        self.log("train_auroc", auroc.mean(), prog_bar=False, sync_dist=True)
-        # get epoch number
+        # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
+        self.log("train_f1", f1.mean(), prog_bar=False, sync_dist=False)
+        self.log("train_auroc", auroc.mean(), prog_bar=False, sync_dist=False)
 
     def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
         f1, auroc = self.compute_metrics(mode="val")
-        self.log("val_f1", f1.mean(), prog_bar=True, sync_dist=True)
-        self.log("val_auroc", auroc.mean(), prog_bar=True, sync_dist=True)
+        self.log("val_f1", f1.mean(), prog_bar=True, sync_dist=False)
+        self.log("val_auroc", auroc.mean(), prog_bar=True, sync_dist=False)
         return {"val_f1": f1.mean(), "val_auroc": auroc.mean()}
 
     def on_test_epoch_end(self):
@@ -620,8 +620,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
         Test epoch end
         """
         f1, auroc = self.compute_metrics(mode="test")
-        self.log("test_f1", f1.mean(), prog_bar=False, sync_dist=True)
-        self.log("test_auroc", auroc.mean(), prog_bar=False, sync_dist=True)
+        self.log("test_f1", f1.mean(), prog_bar=False, sync_dist=False)
+        self.log("test_auroc", auroc.mean(), prog_bar=False, sync_dist=False)
 
     def update_metrics(self, pred, target, mode):
         """
