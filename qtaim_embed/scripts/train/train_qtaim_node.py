@@ -159,6 +159,12 @@ def main(argv=None):
         val_dl = dm.train_dataloader()
         _, _ = next(iter(val_dl))
 
+        # DDP Strategy Note:
+        # This project requires strategy="ddp" (not "ddp_spawn") for multi-GPU
+        # training. LMDB datasets use lazy per-worker env init that is compatible
+        # with fork-based DDP but not spawn-based ddp_spawn (LMDB environments
+        # are not picklable). For PCIe GPUs without NVLink (e.g. A5000), set
+        # NCCL_P2P_DISABLE=1 before launching.
         trainer = pl.Trainer(
             max_epochs=config["model"]["max_epochs"],
             accelerator="gpu",

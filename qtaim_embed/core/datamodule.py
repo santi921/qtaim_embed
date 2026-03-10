@@ -38,7 +38,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
         if "edge_dropout" not in self.config["dataset"].keys():
             print("... > no edge dropout on datamodule")
             self.transforms = None
-        elif type(self.config["dataset"]["edge_dropout"]) != float:
+        elif not isinstance(self.config["dataset"]["edge_dropout"], float):
             print("... > no edge dropout on datamodule")
             self.transforms = None
         else:
@@ -156,6 +156,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
         dl = DataLoaderLinkTaskHeterograph(
             self.train_dataset,
             batch_size=self.config["dataset"]["train_batch_size"],
+            num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms,
         )
         if self.node_len is None:
@@ -167,6 +168,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
         dl = DataLoaderLinkTaskHeterograph(
             self.val_dataset,
             batch_size=self.config["dataset"]["train_batch_size"],
+            num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms,
         )
 
@@ -179,6 +181,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
         dl = DataLoaderLinkTaskHeterograph(
             self.test_dataset,
             batch_size=self.config["dataset"]["train_batch_size"],
+            num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms,
         )
 
@@ -202,7 +205,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
         if "edge_dropout" not in self.config["dataset"].keys():
             print("... > no edge dropout on datamodule")
             self.transforms = None
-        elif type(self.config["dataset"]["edge_dropout"]) != float:
+        elif not isinstance(self.config["dataset"]["edge_dropout"], float):
             print("... > no edge dropout on datamodule")
             self.transforms = None
         else:
@@ -312,6 +315,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
         return DataLoaderMoleculeNodeTask(
             self.train_dataset,
             batch_size=self.config["dataset"]["train_batch_size"],
+            num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms,
         )
 
@@ -319,6 +323,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
         return DataLoaderMoleculeNodeTask(
             self.val_dataset,
             batch_size=self.config["dataset"]["train_batch_size"],
+            num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms,
         )
 
@@ -326,6 +331,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
         return DataLoaderMoleculeNodeTask(
             self.test_dataset,
             batch_size=self.config["dataset"]["train_batch_size"],
+            num_workers=self.config["dataset"]["num_workers"],
             transforms=self.transforms,
         )
 
@@ -345,7 +351,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
         if "edge_dropout" not in self.config["dataset"].keys():
             print("... > no edge dropout on datamodule")
             self.transforms = None
-        elif type(self.config["dataset"]["edge_dropout"]) != float:
+        elif not isinstance(self.config["dataset"]["edge_dropout"], float):
             print("... > no edge dropout on datamodule")
             self.transforms = None
         else:
@@ -503,7 +509,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
         if "edge_dropout" not in self.config["dataset"].keys():
             print("... > no edge dropout on datamodule")
             self.transforms = None
-        elif type(self.config["dataset"]["edge_dropout"]) != float:
+        elif not isinstance(self.config["dataset"]["edge_dropout"], float):
             print("... > no edge dropout on datamodule")
             self.transforms = None
         else:
@@ -660,7 +666,7 @@ class LMDBDataModule(pl.LightningDataModule):
         if "edge_dropout" not in self.config["dataset"].keys():
             print("... > no edge dropout on datamodule")
             self.transforms = None
-        elif type(self.config["dataset"]["edge_dropout"]) != float:
+        elif not isinstance(self.config["dataset"]["edge_dropout"], float):
             print("... > no edge dropout on datamodule")
             self.transforms = None
         else:
@@ -745,7 +751,7 @@ class LMDBLinkDataModule(pl.LightningDataModule):
         if "edge_dropout" not in self.config["dataset"].keys():
             print("... > no edge dropout on datamodule")
             self.transforms = None
-        elif type(self.config["dataset"]["edge_dropout"]) != float:
+        elif not isinstance(self.config["dataset"]["edge_dropout"], float):
             print("... > no edge dropout on datamodule")
             self.transforms = None
         else:
