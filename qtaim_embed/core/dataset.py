@@ -1414,6 +1414,19 @@ class LMDBBaseDataset(Dataset):
         else:
             self.env.close()
 
+    def _close_worker_envs(self) -> None:
+        """Close lazily-opened per-worker LMDB environments."""
+        if self._worker_envs is not None:
+            for env in self._worker_envs:
+                env.close()
+            self._worker_envs = None
+        if self._worker_env is not None:
+            self._worker_env.close()
+            self._worker_env = None
+
+    def __del__(self) -> None:
+        self._close_worker_envs()
+
     def get_metadata(self, num_samples: int = 100) -> None:
         pass
 

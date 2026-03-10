@@ -636,7 +636,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
         )
 
 
-def _resolve_lmdb_path(base_path):
+def _resolve_lmdb_path(base_path: str) -> str:
     """Resolve LMDB path, checking for molecule.lmdb inside directory."""
     check_file = os.path.join(base_path, "molecule.lmdb")
     if os.path.exists(check_file):

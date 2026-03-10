@@ -398,3 +398,82 @@ class TestConvergence:
         assert final_loss < initial_loss, (
             f"Model did not converge: initial={initial_loss:.4f}, final={final_loss:.4f}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TorchMetrics MultioutputWrapper DDP sync verification
+# ---------------------------------------------------------------------------
+
+def test_multioutput_wrapper_dist_reduce_states():
+    """Verify that MultioutputWrapper metrics have dist_reduce_fx on all states.
+
+    In DDP, TorchMetrics .compute() performs an all-reduce on internal states
+    before computing the final metric value. This test checks that
+    MultioutputWrapper preserves the dist_reduce_fx on all metric states,
+    ensuring sync_dist=False is safe when logging .compute() results.
+    """
+    import torchmetrics
+    from torchmetrics.wrappers import MultioutputWrapper
+
+    ntasks = 3
+    metrics = {
+        "r2": MultioutputWrapper(torchmetrics.R2Score(), num_outputs=ntasks),
+        "mae": MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=ntasks),
+        "mse": MultioutputWrapper(torchmetrics.MeanSquaredError(), num_outputs=ntasks),
+    }
+
+    for name, metric in metrics.items():
+        # Check that the wrapper has output metrics with dist_reduce_fx
+        assert hasattr(metric, "metrics"), (
+            f"{name}: MultioutputWrapper missing metrics"
+        )
+        for i, sub_metric in enumerate(metric.metrics):
+            for state_name in sub_metric._defaults:
+                reduce_fx = sub_metric._reductions.get(state_name)
+                assert reduce_fx is not None, (
+                    f"{name}[{i}].{state_name} has no dist_reduce_fx -- "
+                    f"DDP all-reduce will not work"
+                )
+
+
+def test_multioutput_wrapper_split_vs_full():
+    """Verify MultioutputWrapper gives same result on split data vs full data.
+
+    Simulates what happens in DDP: each rank updates metrics with its shard,
+    then states are summed (all-reduced). The result should match computing
+    on the full dataset in one shot.
+    """
+    import torchmetrics
+    from torchmetrics.wrappers import MultioutputWrapper
+
+    torch.manual_seed(42)
+    ntasks = 2
+    n_samples = 100
+    preds = torch.randn(n_samples, ntasks)
+    targets = preds + 0.1 * torch.randn(n_samples, ntasks)
+
+    # Full dataset computation
+    full_mae = MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=ntasks)
+    full_mae.update(preds, targets)
+    full_result = full_mae.compute()
+
+    # Simulated 2-rank split: each rank updates independently, then states are summed
+    split = n_samples // 2
+    rank0_mae = MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=ntasks)
+    rank1_mae = MultioutputWrapper(torchmetrics.MeanAbsoluteError(), num_outputs=ntasks)
+    rank0_mae.update(preds[:split], targets[:split])
+    rank1_mae.update(preds[split:], targets[split:])
+
+    # Simulate DDP all-reduce: sum the internal states across ranks
+    for sub0, sub1 in zip(rank0_mae.metrics, rank1_mae.metrics):
+        for state_name in sub0._defaults:
+            state0 = getattr(sub0, state_name)
+            state1 = getattr(sub1, state_name)
+            setattr(sub0, state_name, state0 + state1)
+
+    split_result = rank0_mae.compute()
+
+    torch.testing.assert_close(
+        split_result, full_result, atol=1e-5, rtol=1e-5,
+        msg=f"Split computation ({split_result}) != full ({full_result})"
+    )
