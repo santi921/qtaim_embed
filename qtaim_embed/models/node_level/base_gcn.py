@@ -658,7 +658,7 @@ class GCNNodePred(pl.LightningModule):
         return r2, torch_l1, torch_mse
 
     def configure_optimizers(self):
-        params = filter(lambda p: p.requires_grad, self.parameters())
+        params = list(filter(lambda p: p.requires_grad, self.parameters()))
         try:
             optimizer = torch.optim.Adam(
                 params,
