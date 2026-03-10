@@ -115,9 +115,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightedMeanPoolingThenCat",
+            "WeightAndMeanThenCat",
         ], (
-            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
+            "global_pooling must be one of: WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, "
+            "WeightAndMeanThenCat, GlobalAttentionPoolingThenCat, Set2SetThenCat, "
             + f"but got {global_pooling}"
         )
 
@@ -126,18 +127,6 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
             )
-
-        assert global_pooling in [
-            "WeightAndSumThenCat",
-            "SumPoolingThenCat",
-            "GlobalAttentionPoolingThenCat",
-            "Set2SetThenCat",
-            "MeanPoolingThenCat",
-            "WeightedMeanPoolingThenCat",
-        ], (
-            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, or GlobalAttentionPoolingThenCat"
-            + f"but got {global_pooling}"
-        )
 
         params = {
             "atom_input_size": atom_input_size,
@@ -323,7 +312,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             readout_fn = Set2SetThenCat
         elif self.hparams.global_pooling == "MeanPoolingThenCat":
             readout_fn = MeanPoolingThenCat
-        elif self.hparams.global_pooling == "WeightedMeanPoolingThenCat":
+        elif self.hparams.global_pooling == "WeightAndMeanThenCat":
             readout_fn = WeightAndMeanThenCat
 
         list_in_feats = []

@@ -7,6 +7,8 @@ from torch_geometric.data import HeteroData
 from qtaim_embed.utils.models import (
     get_layer_args,
 )
+from qtaim_embed.utils.data import get_default_graph_level_config
+from qtaim_embed.models.utils import load_graph_level_model_from_config
 
 from qtaim_embed.core.dataset import (
     HeteroGraphNodeLabelDataset,
@@ -290,6 +292,45 @@ def make_hetero_graph():
         b2a=[(0, 0), (0, 1), (1, 1), (1, 2), (2, 1), (2, 3)],
         self_loop=True,
     )
+
+
+def make_test_model(
+    atom_feat_size: int,
+    bond_feat_size: int,
+    global_feat_size: int,
+    target_dict: dict = None,
+    pooling_fn: str = "SumPoolingThenCat",
+):
+    """Build a small GCNGraphPred for testing.
+
+    Shared helper used by edge-case, numerical, and logger tests.
+    """
+    if target_dict is None:
+        target_dict = {"global": ["target_1"]}
+    config = get_default_graph_level_config()["model"]
+    config["atom_feature_size"] = atom_feat_size
+    config["bond_feature_size"] = bond_feat_size
+    config["global_feature_size"] = global_feat_size
+    config["target_dict"] = target_dict
+    config["n_conv_layers"] = 2
+    config["hidden_size"] = 16
+    config["embedding_size"] = 16
+    config["fc_hidden_size_1"] = 16
+    config["fc_num_layers"] = 1
+    config["shape_fc"] = "flat"
+    config["fc_batch_norm"] = False
+    config["fc_dropout"] = 0.0
+    config["dropout"] = 0.0
+    config["batch_norm"] = False
+    config["global_pooling_fn"] = pooling_fn
+    config["conv_fn"] = "GraphConvDropoutBatch"
+    config["initializer"] = None
+    config["restore"] = False
+    config["classifier"] = False
+    config["compiled"] = False
+    model = load_graph_level_model_from_config(config)
+    model.eval()
+    return model
 
 
 def get_hyperparams_resid():

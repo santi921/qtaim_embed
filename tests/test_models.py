@@ -1,13 +1,20 @@
 import os
 import glob
 import shutil
+
+import pytest
 import torch
 import pytorch_lightning as pl
 from torch.nn import functional as F
+from torch_geometric.data import Batch
+
 from qtaim_embed.utils.tests import (
     get_dataset_graph_level,
     get_dataset_graph_level_multitask,
     get_datasets_graph_level_classifier,
+    make_hetero,
+    make_hetero_graph,
+    make_test_model,
 )
 from qtaim_embed.utils.data import get_default_graph_level_config
 from qtaim_embed.models.utils import load_graph_level_model_from_config
@@ -330,3 +337,172 @@ def test_multi_task():
     )
 
     trainer.fit(model, data_loader)
+
+
+# ---------------------------------------------------------------------------
+# Edge case model pipeline tests
+# ---------------------------------------------------------------------------
+
+
+def _forward_edge_case(model, graph):
+    """Extract features from graph and run model forward."""
+    feats = {
+        nt: graph[nt].feat
+        for nt in graph.node_types
+        if hasattr(graph[nt], "feat")
+    }
+    with torch.no_grad():
+        return model(graph, feats)
+
+
+def _make_large_graph(num_atoms: int, num_bonds: int):
+    """Build a synthetic graph with many atoms and bonds."""
+    a2b = [(i % num_atoms, i) for i in range(num_bonds)]
+    b2a = [(i, (i + 1) % num_atoms) for i in range(num_bonds)]
+    return make_hetero(num_atoms, num_bonds, a2b, b2a, self_loop=True)
+
+
+# Feature sizes from make_hetero: atom=2, bond=3, global=4
+_ATOM_FEAT = 2
+_BOND_FEAT = 3
+_GLOBAL_FEAT = 4
+
+
+class TestEdgeCases:
+    """Test extreme graph configurations through the full model pipeline."""
+
+    def _model(self, pooling_fn="SumPoolingThenCat"):
+        return make_test_model(
+            _ATOM_FEAT, _BOND_FEAT, _GLOBAL_FEAT, pooling_fn=pooling_fn
+        )
+
+    def test_zero_bond_full_pipeline(self):
+        """5 atoms, 0 bonds -> model produces (1,1), no NaN/Inf."""
+        graph, _ = make_hetero(num_atoms=5, num_bonds=0, a2b=[], b2a=[])
+        batched = Batch.from_data_list([graph])
+        model = self._model()
+        out = _forward_edge_case(model, batched)
+        assert out.shape == (1, 1)
+        assert torch.isfinite(out).all(), f"Non-finite output: {out}"
+
+    def test_single_node_per_type(self):
+        """1 atom, 1 bond, 1 global -> model works."""
+        graph, _ = make_hetero(
+            num_atoms=1, num_bonds=1, a2b=[(0, 0)], b2a=[(0, 0)]
+        )
+        batched = Batch.from_data_list([graph])
+        model = self._model()
+        out = _forward_edge_case(model, batched)
+        assert out.shape == (1, 1)
+        assert torch.isfinite(out).all(), f"Non-finite output: {out}"
+
+    def test_large_graph_200_atoms(self):
+        """200 atoms, 300 bonds -> no numerical blowup."""
+        graph, _ = _make_large_graph(200, 300)
+        batched = Batch.from_data_list([graph])
+        model = self._model()
+        out = _forward_edge_case(model, batched)
+        assert out.shape == (1, 1)
+        assert torch.isfinite(out).all(), f"Non-finite output: {out}"
+
+    def test_batch_size_1(self):
+        """Single graph batch through model."""
+        graph, _ = make_hetero_graph()
+        batched = Batch.from_data_list([graph])
+        model = self._model()
+        out = _forward_edge_case(model, batched)
+        assert out.shape == (1, 1)
+        assert torch.isfinite(out).all()
+
+    def test_batch_size_16(self):
+        """16 identical graphs batched."""
+        graph, _ = make_hetero_graph()
+        graphs = [graph.clone() for _ in range(16)]
+        batched = Batch.from_data_list(graphs)
+        model = self._model()
+        out = _forward_edge_case(model, batched)
+        assert out.shape == (16, 1)
+        assert torch.isfinite(out).all()
+
+    def test_mixed_batch_sizes(self):
+        """1-atom graph + 50-atom graph in same batch, both finite."""
+        tiny, _ = make_hetero(
+            num_atoms=1, num_bonds=1, a2b=[(0, 0)], b2a=[(0, 0)]
+        )
+        large, _ = _make_large_graph(50, 75)
+        batched = Batch.from_data_list([tiny, large])
+        model = self._model()
+        out = _forward_edge_case(model, batched)
+        assert out.shape == (2, 1)
+        assert torch.isfinite(out).all(), f"Non-finite: {out}"
+
+    @pytest.mark.parametrize(
+        "pooling_fn",
+        [
+            "SumPoolingThenCat",
+            "MeanPoolingThenCat",
+            "WeightAndSumThenCat",
+            "WeightAndMeanThenCat",
+            "GlobalAttentionPoolingThenCat",
+            "Set2SetThenCat",
+        ],
+    )
+    def test_zero_bond_all_pooling_fns(self, pooling_fn):
+        """Zero-bond graph works with every pooling function."""
+        graph, _ = make_hetero(num_atoms=3, num_bonds=0, a2b=[], b2a=[])
+        batched = Batch.from_data_list([graph])
+        model = self._model(pooling_fn=pooling_fn)
+        out = _forward_edge_case(model, batched)
+        assert out.shape == (1, 1)
+        assert torch.isfinite(out).all(), (
+            f"{pooling_fn} produced non-finite output on zero-bond graph: {out}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Logger integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestLoggerIntegration:
+    """Verify logging backends work with the training pipeline."""
+
+    def test_tensorboard_creates_event_files(self, tmp_path):
+        """Train 2 epochs with TensorBoardLogger, verify event files exist."""
+        from pytorch_lightning.loggers import TensorBoardLogger
+
+        dataset = get_dataset_graph_level(
+            log_scale_features=False,
+            log_scale_targets=False,
+            standard_scale_features=True,
+            standard_scale_targets=True,
+        )
+        dl = DataLoaderMoleculeGraphTask(
+            dataset, batch_size=len(dataset.graphs), shuffle=False
+        )
+
+        model = make_test_model(
+            atom_feat_size=dataset.feature_size["atom"],
+            bond_feat_size=dataset.feature_size["bond"],
+            global_feat_size=dataset.feature_size["global"],
+            target_dict={"global": dataset.target_dict["global"]},
+        )
+
+        tb_logger = TensorBoardLogger(save_dir=str(tmp_path), name="test_tb")
+        trainer = pl.Trainer(
+            max_epochs=2,
+            accelerator="cpu",
+            devices=1,
+            enable_checkpointing=False,
+            enable_progress_bar=False,
+            log_every_n_steps=1,
+            logger=tb_logger,
+        )
+        trainer.fit(model, train_dataloaders=dl, val_dataloaders=dl)
+
+        log_dir = os.path.join(str(tmp_path), "test_tb")
+        assert os.path.isdir(log_dir), f"TensorBoard log dir not created: {log_dir}"
+        event_files = glob.glob(
+            os.path.join(log_dir, "**", "events.out.tfevents.*"), recursive=True
+        )
+        assert len(event_files) > 0, "No TensorBoard event files found"

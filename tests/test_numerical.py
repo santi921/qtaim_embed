@@ -8,21 +8,30 @@ by using known inputs and manually-computed expected values:
 2. ResidualBlock: zero weights -> residual pass-through (out = input)
 3. UnifySize: exact W*x linear transform
 4. SumPoolingThenCat / MeanPoolingThenCat: exact aggregated values
-5. End-to-end convergence: loss decreases over training steps
+5. Set2Set: LSTM attention pooling value verification and batch independence
+6. End-to-end convergence: loss decreases over training steps
+7. Diverse molecule numerical stability across all pooling functions
 """
 
+import pytest
 import torch
 import torch.nn.functional as F
+from torch_geometric.data import Batch
+from torch_geometric.nn import global_add_pool
+from torch_geometric.utils import softmax
 
 from qtaim_embed.models.layers import (
     GraphConvDropoutBatch,
-    ResidualBlock,
-    SumPoolingThenCat,
     MeanPoolingThenCat,
+    ResidualBlock,
+    Set2Set,
+    Set2SetThenCat,
+    SumPoolingThenCat,
     UnifySize,
 )
 from qtaim_embed.utils.tests import (
     make_hetero_graph,
+    make_test_model,
     get_dataset_graph_level,
     get_hyperparams_resid,
 )
@@ -477,3 +486,232 @@ def test_multioutput_wrapper_split_vs_full():
         split_result, full_result, atol=1e-5, rtol=1e-5,
         msg=f"Split computation ({split_result}) != full ({full_result})"
     )
+
+
+# ---------------------------------------------------------------------------
+# Set2Set numerical correctness
+# ---------------------------------------------------------------------------
+
+
+class TestSet2SetNumericalCorrectness:
+    """Verify Set2Set produces correct values, not just correct shapes."""
+
+    def test_single_graph_single_iter_values(self):
+        """Manual step-by-step LSTM+attention math matches module output."""
+        torch.manual_seed(0)
+        s2s = Set2Set(input_dim=2, n_iters=1, n_layers=1, ntype="atom")
+        s2s.eval()
+
+        x = torch.tensor([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+        batch = torch.tensor([0, 0, 0])
+
+        with torch.no_grad():
+            actual = s2s(x, batch)
+
+        # Manual computation replicating Set2Set.forward
+        batch_size = 1
+        h = (torch.zeros(1, 1, 2), torch.zeros(1, 1, 2))
+        q_star = torch.zeros(1, 4)
+
+        with torch.no_grad():
+            q, _ = s2s.lstm(q_star.unsqueeze(0), h)
+            q = q.view(batch_size, 2)
+            e = (x * q[batch]).sum(dim=-1, keepdim=True)
+            alpha = softmax(e, batch, dim=0)
+            readout = global_add_pool(x * alpha, batch, size=batch_size)
+            expected = torch.cat([q, readout], dim=-1)
+
+        assert actual.shape == (1, 4)
+        assert torch.allclose(actual, expected, atol=ATOL), (
+            f"Set2Set values:\nExpected: {expected}\nGot:      {actual}"
+        )
+
+    def test_multi_graph_batch_independence(self):
+        """Batched output[i] == individual graph output for each graph."""
+        torch.manual_seed(42)
+        s2s = Set2Set(input_dim=2, n_iters=2, n_layers=1, ntype="atom")
+        s2s.eval()
+
+        x_a = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+        x_b = torch.tensor([[2.0, 2.0]])
+
+        with torch.no_grad():
+            out_a = s2s(x_a, torch.tensor([0, 0]))
+            out_b = s2s(x_b, torch.tensor([0]))
+
+        x_cat = torch.cat([x_a, x_b], dim=0)
+        batch = torch.tensor([0, 0, 1])
+        with torch.no_grad():
+            out_batched = s2s(x_cat, batch)
+
+        assert out_batched.shape == (2, 4)
+        assert torch.allclose(out_batched[0], out_a[0], atol=ATOL), (
+            f"Graph 0 mismatch:\nbatched={out_batched[0]}\nindiv={out_a[0]}"
+        )
+        assert torch.allclose(out_batched[1], out_b[0], atol=ATOL), (
+            f"Graph 1 mismatch:\nbatched={out_batched[1]}\nindiv={out_b[0]}"
+        )
+
+    def test_n_iters_changes_output(self):
+        """More iterations produce different (refined) output."""
+        torch.manual_seed(7)
+        s2s_1 = Set2Set(input_dim=3, n_iters=1, n_layers=1, ntype="atom")
+        s2s_3 = Set2Set(input_dim=3, n_iters=3, n_layers=1, ntype="atom")
+        s2s_3.load_state_dict(s2s_1.state_dict())
+        s2s_1.eval()
+        s2s_3.eval()
+
+        x = torch.randn(5, 3)
+        batch = torch.tensor([0, 0, 0, 1, 1])
+
+        with torch.no_grad():
+            out_1 = s2s_1(x, batch)
+            out_3 = s2s_3(x, batch)
+
+        assert not torch.allclose(out_1, out_3, atol=1e-3), (
+            "n_iters=1 and n_iters=3 should give different outputs"
+        )
+
+    def test_set2set_then_cat_matches_parts(self):
+        """Set2SetThenCat output matches individual Set2Set per ntype."""
+        torch.manual_seed(99)
+        ntypes = ["atom", "bond"]
+        ntypes_direct_cat = []
+        in_feats = [2, 3]
+
+        pool = Set2SetThenCat(
+            ntypes=ntypes,
+            ntypes_direct_cat=ntypes_direct_cat,
+            in_feats=in_feats,
+            n_iters=2,
+            n_layers=1,
+        )
+        pool.eval()
+
+        feats = {
+            "atom": torch.randn(4, 2),
+            "bond": torch.randn(3, 3),
+        }
+        batch_dict = {
+            "atom": torch.tensor([0, 0, 1, 1]),
+            "bond": torch.tensor([0, 0, 1]),
+        }
+
+        with torch.no_grad():
+            out = pool(feats, batch_dict)
+
+        assert out.shape == (2, 10), f"Expected (2, 10), got {out.shape}"
+
+        with torch.no_grad():
+            atom_out = pool.layers["atom"](feats["atom"], batch_dict["atom"])
+            bond_out = pool.layers["bond"](feats["bond"], batch_dict["bond"])
+
+        expected = torch.cat([atom_out, bond_out], dim=-1)
+        assert torch.allclose(out, expected, atol=ATOL), (
+            f"Concatenation mismatch:\nExpected: {expected}\nGot:      {out}"
+        )
+
+    @pytest.mark.parametrize("dim", [1, 4, 16])
+    def test_output_dim_2x_input(self, dim):
+        """Output is always (B, 2*input_dim)."""
+        s2s = Set2Set(input_dim=dim, n_iters=1, n_layers=1, ntype="atom")
+        s2s.eval()
+        x = torch.randn(5, dim)
+        batch = torch.tensor([0, 0, 0, 1, 1])
+        with torch.no_grad():
+            out = s2s(x, batch)
+        assert out.shape == (2, 2 * dim)
+
+
+# ---------------------------------------------------------------------------
+# Diverse molecule numerical stability
+# ---------------------------------------------------------------------------
+
+
+def _make_diverse_model(dataset, pooling_fn="SumPoolingThenCat"):
+    """Build a small model matching the given dataset's feature sizes."""
+    return make_test_model(
+        atom_feat_size=dataset.feature_size["atom"],
+        bond_feat_size=dataset.feature_size["bond"],
+        global_feat_size=dataset.feature_size["global"],
+        target_dict={"global": dataset.target_dict["global"]},
+        pooling_fn=pooling_fn,
+    )
+
+
+class TestDiverseMoleculeNumerical:
+    """Run real test dataset through the model, check for NaN/Inf."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        self.dataset = get_dataset_graph_level(
+            log_scale_features=True,
+            log_scale_targets=False,
+            standard_scale_features=True,
+            standard_scale_targets=True,
+        )
+
+    def _full_batch(self):
+        dl = DataLoaderMoleculeGraphTask(
+            self.dataset, batch_size=len(self.dataset.graphs), shuffle=False
+        )
+        batch_graph, batch_label = next(iter(dl))
+        return batch_graph, batch_label
+
+    def _forward(self, model, graph):
+        """Extract features and run model forward."""
+        feats = {
+            nt: graph[nt].feat
+            for nt in graph.node_types
+            if hasattr(graph[nt], "feat")
+        }
+        with torch.no_grad():
+            return model(graph, feats)
+
+    def test_output_shape_matches_targets(self):
+        """output.shape == (num_molecules, num_targets)."""
+        model = _make_diverse_model(self.dataset)
+        batch_graph, _ = self._full_batch()
+        out = self._forward(model, batch_graph)
+
+        num_molecules = len(self.dataset.graphs)
+        num_targets = len(self.dataset.target_dict["global"])
+        assert out.shape == (num_molecules, num_targets), (
+            f"Expected ({num_molecules}, {num_targets}), got {out.shape}"
+        )
+
+    def test_per_molecule_forward_consistency(self):
+        """Batch output[i] == individual forward on molecule i (first 5)."""
+        torch.manual_seed(42)
+        model = _make_diverse_model(self.dataset)
+        batch_graph, _ = self._full_batch()
+        batch_out = self._forward(model, batch_graph)
+
+        n_check = min(5, len(self.dataset.graphs))
+        for i in range(n_check):
+            single_graph = Batch.from_data_list([self.dataset.graphs[i]])
+            single_out = self._forward(model, single_graph)
+
+            assert torch.allclose(batch_out[i], single_out[0], atol=1e-4), (
+                f"Molecule {i}: batch={batch_out[i]}, single={single_out[0]}"
+            )
+
+    @pytest.mark.parametrize(
+        "pooling_fn",
+        [
+            "SumPoolingThenCat",
+            "MeanPoolingThenCat",
+            "WeightAndSumThenCat",
+            "WeightAndMeanThenCat",
+            "GlobalAttentionPoolingThenCat",
+            "Set2SetThenCat",
+        ],
+    )
+    def test_all_pooling_fns_real_data(self, pooling_fn):
+        """Every pooling function produces finite output on real data."""
+        model = _make_diverse_model(self.dataset, pooling_fn=pooling_fn)
+        batch_graph, _ = self._full_batch()
+        out = self._forward(model, batch_graph)
+        assert torch.isfinite(out).all(), (
+            f"{pooling_fn}: NaN/Inf in output"
+        )

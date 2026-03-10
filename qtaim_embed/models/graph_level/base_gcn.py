@@ -130,9 +130,10 @@ class GCNGraphPred(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightandMeanThenCat",
+            "WeightAndMeanThenCat",
         ], (
-            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
+            "global_pooling must be one of: WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, "
+            "WeightAndMeanThenCat, GlobalAttentionPoolingThenCat, Set2SetThenCat, "
             + f"but got {global_pooling}"
         )
 
@@ -300,7 +301,7 @@ class GCNGraphPred(pl.LightningModule):
             readout_fn = Set2SetThenCat
         elif self.hparams.global_pooling == "MeanPoolingThenCat":
             readout_fn = MeanPoolingThenCat
-        elif self.hparams.global_pooling == "WeightandMeanThenCat":
+        elif self.hparams.global_pooling == "WeightAndMeanThenCat":
             readout_fn = WeightAndMeanThenCat
 
         list_in_feats = []
