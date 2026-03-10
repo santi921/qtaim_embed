@@ -1285,6 +1285,8 @@ class LMDBBaseDataset(Dataset):
 
         self.config = config
         self.path = Path(self.config["src"])
+        self._worker_env = None
+        self._worker_envs = None
 
         if not self.path.is_file():
             db_paths = sorted(self.path.glob("*.lmdb"))
@@ -1358,7 +1360,7 @@ class LMDBBaseDataset(Dataset):
         if not self.path.is_file():
             # Lazy per-worker init: each DataLoader worker opens its own env
             # after fork, avoiding shared-handle conflicts with max_readers > 1.
-            if not hasattr(self, "_worker_envs") or self._worker_envs is None:
+            if self._worker_envs is None:
                 self._worker_envs = [self.connect_db(p) for p in self._db_paths]
 
             # Figure out which db this should be indexed from.
@@ -1379,7 +1381,7 @@ class LMDBBaseDataset(Dataset):
 
         else:
             # Lazy per-worker init: each DataLoader worker opens its own env.
-            if not hasattr(self, "_worker_env") or self._worker_env is None:
+            if self._worker_env is None:
                 self._worker_env = self.connect_db(self.path)
 
             datapoint_pickled = self._worker_env.begin().get(

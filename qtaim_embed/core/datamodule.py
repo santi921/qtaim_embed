@@ -51,7 +51,8 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                 self.transforms = None
 
         self.node_len = None
-        self._setup_done = False
+        self._fit_setup_done = False
+        self._test_setup_done = False
 
     def prepare_data(self, stage=None):
         # No-op: in DDP, prepare_data runs only on rank 0.
@@ -59,10 +60,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        if self._setup_done:
-            return
-
-        if stage in (None, "fit", "validate"):
+        if stage in (None, "fit", "validate") and not self._fit_setup_done:
             self.full_dataset = HeteroGraphNodeLabelDataset(
                 file=self.config["dataset"]["train_dataset_loc"],
                 allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
@@ -117,41 +115,42 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                 feat_dict = self.train_dataset.feature_size
                 self.node_len = feat_dict["atom"] + feat_dict["global"]
 
-            self._setup_done = True
+            self._fit_setup_done = True
 
-        elif stage in ("test", "predict"):
-            assert (
-                self.config["dataset"]["test_dataset_loc"] is not None
-            ), "test_dataset_loc is None"
-            self.test_dataset = HeteroGraphNodeLabelDataset(
-                file=self.config["dataset"]["test_dataset_loc"],
-                allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
-                allowed_charges=self.config["dataset"]["allowed_charges"],
-                allowed_spins=self.config["dataset"]["allowed_spins"],
-                self_loop=self.config["dataset"]["self_loop"],
-                extra_keys=self.config["dataset"]["extra_keys"],
-                target_dict=self.config["dataset"]["target_dict"],
-                element_set=self.config["dataset"]["element_set"],
-                extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
-                debug=self.config["dataset"]["debug"],
-                log_scale_features=self.config["dataset"]["log_scale_features"],
-                log_scale_targets=self.config["dataset"]["log_scale_targets"],
-                standard_scale_features=self.config["dataset"][
-                    "standard_scale_features"
-                ],
-                bond_key=self.config["dataset"]["bond_key"],
-                map_key=self.config["dataset"]["map_key"],
-                standard_scale_targets=self.config["dataset"][
-                    "standard_scale_targets"
-                ],
-                verbose=self.config["dataset"]["verbose"],
-                num_workers=self.config["dataset"].get("num_workers", 1),
-            )
+        if stage in ("test", "predict") and not self._test_setup_done:
+            if not hasattr(self, "test_dataset"):
+                assert (
+                    self.config["dataset"]["test_dataset_loc"] is not None
+                ), "test_dataset_loc is None"
+                self.test_dataset = HeteroGraphNodeLabelDataset(
+                    file=self.config["dataset"]["test_dataset_loc"],
+                    allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
+                    allowed_charges=self.config["dataset"]["allowed_charges"],
+                    allowed_spins=self.config["dataset"]["allowed_spins"],
+                    self_loop=self.config["dataset"]["self_loop"],
+                    extra_keys=self.config["dataset"]["extra_keys"],
+                    target_dict=self.config["dataset"]["target_dict"],
+                    element_set=self.config["dataset"]["element_set"],
+                    extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
+                    debug=self.config["dataset"]["debug"],
+                    log_scale_features=self.config["dataset"]["log_scale_features"],
+                    log_scale_targets=self.config["dataset"]["log_scale_targets"],
+                    standard_scale_features=self.config["dataset"][
+                        "standard_scale_features"
+                    ],
+                    bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
+                    standard_scale_targets=self.config["dataset"][
+                        "standard_scale_targets"
+                    ],
+                    verbose=self.config["dataset"]["verbose"],
+                    num_workers=self.config["dataset"].get("num_workers", 1),
+                )
             if self.node_len is None:
                 feat_dict = self.test_dataset.feature_size
                 self.node_len = feat_dict["atom"] + feat_dict["global"]
 
-            self._setup_done = True
+            self._test_setup_done = True
 
     def train_dataloader(self):
         dl = DataLoaderLinkTaskHeterograph(
@@ -215,7 +214,8 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
             else:
                 self.transforms = None
 
-        self._setup_done = False
+        self._fit_setup_done = False
+        self._test_setup_done = False
 
     def prepare_data(self, stage=None):
         # No-op: in DDP, prepare_data runs only on rank 0.
@@ -223,10 +223,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        if self._setup_done:
-            return
-
-        if stage in (None, "fit", "validate"):
+        if stage in (None, "fit", "validate") and not self._fit_setup_done:
             self.full_dataset = HeteroGraphNodeLabelDataset(
                 file=self.config["dataset"]["train_dataset_loc"],
                 allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
@@ -278,37 +275,38 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     random_seed=self.config["dataset"]["seed"],
                 )
 
-            self._setup_done = True
+            self._fit_setup_done = True
 
-        elif stage in ("test", "predict"):
-            assert (
-                self.config["dataset"]["test_dataset_loc"] is not None
-            ), "test_dataset_loc is None"
-            self.test_dataset = HeteroGraphNodeLabelDataset(
-                file=self.config["dataset"]["test_dataset_loc"],
-                allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
-                allowed_charges=self.config["dataset"]["allowed_charges"],
-                allowed_spins=self.config["dataset"]["allowed_spins"],
-                self_loop=self.config["dataset"]["self_loop"],
-                extra_keys=self.config["dataset"]["extra_keys"],
-                target_dict=self.config["dataset"]["target_dict"],
-                element_set=self.config["dataset"]["element_set"],
-                extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
-                debug=self.config["dataset"]["debug"],
-                log_scale_features=self.config["dataset"]["log_scale_features"],
-                log_scale_targets=self.config["dataset"]["log_scale_targets"],
-                standard_scale_features=self.config["dataset"][
-                    "standard_scale_features"
-                ],
-                standard_scale_targets=self.config["dataset"][
-                    "standard_scale_targets"
-                ],
-                verbose=self.config["dataset"]["verbose"],
-                bond_key=self.config["dataset"]["bond_key"],
-                map_key=self.config["dataset"]["map_key"],
-                num_workers=self.config["dataset"].get("num_workers", 1),
-            )
-            self._setup_done = True
+        if stage in ("test", "predict") and not self._test_setup_done:
+            if not hasattr(self, "test_dataset"):
+                assert (
+                    self.config["dataset"]["test_dataset_loc"] is not None
+                ), "test_dataset_loc is None"
+                self.test_dataset = HeteroGraphNodeLabelDataset(
+                    file=self.config["dataset"]["test_dataset_loc"],
+                    allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
+                    allowed_charges=self.config["dataset"]["allowed_charges"],
+                    allowed_spins=self.config["dataset"]["allowed_spins"],
+                    self_loop=self.config["dataset"]["self_loop"],
+                    extra_keys=self.config["dataset"]["extra_keys"],
+                    target_dict=self.config["dataset"]["target_dict"],
+                    element_set=self.config["dataset"]["element_set"],
+                    extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
+                    debug=self.config["dataset"]["debug"],
+                    log_scale_features=self.config["dataset"]["log_scale_features"],
+                    log_scale_targets=self.config["dataset"]["log_scale_targets"],
+                    standard_scale_features=self.config["dataset"][
+                        "standard_scale_features"
+                    ],
+                    standard_scale_targets=self.config["dataset"][
+                        "standard_scale_targets"
+                    ],
+                    verbose=self.config["dataset"]["verbose"],
+                    bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
+                    num_workers=self.config["dataset"].get("num_workers", 1),
+                )
+            self._test_setup_done = True
 
     def train_dataloader(self):
         return DataLoaderMoleculeNodeTask(
@@ -359,7 +357,8 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
             else:
                 self.transforms = None
 
-        self._setup_done = False
+        self._fit_setup_done = False
+        self._test_setup_done = False
 
     def prepare_data(self, stage=None):
         # No-op: in DDP, prepare_data runs only on rank 0.
@@ -367,10 +366,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        if self._setup_done:
-            return
-
-        if stage in (None, "fit", "validate"):
+        if stage in (None, "fit", "validate") and not self._fit_setup_done:
             self.full_dataset = HeteroGraphGraphLabelDataset(
                 file=self.config["dataset"]["train_dataset_loc"],
                 allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
@@ -428,40 +424,41 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                 print("training set size: ", len(self.train_dataset))
                 print("validation set size: ", len(self.val_dataset))
 
-            self._setup_done = True
+            self._fit_setup_done = True
 
-        elif stage in ("test", "predict"):
-            assert (
-                self.config["dataset"]["test_dataset_loc"] is not None
-            ), "test_dataset_loc is None"
+        if stage in ("test", "predict") and not self._test_setup_done:
+            if not hasattr(self, "test_dataset"):
+                assert (
+                    self.config["dataset"]["test_dataset_loc"] is not None
+                ), "test_dataset_loc is None"
 
-            self.test_dataset = HeteroGraphGraphLabelDataset(
-                file=self.config["dataset"]["test_dataset_loc"],
-                allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
-                allowed_charges=self.config["dataset"]["allowed_charges"],
-                allowed_spins=self.config["dataset"]["allowed_spins"],
-                self_loop=self.config["dataset"]["self_loop"],
-                extra_keys=self.config["dataset"]["extra_keys"],
-                target_list=self.config["dataset"]["target_list"],
-                element_set=self.config["dataset"]["element_set"],
-                extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
-                debug=self.config["dataset"]["debug"],
-                log_scale_features=self.config["dataset"]["log_scale_features"],
-                log_scale_targets=self.config["dataset"]["log_scale_targets"],
-                standard_scale_features=self.config["dataset"][
-                    "standard_scale_features"
-                ],
-                standard_scale_targets=self.config["dataset"][
-                    "standard_scale_targets"
-                ],
-                bond_key=self.config["dataset"]["bond_key"],
-                map_key=self.config["dataset"]["map_key"],
-                verbose=self.config["dataset"]["verbose"],
-                num_workers=self.config["dataset"].get("num_workers", 1),
-            )
+                self.test_dataset = HeteroGraphGraphLabelDataset(
+                    file=self.config["dataset"]["test_dataset_loc"],
+                    allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
+                    allowed_charges=self.config["dataset"]["allowed_charges"],
+                    allowed_spins=self.config["dataset"]["allowed_spins"],
+                    self_loop=self.config["dataset"]["self_loop"],
+                    extra_keys=self.config["dataset"]["extra_keys"],
+                    target_list=self.config["dataset"]["target_list"],
+                    element_set=self.config["dataset"]["element_set"],
+                    extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
+                    debug=self.config["dataset"]["debug"],
+                    log_scale_features=self.config["dataset"]["log_scale_features"],
+                    log_scale_targets=self.config["dataset"]["log_scale_targets"],
+                    standard_scale_features=self.config["dataset"][
+                        "standard_scale_features"
+                    ],
+                    standard_scale_targets=self.config["dataset"][
+                        "standard_scale_targets"
+                    ],
+                    bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
+                    verbose=self.config["dataset"]["verbose"],
+                    num_workers=self.config["dataset"].get("num_workers", 1),
+                )
 
             print("test set size: ", len(self.test_dataset))
-            self._setup_done = True
+            self._test_setup_done = True
 
     def train_dataloader(self):
         return DataLoaderMoleculeGraphTask(
@@ -518,7 +515,8 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
             else:
                 self.transforms = None
 
-        self._setup_done = False
+        self._fit_setup_done = False
+        self._test_setup_done = False
 
     def prepare_data(self, stage=None):
         # No-op: in DDP, prepare_data runs only on rank 0.
@@ -526,10 +524,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        if self._setup_done:
-            return
-
-        if stage in (None, "fit", "validate"):
+        if stage in (None, "fit", "validate") and not self._fit_setup_done:
             self.full_dataset = HeteroGraphGraphLabelClassifierDataset(
                 file=self.config["dataset"]["train_dataset_loc"],
                 allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
@@ -583,34 +578,35 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                 print("training set size: ", len(self.train_dataset))
                 print("validation set size: ", len(self.val_dataset))
 
-            self._setup_done = True
+            self._fit_setup_done = True
 
-        elif stage in ("test", "predict"):
-            assert (
-                self.config["dataset"]["test_dataset_loc"] is not None
-            ), "test_dataset_loc is None"
+        if stage in ("test", "predict") and not self._test_setup_done:
+            if not hasattr(self, "test_dataset"):
+                assert (
+                    self.config["dataset"]["test_dataset_loc"] is not None
+                ), "test_dataset_loc is None"
 
-            self.test_dataset = HeteroGraphGraphLabelClassifierDataset(
-                file=self.config["dataset"]["test_dataset_loc"],
-                allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
-                allowed_charges=self.config["dataset"]["allowed_charges"],
-                self_loop=self.config["dataset"]["self_loop"],
-                extra_keys=self.config["dataset"]["extra_keys"],
-                target_list=self.config["dataset"]["target_list"],
-                element_set=self.config["dataset"]["element_set"],
-                extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
-                debug=self.config["dataset"]["debug"],
-                log_scale_features=self.config["dataset"]["log_scale_features"],
-                standard_scale_features=self.config["dataset"][
-                    "standard_scale_features"
-                ],
-                bond_key=self.config["dataset"]["bond_key"],
-                map_key=self.config["dataset"]["map_key"],
-                verbose=self.config["dataset"]["verbose"],
-                num_workers=self.config["dataset"].get("num_workers", 1),
-            )
+                self.test_dataset = HeteroGraphGraphLabelClassifierDataset(
+                    file=self.config["dataset"]["test_dataset_loc"],
+                    allowed_ring_size=self.config["dataset"]["allowed_ring_size"],
+                    allowed_charges=self.config["dataset"]["allowed_charges"],
+                    self_loop=self.config["dataset"]["self_loop"],
+                    extra_keys=self.config["dataset"]["extra_keys"],
+                    target_list=self.config["dataset"]["target_list"],
+                    element_set=self.config["dataset"]["element_set"],
+                    extra_dataset_info=self.config["dataset"]["extra_dataset_info"],
+                    debug=self.config["dataset"]["debug"],
+                    log_scale_features=self.config["dataset"]["log_scale_features"],
+                    standard_scale_features=self.config["dataset"][
+                        "standard_scale_features"
+                    ],
+                    bond_key=self.config["dataset"]["bond_key"],
+                    map_key=self.config["dataset"]["map_key"],
+                    verbose=self.config["dataset"]["verbose"],
+                    num_workers=self.config["dataset"].get("num_workers", 1),
+                )
             print("test set size: ", len(self.test_dataset))
-            self._setup_done = True
+            self._test_setup_done = True
 
     def train_dataloader(self):
         return DataLoaderMoleculeGraphTask(
