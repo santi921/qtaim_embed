@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+import logging
 import wandb, argparse, torch, json
 from copy import deepcopy
 import pandas as pd
 
 import pytorch_lightning as pl
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
@@ -59,12 +63,12 @@ def main(argv=None):
     # set num_workers from CLI (overrides config file)
     config["dataset"]["num_workers"] = args.num_workers
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     # for k, v in config.items():
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
     if use_lmdb:
-        print("using lmdbs!")
+        logger.info("Using LMDBs")
         dm = LMDBDataModule(config=config)
         # config["model"]["target_dict"]["global"] = {"global": ["value"]}
         config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
@@ -96,20 +100,20 @@ def main(argv=None):
     dm.setup(stage="fit")
     feature_names = dm.train_dataset.feature_names
     feature_size = dm.train_dataset.feature_size
-    print(feature_names, feature_size)
+    logger.debug("feature_names=%s, feature_size=%s", feature_names, feature_size)
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
     # config["dataset"]["feature_names"] = feature_names
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
     for k, v in config.items():
-        print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
+        logger.info("%s\t\t\t%s", str(k).ljust(20), str(v).ljust(20))
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     model = load_graph_level_model_from_config(config["model"])
-    print("model constructed!")
+    logger.info("Model constructed")
 
     with wandb.init(project=project_name) as run:
         log_parameters = LogParameters()
@@ -198,10 +202,10 @@ def main(argv=None):
                     per_atom=True,
                 )
                 # make a table of the results
-                print(">" * 40 + "test_results" + "<" * 40)
-                print("mean_mae_test: ", mean_mae_test.numpy())
-                print("mean_rmse_test: ", mean_rmse_test.numpy())
-                print("ewt_prop_test: ", ewt_prop_test.numpy())
+                logger.info("test_results")
+                logger.info("mean_mae_test: %s", mean_mae_test.numpy())
+                logger.info("mean_rmse_test: %s", mean_rmse_test.numpy())
+                logger.info("ewt_prop_test: %s", ewt_prop_test.numpy())
                 # save results to pkl
                 results = {
                     "mean_mae_test": mean_mae_test.numpy(),
@@ -221,10 +225,10 @@ def main(argv=None):
                     batch_graph, batch_labels, scalers, per_atom=False
                 )
                 # make a table of the results
-                print(">" * 40 + "test_results" + "<" * 40)
-                print("r2_test: ", r2_val.numpy())
-                print("mae_test: ", mae_val.numpy())
-                print("mse_test: ", mse_val.numpy())
+                logger.info("test_results")
+                logger.info("r2_test: %s", r2_val.numpy())
+                logger.info("mae_test: %s", mae_val.numpy())
+                logger.info("mse_test: %s", mse_val.numpy())
                 # save results to pkl
                 results = {
                     "r2_val": r2_val.numpy(),

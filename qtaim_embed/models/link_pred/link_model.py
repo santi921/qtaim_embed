@@ -1,6 +1,9 @@
+import logging
 from typing import List, Tuple, Dict, Optional
 
 import torch
+
+logger = logging.getLogger(__name__)
 import torch.nn as nn
 from torch.optim import lr_scheduler
 import pytorch_lightning as pl
@@ -112,7 +115,7 @@ class GCNLinkPred(pl.LightningModule):
                 "batch_norm": False,
                 "activation": "ReLU",
             }
-            print("...> Using default predictor parameters for MLP predictor!")
+            logger.warning("Using default predictor parameters for MLP predictor!")
 
         params = {
             "input_size": input_size,
@@ -547,11 +550,20 @@ class GCNLinkPred(pl.LightningModule):
         return acc, f1, auc
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.parameters()),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
-        )
+        params = filter(lambda p: p.requires_grad, self.parameters())
+        try:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+                fused=True,
+            )
+        except RuntimeError:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+            )
 
         scheduler = self._config_lr_scheduler(optimizer)
 

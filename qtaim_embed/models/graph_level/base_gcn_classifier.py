@@ -1,7 +1,10 @@
 # baseline GNN model for graph-level classification
+import logging
 from copy import deepcopy
 import numpy as np
 import torch
+
+logger = logging.getLogger(__name__)
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import lr_scheduler
@@ -374,7 +377,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             if self.hparams.fc_dropout > 0:
                 self.fc_layers.append(nn.Dropout(self.hparams.fc_dropout))
             input_size = out_size
-        print("... > number of tasks:", self.hparams.ntasks)
+        logger.info("Number of tasks: %d", self.hparams.ntasks)
         # add softmax layer
         if self.hparams.ntasks > 1:
             # create a dict of softmax layers
@@ -666,11 +669,20 @@ class GCNGraphPredClassifier(pl.LightningModule):
         return f1, auroc
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.parameters()),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
-        )
+        params = filter(lambda p: p.requires_grad, self.parameters())
+        try:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+                fused=True,
+            )
+        except RuntimeError:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+            )
 
         scheduler = self._config_lr_scheduler(optimizer)
 

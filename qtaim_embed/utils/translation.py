@@ -1,7 +1,10 @@
+import logging
 import numpy as np
 from tqdm import tqdm
 from rdkit import Chem
 from rdkit import RDLogger
+
+logger = logging.getLogger(__name__)
 
 import openbabel as ob
 import pandas as pd
@@ -57,7 +60,7 @@ def get_molecule_translation_dimenet_qm8(df, file):
         f1_cam.append(row["f1-CAM"])
         f2_cam.append(row["f2-CAM"])
         works_count += 1
-    print(works_count)
+    logger.info("Processed %d molecules", works_count)
     # print(z_list)
     # print(n_list)
 
@@ -113,7 +116,7 @@ def get_molecule_translation_dimenet_qm9(df, file):
         gap_list.append(row["gap"])
         U0_list.append(row["u0"])
         works_count += 1
-    print(works_count)
+    logger.info("Processed %d molecules", works_count)
     # print(z_list)
     # print(n_list)
 
@@ -303,7 +306,7 @@ def write_csv_qm8(
             header_str = "AAM,CC2_E1,CC2_E2,CC2_f1,CC2_f2,CAM_E1,CAM_E2,CAM_f1,CAM_f2,PBE_E1,PBE_E2,PBE_f1,PBE_f2\n"
             f.write(header_str)
 
-        print(".... > writing csv")
+        logger.info("Writing csv")
 
         for i in tqdm(range(len(smi_list))):
             str_line = (
@@ -375,7 +378,7 @@ def write_csv_qm9(
         if header:
             header_str = "AAM,homo,lumo,gap,U0\n"
             f.write(header_str)
-        print(".... > writing csv")
+        logger.info("Writing csv")
 
         for i in tqdm(range(len(smi_list))):
             str_line = (

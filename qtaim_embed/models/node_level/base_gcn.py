@@ -1,6 +1,9 @@
 # baseline GNN model for node-level regression
+import logging
 from copy import deepcopy
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn as nn
@@ -239,7 +242,7 @@ class GCNNodePred(pl.LightningModule):
 
         self.loss = self.loss_function()
 
-        print("number of output dims", output_dims)
+        logger.debug("Number of output dims: %d", output_dims)
 
         # create multioutput wrapper for metrics
         self.train_r2 = MultioutputWrapper(

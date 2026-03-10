@@ -5,6 +5,10 @@ This module contains worker functions for multiprocessing-based parallelization
 of graph building, featurization, and serialization operations.
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def build_and_featurize_graph_worker(args_tuple):
     """
@@ -43,7 +47,7 @@ def build_and_featurize_graph_worker(args_tuple):
         # Return error info without crashing the pool
         import traceback
         error_msg = f"{str(e)}\n{traceback.format_exc()}"
-        print(f"Error processing molecule {idx}: {e}")
+        logger.error(f"Error processing molecule {idx}: {e}")
         return (idx, None, error_msg)
 
 
@@ -77,6 +81,5 @@ def serialize_graph_worker(args_tuple):
     except Exception as e:
         # Return None for this graph, log error
         import traceback
-        print(f"Error serializing graph {idx}: {e}")
-        print(traceback.format_exc())
+        logger.error(f"Error serializing graph {idx}: {e}\n{traceback.format_exc()}")
         return (idx, None)

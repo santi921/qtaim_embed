@@ -1,8 +1,11 @@
+import logging
 import torch
 from torch.utils.data import DataLoader
 from torch_geometric.data import Batch, Data
 from torch_geometric.utils import negative_sampling
 from qtaim_embed.data.transforms import hetero_to_homo
+
+logger = logging.getLogger(__name__)
 
 
 def _get_ndata(data, key):
@@ -121,7 +124,7 @@ class DataLoaderLinkTaskHeterograph(DataLoader):
     """
 
     def __init__(self, dataset, transforms=None, **kwargs):
-        print("DataLoaderLinkTaskHeterograph")
+        logger.debug("DataLoaderLinkTaskHeterograph")
         kwargs.pop("collate_fn", None)
         self.transforms = transforms
         self.transformer = hetero_to_homo(concat_global=True)

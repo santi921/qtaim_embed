@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
+import logging
 import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
 import pandas as pd
 
 import pytorch_lightning as pl
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
@@ -52,18 +56,18 @@ def main(argv=None):
     wandb_entity = args.wandb_entity
     config = args.config
 
-    # print options
-    print("debug: ", debug)
-    print("use_lmdb: ", use_lmdb)
-    print("project_name: ", project_name)
-    print("dataset_loc: ", dataset_loc)
-    print("dataset_test_loc: ", dataset_test_loc)
-    print("log_save_dir: ", log_save_dir)
-    print("wandb_entity: ", wandb_entity)
-    print("config: ", config)
+    # log options
+    logger.info("debug: %s", debug)
+    logger.info("use_lmdb: %s", use_lmdb)
+    logger.info("project_name: %s", project_name)
+    logger.info("dataset_loc: %s", dataset_loc)
+    logger.info("dataset_test_loc: %s", dataset_test_loc)
+    logger.info("log_save_dir: %s", log_save_dir)
+    logger.info("wandb_entity: %s", wandb_entity)
+    logger.info("config: %s", config)
 
     if config is None:
-        print("...using default config!")
+        logger.info("Using default config")
         config = get_default_node_level_config()
     else:
         with open(config, "r") as f:
@@ -74,7 +78,7 @@ def main(argv=None):
     # set num_workers from CLI (overrides config file)
     config["dataset"]["num_workers"] = args.num_workers
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     # for k, v in config.items():
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
@@ -84,7 +88,7 @@ def main(argv=None):
         config["model"]["target_dict"] = config["dataset"]["target_dict"]
 
     if use_lmdb:
-        print("...using lmdbs!")
+        logger.info("Using LMDBs")
         dm = LMDBDataModule(config=config)
 
     else:
@@ -114,19 +118,19 @@ def main(argv=None):
     dm.setup(stage="fit")
     feature_names = dm.train_dataset.feature_names
     feature_size = dm.train_dataset.feature_size
-    print(feature_names, feature_size)
-    print("feature size dict: ", feature_size)
+    logger.debug("feature_names=%s, feature_size=%s", feature_names, feature_size)
+    logger.debug("feature size dict: %s", feature_size)
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
     for k, v in config.items():
-        print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
+        logger.info("%s\t\t\t%s", str(k).ljust(20), str(v).ljust(20))
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
     model = load_node_level_model_from_config(config["model"])
-    print("model constructed!")
+    logger.info("Model constructed")
 
     with wandb.init(project=project_name) as run:
         log_parameters = LogParameters()
@@ -190,11 +194,11 @@ def main(argv=None):
         run.config.update(config["dataset"])
         run.config.update(config["optim"])
 
-        print("dataset and optim settings logged!")
-        print("fitting model!")
+        logger.info("Dataset and optim settings logged")
+        logger.info("Fitting model")
         trainer.fit(model, dm)
 
-        print("model fitted, testing!")
+        logger.info("Model fitted, testing")
         if use_lmdb:
             if "test_lmdb" in config["dataset"]:
                 trainer.test(model, dm)

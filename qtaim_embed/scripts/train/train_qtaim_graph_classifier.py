@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+import logging
 import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
 
 import pytorch_lightning as pl
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
@@ -65,7 +69,7 @@ def main(argv=None):
 
     if debug:
         config["dataset"]["debug"] = debug
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     # for k, v in config.items():
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
@@ -82,14 +86,14 @@ def main(argv=None):
     config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
     # config["dataset"]["feature_names"] = feature_names
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
     for k, v in config.items():
-        print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
+        logger.info("%s\t\t\t%s", str(k).ljust(20), str(v).ljust(20))
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     model = load_graph_level_model_from_config(config["model"])
-    print("model constructed!")
+    logger.info("Model constructed")
 
     with wandb.init(project=project_name) as run:
         log_parameters = LogParameters()

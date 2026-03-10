@@ -1,3 +1,4 @@
+import logging
 import os
 import io
 import shutil
@@ -6,6 +7,8 @@ import pickle
 import torch
 from torch_geometric.data import HeteroData
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 from qtaim_embed.core.dataset import Subset
 
@@ -198,7 +201,7 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
         None
     """
 
-    if type(dataset) == Subset:
+    if isinstance(dataset, Subset):
         src = dataset.dataset
         graph_iter = (src.graphs[ind] for ind in dataset.indices)
         num_graphs = len(dataset.indices)
@@ -235,7 +238,7 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
 
     os.makedirs(lmdb_dir, exist_ok=True)
 
-    print(f"...> streaming {num_graphs} molecules to lmdb")
+    logger.info(f"Streaming {num_graphs} molecules to LMDB")
 
     WRITE_BATCH_SIZE = 1000
 
@@ -332,12 +335,12 @@ def construct_lmdb_and_save_dataset(dataset: str, lmdb_dir: str, chunk: int = -1
 
     if save_scalers:
         if feature_scalers == []:
-            print("No feature scalers found in dataset. Skipping scaler save.")
+            logger.warning("No feature scalers found in dataset. Skipping scaler save.")
         else:
             for scaler in feature_scalers:
                 scaler.save_scaler(os.path.join(lmdb_dir, "feature_scaler_{}.pt".format(scaler.name)))
         if label_scalers == []:
-            print("No label scalers found in dataset. Skipping label scaler save.")
+            logger.warning("No label scalers found in dataset. Skipping label scaler save.")
         else:
             for scaler in label_scalers:
                 scaler.save_scaler(os.path.join(lmdb_dir, "label_scaler_{}.pt".format(scaler.name)))

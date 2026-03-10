@@ -1,7 +1,10 @@
+import logging
 from typing import Optional
 import numpy as np
 from sklearn.preprocessing import StandardScaler as sk_StandardScaler
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 def compute_running_average(
@@ -48,9 +51,9 @@ def _transform(
     # print("std", std)
     for i, v in enumerate(std):
         if v <= threshold:
-            print(
-                "Standard deviation for feature {} is {}, smaller than {}. "
-                "You may want to exclude this feature.".format(i, v, threshold)
+            logger.warning(
+                "Standard deviation for feature %d is %s, smaller than %s. "
+                "You may want to exclude this feature.", i, v, threshold
             )
 
     rst = scaler.transform(X)

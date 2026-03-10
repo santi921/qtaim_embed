@@ -1,3 +1,4 @@
+import logging
 import os
 import pytorch_lightning as pl
 from qtaim_embed.data.dataloader import (
@@ -23,6 +24,8 @@ from qtaim_embed.utils.data import train_validation_test_split
 from qtaim_embed.data.transforms import DropBondHeterograph
 from qtaim_embed.data.lmdb import TransformMol
 
+logger = logging.getLogger(__name__)
+
 
 class QTAIMLinkTaskDataModule(pl.LightningDataModule):
     def __init__(
@@ -36,14 +39,14 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
             self.config = config
 
         if "edge_dropout" not in self.config["dataset"].keys():
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         elif not isinstance(self.config["dataset"]["edge_dropout"], float):
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0:
-                print("... > using edge dropout on datamodule")
+                logger.info("Using edge dropout on datamodule")
                 self.transforms = DropBondHeterograph(
                     p=config["dataset"]["edge_dropout"]
                 )
@@ -100,7 +103,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                     random_seed=self.config["dataset"]["seed"],
                 )
             else:
-                print("... > no test set in datamodule")
+                logger.info("No test set in datamodule")
                 (
                     self.train_dataset,
                     self.val_dataset,
@@ -203,14 +206,14 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
             self.config = config
 
         if "edge_dropout" not in self.config["dataset"].keys():
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         elif not isinstance(self.config["dataset"]["edge_dropout"], float):
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0:
-                print("... > using edge dropout on datamodule")
+                logger.info("Using edge dropout on datamodule")
                 self.transforms = DropBondHeterograph(
                     p=config["dataset"]["edge_dropout"]
                 )
@@ -267,7 +270,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     random_seed=self.config["dataset"]["seed"],
                 )
             else:
-                print("... > no test set in datamodule")
+                logger.info("No test set in datamodule")
                 (
                     self.train_dataset,
                     self.val_dataset,
@@ -343,20 +346,20 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
     ):
         super().__init__()
         if config == None:
-            print("no config passed - using default on data module")
+            logger.warning("No config passed - using default on data module")
             self.config = get_default_graph_level_config()
         else:
             self.config = config
 
         if "edge_dropout" not in self.config["dataset"].keys():
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         elif not isinstance(self.config["dataset"]["edge_dropout"], float):
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0:
-                print("... > using edge dropout on datamodule")
+                logger.info("Using edge dropout on datamodule")
                 self.transforms = DropBondHeterograph(
                     p=config["dataset"]["edge_dropout"]
                 )
@@ -412,12 +415,12 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     validation=validation,
                     random_seed=self.config["dataset"]["seed"],
                 )
-                print("training set size: ", len(self.train_dataset))
-                print("validation set size: ", len(self.val_dataset))
-                print("test set size: ", len(self.test_dataset))
+                logger.info(f"Training set size: {len(self.train_dataset)}")
+                logger.info(f"Validation set size: {len(self.val_dataset)}")
+                logger.info(f"Test set size: {len(self.test_dataset)}")
 
             else:
-                print("... > no test set in datamodule")
+                logger.info("No test set in datamodule")
                 (
                     self.train_dataset,
                     self.val_dataset,
@@ -427,8 +430,8 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     validation=validation,
                     random_seed=self.config["dataset"]["seed"],
                 )
-                print("training set size: ", len(self.train_dataset))
-                print("validation set size: ", len(self.val_dataset))
+                logger.info(f"Training set size: {len(self.train_dataset)}")
+                logger.info(f"Validation set size: {len(self.val_dataset)}")
 
             self._fit_setup_done = True
 
@@ -463,7 +466,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     num_workers=self.config["dataset"].get("num_workers", 1),
                 )
 
-            print("test set size: ", len(self.test_dataset))
+            logger.info(f"Test set size: {len(self.test_dataset)}")
             self._test_setup_done = True
 
     def train_dataloader(self):
@@ -501,20 +504,20 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
     ):
         super().__init__()
         if config == None:
-            print("no config passed - using default on data module")
+            logger.warning("No config passed - using default on data module")
             self.config = get_default_graph_level_config()
         else:
             self.config = config
 
         if "edge_dropout" not in self.config["dataset"].keys():
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         elif not isinstance(self.config["dataset"]["edge_dropout"], float):
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0:
-                print("... > using edge dropout on datamodule")
+                logger.info("Using edge dropout on datamodule")
                 self.transforms = DropBondHeterograph(
                     dropout=config["dataset"]["edge_dropout"]
                 )
@@ -566,12 +569,12 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     validation=validation,
                     random_seed=self.config["dataset"]["seed"],
                 )
-                print("training set size: ", len(self.train_dataset))
-                print("validation set size: ", len(self.val_dataset))
-                print("test set size: ", len(self.test_dataset))
+                logger.info(f"Training set size: {len(self.train_dataset)}")
+                logger.info(f"Validation set size: {len(self.val_dataset)}")
+                logger.info(f"Test set size: {len(self.test_dataset)}")
 
             else:
-                print("... > no test set in datamodule")
+                logger.info("No test set in datamodule")
                 (
                     self.train_dataset,
                     self.val_dataset,
@@ -581,8 +584,8 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     validation=validation,
                     random_seed=self.config["dataset"]["seed"],
                 )
-                print("training set size: ", len(self.train_dataset))
-                print("validation set size: ", len(self.val_dataset))
+                logger.info(f"Training set size: {len(self.train_dataset)}")
+                logger.info(f"Validation set size: {len(self.val_dataset)}")
 
             self._fit_setup_done = True
 
@@ -611,7 +614,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     verbose=self.config["dataset"]["verbose"],
                     num_workers=self.config["dataset"].get("num_workers", 1),
                 )
-            print("test set size: ", len(self.test_dataset))
+            logger.info(f"Test set size: {len(self.test_dataset)}")
             self._test_setup_done = True
 
     def train_dataloader(self):
@@ -664,14 +667,14 @@ class LMDBDataModule(pl.LightningDataModule):
             self.test_lmdb_loc = config["dataset"]["test_lmdb"]
 
         if "edge_dropout" not in self.config["dataset"].keys():
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         elif not isinstance(self.config["dataset"]["edge_dropout"], float):
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0:
-                print("... > using edge dropout on datamodule")
+                logger.info("Using edge dropout on datamodule")
                 self.transforms = DropBondHeterograph(
                     p=config["dataset"]["edge_dropout"]
                 )
@@ -749,14 +752,14 @@ class LMDBLinkDataModule(pl.LightningDataModule):
             self.test_lmdb_loc = config["dataset"]["test_lmdb"]
 
         if "edge_dropout" not in self.config["dataset"].keys():
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         elif not isinstance(self.config["dataset"]["edge_dropout"], float):
-            print("... > no edge dropout on datamodule")
+            logger.info("No edge dropout on datamodule")
             self.transforms = None
         else:
             if self.config["dataset"]["edge_dropout"] > 0.0:
-                print("... > using edge dropout on datamodule")
+                logger.info("Using edge dropout on datamodule")
                 self.transforms = DropBondHeterograph(
                     p=config["dataset"]["edge_dropout"]
                 )

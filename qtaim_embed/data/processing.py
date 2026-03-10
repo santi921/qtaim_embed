@@ -1,8 +1,11 @@
+import logging
 from shutil import copy
 import torch
 from torch_geometric.data import HeteroData
 from collections import defaultdict
 from typing import Optional, Dict, List
+
+logger = logging.getLogger(__name__)
 
 from qtaim_embed.utils.scalers import _transform
 
@@ -154,7 +157,7 @@ class HeteroGraphStandardScaler:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
                 setattr(g[nt], graph_key, ft.clone())
-        print("... > standard scaler - inverse done")
+        logger.debug("Standard scaler - inverse done")
         return graphs
 
     def inverse_feats(self, feats):
@@ -339,7 +342,7 @@ class HeteroGraphStandardScalerIterative:
         # compute std from mean and sum_x2
         assert self.finalized == False, "scaler already finalized"
         
-        print("...> finalizing scaler")
+        logger.debug("Finalizing scaler")
         for nt in self._mean.keys():
             if self.dict_node_sizes[nt] > 0:
                 self._std[nt] = torch.sqrt(
@@ -445,7 +448,7 @@ class HeteroGraphStandardScalerIterative:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
                 setattr(g[nt], graph_key, ft.clone())
-        print("... > standard scaler - inverse done")
+        logger.debug("Standard scaler - inverse done")
         return graphs
 
     def inverse_feats(self, feats):
@@ -630,7 +633,7 @@ class HeteroGraphLogMagnitudeScaler:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
                 setattr(g[nt], graph_key, ft.clone())
-        print("... > log scaler - inverse done")
+        logger.debug("Log scaler - inverse done")
         return graphs
 
     def inverse_feats(self, feats):
@@ -773,9 +776,9 @@ def standard_scale_from_dict(dict_params):
     Returns:
         standard_scale: HeteroGraphStandardScaler object
     """
-    if type(dict_params["mean"]) != torch.Tensor:
+    if not isinstance(dict_params["mean"], torch.Tensor):
         dict_params["mean"] = torch.tensor(dict_params["mean"])
-    if type(dict_params["std"]) != torch.Tensor:
+    if not isinstance(dict_params["std"], torch.Tensor):
         dict_params["std"] = torch.tensor(dict_params["std"])
 
     return HeteroGraphStandardScaler(

@@ -27,7 +27,7 @@ def get_atom_feats(row, atom_keys):
     """
     atom_feats = {i: {} for i in range(len(row.molecule))}
     for key in atom_keys:
-        if type(row[key]) == int:
+        if isinstance(row[key], int):
             if row[key] == -1:
                 return -1
         for i, feat in enumerate(row[key]):
@@ -55,7 +55,7 @@ def get_bond_features(
 
     for key in keys:
         if key != "bond_length" and "boo_" not in key:
-            if type(row[key]) == int:
+            if isinstance(row[key], int):
                 if row[key] == -1:
                     return -1
 
@@ -76,7 +76,7 @@ def get_bond_features(
 
         for key in keys:
             if key != "bond_length" and "boo_" not in key:
-                if type(row[key][0]) == list:
+                if isinstance(row[key][0], list):
                     bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
                 else:
                     bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
