@@ -1,6 +1,7 @@
 import os
 import glob
 import shutil
+import tracemalloc
 
 import pytest
 import torch
@@ -506,3 +507,138 @@ class TestLoggerIntegration:
             os.path.join(log_dir, "**", "events.out.tfevents.*"), recursive=True
         )
         assert len(event_files) > 0, "No TensorBoard event files found"
+
+    def test_wandb_logger_offline(self, tmp_path):
+        """Train 2 epochs with WandbLogger in offline mode, verify run dir created."""
+        import wandb
+        from pytorch_lightning.loggers import WandbLogger
+
+        dataset = get_dataset_graph_level(
+            log_scale_features=False,
+            log_scale_targets=False,
+            standard_scale_features=True,
+            standard_scale_targets=True,
+        )
+        dl = DataLoaderMoleculeGraphTask(
+            dataset, batch_size=len(dataset.graphs), shuffle=False
+        )
+
+        model = make_test_model(
+            atom_feat_size=dataset.feature_size["atom"],
+            bond_feat_size=dataset.feature_size["bond"],
+            global_feat_size=dataset.feature_size["global"],
+            target_dict={"global": dataset.target_dict["global"]},
+        )
+
+        wandb_logger = WandbLogger(
+            project="test_project",
+            save_dir=str(tmp_path),
+            offline=True,
+        )
+        trainer = pl.Trainer(
+            max_epochs=2,
+            accelerator="cpu",
+            devices=1,
+            enable_checkpointing=False,
+            enable_progress_bar=False,
+            log_every_n_steps=1,
+            logger=wandb_logger,
+        )
+        trainer.fit(model, train_dataloaders=dl, val_dataloaders=dl)
+
+        # Verify wandb created an offline run directory
+        wandb_dir = tmp_path / "wandb"
+        assert wandb_dir.is_dir(), f"wandb dir not created at {wandb_dir}"
+        offline_runs = list(wandb_dir.glob("offline-run-*"))
+        assert len(offline_runs) > 0, "No offline run directories found"
+        wandb.finish()
+
+
+class TestMemoryProfiling:
+    """Verify no memory regressions in training pipeline."""
+
+    def test_training_host_memory(self):
+        """Measure host (CPU) memory during a short training run.
+
+        Ensures no excessive memory bloat from graph construction,
+        batching, or the torch.split shared-storage issue.
+        """
+        dataset = get_dataset_graph_level(
+            log_scale_features=False,
+            log_scale_targets=False,
+            standard_scale_features=True,
+            standard_scale_targets=True,
+        )
+        dl = DataLoaderMoleculeGraphTask(
+            dataset, batch_size=len(dataset.graphs), shuffle=False
+        )
+
+        model = make_test_model(
+            atom_feat_size=dataset.feature_size["atom"],
+            bond_feat_size=dataset.feature_size["bond"],
+            global_feat_size=dataset.feature_size["global"],
+            target_dict={"global": dataset.target_dict["global"]},
+        )
+
+        tracemalloc.start()
+
+        trainer = pl.Trainer(
+            max_epochs=5,
+            accelerator="cpu",
+            devices=1,
+            enable_checkpointing=False,
+            enable_progress_bar=False,
+        )
+        trainer.fit(model, train_dataloaders=dl, val_dataloaders=dl)
+
+        current_mb, peak_mb = [x / 1e6 for x in tracemalloc.get_traced_memory()]
+        tracemalloc.stop()
+
+        # Sanity threshold: small test dataset should stay well under 512 MB
+        assert peak_mb < 512, (
+            f"Peak host memory {peak_mb:.1f} MB exceeds 512 MB threshold"
+        )
+        # Current allocation should be much lower than peak (no leaks)
+        assert current_mb < peak_mb, (
+            f"Current memory ({current_mb:.1f} MB) not below peak ({peak_mb:.1f} MB)"
+        )
+
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="CUDA not available"
+    )
+    def test_training_gpu_memory(self):
+        """Measure GPU peak memory during a short training run."""
+        dataset = get_dataset_graph_level(
+            log_scale_features=False,
+            log_scale_targets=False,
+            standard_scale_features=True,
+            standard_scale_targets=True,
+        )
+        dl = DataLoaderMoleculeGraphTask(
+            dataset, batch_size=len(dataset.graphs), shuffle=False
+        )
+
+        model = make_test_model(
+            atom_feat_size=dataset.feature_size["atom"],
+            bond_feat_size=dataset.feature_size["bond"],
+            global_feat_size=dataset.feature_size["global"],
+            target_dict={"global": dataset.target_dict["global"]},
+        )
+
+        torch.cuda.reset_peak_memory_stats()
+
+        trainer = pl.Trainer(
+            max_epochs=5,
+            accelerator="gpu",
+            devices=1,
+            enable_checkpointing=False,
+            enable_progress_bar=False,
+        )
+        trainer.fit(model, train_dataloaders=dl, val_dataloaders=dl)
+
+        peak_mb = torch.cuda.max_memory_allocated() / 1e6
+
+        # Small test model should stay well under 1 GB
+        assert peak_mb < 1024, (
+            f"GPU peak memory {peak_mb:.1f} MB exceeds 1024 MB threshold"
+        )
