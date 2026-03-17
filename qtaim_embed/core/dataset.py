@@ -70,6 +70,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         extra_dataset_info: Dict[str, Any] = {},
         num_workers: int = 1,
         verbose: bool = True,
+        rbf_cutoff: float = 5.0,
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -137,6 +138,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             allowed_charges=allowed_charges,
             allowed_spins=allowed_spins,
             self_loop=self_loop,
+            rbf_cutoff=rbf_cutoff,
         )
 
         # Build graphs - use parallel processing if num_workers > 1
@@ -212,6 +214,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         from qtaim_embed.data.parallel_utils import build_and_featurize_graph_worker
 
         # Extract grapher config for workers to reconstruct in each process
+        # NOTE: when adding new featurizer params, update all 3 _build_graphs_parallel sites
         grapher_config = {
             'element_set': grapher.atom_featurizer.element_set,
             'atom_keys': grapher.atom_featurizer.selected_keys,
@@ -221,6 +224,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             'allowed_charges': grapher.global_featurizer.allowed_charges,
             'allowed_spins': grapher.global_featurizer.allowed_spins,
             'self_loop': grapher.self_loop,
+            'rbf_cutoff': grapher.bond_featurizer.rbf_cutoff,
         }
 
         # Clamp workers to reasonable bounds
@@ -457,6 +461,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         extra_dataset_info: Dict[str, Any] = {},
         num_workers: int = 1,
         verbose: bool = True,
+        rbf_cutoff: float = 5.0,
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -533,6 +538,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             allowed_charges=allowed_charges,
             allowed_spins=allowed_spins,
             self_loop=self_loop,
+            rbf_cutoff=rbf_cutoff,
         )
 
         # Build graphs - use parallel processing if num_workers > 1
@@ -609,6 +615,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         from qtaim_embed.data.parallel_utils import build_and_featurize_graph_worker
 
         # Extract grapher config for workers to reconstruct in each process
+        # NOTE: when adding new featurizer params, update all 3 _build_graphs_parallel sites
         grapher_config = {
             'element_set': grapher.atom_featurizer.element_set,
             'atom_keys': grapher.atom_featurizer.selected_keys,
@@ -618,6 +625,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             'allowed_charges': grapher.global_featurizer.allowed_charges,
             'allowed_spins': grapher.global_featurizer.allowed_spins,
             'self_loop': grapher.self_loop,
+            'rbf_cutoff': grapher.bond_featurizer.rbf_cutoff,
         }
 
         # Clamp workers to reasonable bounds
@@ -862,6 +870,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         impute: bool = False,
         verbose: bool = True,
         num_workers: int = 1,
+        rbf_cutoff: float = 5.0,
     ):
         """
         Baseline dataset for hetero graph node label prediction. Includes global feautures.
@@ -930,6 +939,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             allowed_charges=allowed_charges,
             allowed_spins=allowed_spins,
             self_loop=self_loop,
+            rbf_cutoff=rbf_cutoff,
         )
 
         # Build graphs (parallel or serial)
@@ -991,6 +1001,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         from qtaim_embed.data.parallel_utils import build_and_featurize_graph_worker
 
         # Extract grapher config for workers (avoid pickling complex objects)
+        # NOTE: when adding new featurizer params, update all 3 _build_graphs_parallel sites
         grapher_config = {
             'element_set': grapher.atom_featurizer.element_set,
             'atom_keys': grapher.atom_featurizer.selected_keys,
@@ -1000,6 +1011,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             'allowed_charges': grapher.global_featurizer.allowed_charges,
             'allowed_spins': grapher.global_featurizer.allowed_spins,
             'self_loop': grapher.self_loop,
+            'rbf_cutoff': grapher.bond_featurizer.rbf_cutoff,
         }
 
         # Clamp workers to reasonable bounds

@@ -332,3 +332,186 @@ class TestGrapher:
                 graph_list_charge[ind]["global"].feat.shape[1]
                 == graph_list_bare[ind]["global"].feat.shape[1] + 3
             )
+
+
+import torch
+from qtaim_embed.utils.descriptors import sinusoidal_bessel_rbf, gaussian_rbf
+
+
+class TestSinusoidalBesselRBF:
+    def test_output_shape(self):
+        d = torch.tensor([1.0, 2.0, 3.0])
+        out = sinusoidal_bessel_rbf(d, n_basis=20, cutoff=5.0)
+        assert out.shape == (3, 20)
+
+    def test_zero_at_cutoff(self):
+        d = torch.tensor([5.0])
+        out = sinusoidal_bessel_rbf(d, n_basis=20, cutoff=5.0)
+        assert torch.allclose(out, torch.zeros(1, 20), atol=1e-5)
+
+    def test_zero_distance_no_nan(self):
+        d = torch.tensor([0.0])
+        out = sinusoidal_bessel_rbf(d, n_basis=20, cutoff=5.0)
+        assert not torch.any(torch.isnan(out))
+
+    def test_beyond_cutoff_is_zero(self):
+        d = torch.tensor([6.0, 10.0])
+        out = sinusoidal_bessel_rbf(d, n_basis=20, cutoff=5.0)
+        assert torch.allclose(out, torch.zeros(2, 20), atol=1e-6)
+
+    def test_different_cutoffs(self):
+        d = torch.tensor([2.0])
+        out_5 = sinusoidal_bessel_rbf(d, n_basis=20, cutoff=5.0)
+        out_10 = sinusoidal_bessel_rbf(d, n_basis=20, cutoff=10.0)
+        assert not torch.allclose(out_5, out_10)
+
+    def test_nonzero_in_range(self):
+        d = torch.tensor([1.5])
+        out = sinusoidal_bessel_rbf(d, n_basis=20, cutoff=5.0)
+        assert out.abs().sum() > 0
+
+
+class TestGaussianRBF:
+    def test_output_shape(self):
+        d = torch.tensor([1.0, 2.0])
+        out = gaussian_rbf(d, n_basis=50, cutoff=5.0)
+        assert out.shape == (2, 50)
+
+    def test_peak_at_center(self):
+        n_basis = 10
+        cutoff = 5.0
+        centers = torch.linspace(0, cutoff, n_basis)
+        for i, c in enumerate(centers):
+            out = gaussian_rbf(c.unsqueeze(0), n_basis, cutoff)
+            assert out[0, i] == out[0].max()
+
+    def test_bounded_output(self):
+        d = torch.linspace(0, 10, 100)
+        out = gaussian_rbf(d, n_basis=50, cutoff=5.0)
+        assert out.min() >= 0.0
+        assert out.max() <= 1.0 + 1e-6
+
+    def test_nonzero_in_range(self):
+        d = torch.tensor([2.5])
+        out = gaussian_rbf(d, n_basis=20, cutoff=5.0)
+        assert out.abs().sum() > 0
+
+
+class TestRBFFeaturizerIntegration:
+    df_test = get_data()
+
+    def test_rbf_bessel_featurizer(self):
+        atom_keys = ["extra_feat_atom_esp_total"]
+        bond_keys = ["rbf_bessel_20"]
+        mol_wrappers, element_set = mol_wrappers_from_df(
+            df=self.df_test,
+            bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+        )
+        grapher = get_grapher(
+            element_set,
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+            allowed_ring_size=[3, 4, 5, 6, 7],
+            self_loop=True,
+            rbf_cutoff=5.0,
+        )
+        for mol in mol_wrappers:
+            graph = grapher.build_graph(mol)
+            graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
+            bond_names = names["bond"]
+            # Should have ring features (7) + 20 RBF features
+            rbf_names = [n for n in bond_names if "rbf_bessel_20" in n]
+            assert len(rbf_names) == 20
+            assert "rbf_bessel_20_0" in bond_names
+            assert "rbf_bessel_20_19" in bond_names
+
+    def test_rbf_gaussian_featurizer(self):
+        atom_keys = ["extra_feat_atom_esp_total"]
+        bond_keys = ["rbf_gaussian_10"]
+        mol_wrappers, element_set = mol_wrappers_from_df(
+            df=self.df_test,
+            bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+        )
+        grapher = get_grapher(
+            element_set,
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+            allowed_ring_size=[3, 4, 5, 6, 7],
+            self_loop=True,
+            rbf_cutoff=5.0,
+        )
+        for mol in mol_wrappers:
+            graph = grapher.build_graph(mol)
+            graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
+            bond_names = names["bond"]
+            rbf_names = [n for n in bond_names if "rbf_gaussian_10" in n]
+            assert len(rbf_names) == 10
+
+    def test_rbf_plus_boo_featurizer(self):
+        atom_keys = ["extra_feat_atom_esp_total"]
+        bond_keys = ["rbf_bessel_10", "boo_2"]
+        mol_wrappers, element_set = mol_wrappers_from_df(
+            df=self.df_test,
+            bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+        )
+        grapher = get_grapher(
+            element_set,
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+            allowed_ring_size=[3, 4, 5, 6, 7],
+            self_loop=True,
+            rbf_cutoff=5.0,
+        )
+        for mol in mol_wrappers:
+            graph = grapher.build_graph(mol)
+            graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
+            bond_names = names["bond"]
+            rbf_names = [n for n in bond_names if "rbf_bessel_10" in n]
+            boo_names = [n for n in bond_names if "boo_2" in n]
+            assert len(rbf_names) == 10
+            assert len(boo_names) == 9  # (2+1)^2 = 9
+
+    def test_no_rbf_backward_compatible(self):
+        atom_keys = ["extra_feat_atom_esp_total"]
+        bond_keys = ["extra_feat_bond_esp_total", "bond_length"]
+        mol_wrappers, element_set = mol_wrappers_from_df(
+            df=self.df_test,
+            bond_key="bonds",
+            map_key="extra_feat_bond_indices_qtaim",
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+        )
+        grapher = get_grapher(
+            element_set,
+            atom_keys=atom_keys,
+            bond_keys=bond_keys,
+            global_keys=[],
+            allowed_ring_size=[3, 4, 5, 6, 7],
+            self_loop=True,
+        )
+        for mol in mol_wrappers:
+            graph = grapher.build_graph(mol)
+            graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
+            bond_names = names["bond"]
+            # Should have ring features (7) + bond_length (1) + esp_total (1) = 9
+            assert "bond_length" in bond_names
+            assert "extra_feat_bond_esp_total" in bond_names
+            # No RBF names
+            rbf_names = [n for n in bond_names if "rbf_" in n]
+            assert len(rbf_names) == 0
