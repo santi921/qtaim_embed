@@ -515,3 +515,34 @@ class TestRBFFeaturizerIntegration:
             # No RBF names
             rbf_names = [n for n in bond_names if "rbf_" in n]
             assert len(rbf_names) == 0
+
+    def test_zero_bond_molecule_with_rbf(self):
+        """Zero-bond fallback path produces correct feature width when RBF is enabled."""
+        import numpy as np
+        from qtaim_embed.data.featurizer import BondAsNodeGraphFeaturizerGeneral
+
+        n_basis = 16
+        bond_keys = ["rbf_bessel_16"]
+
+        # Minimal mock that satisfies the featurizer interface
+        class MockMol:
+            bonds = {}
+            bond_features = {}
+            coords = np.zeros((1, 3))
+            num_atoms = 1
+
+        featurizer = BondAsNodeGraphFeaturizerGeneral(
+            selected_keys=bond_keys,
+            allowed_ring_size=[3, 4, 5, 6, 7],
+            rbf_cutoff=5.0,
+        )
+
+        feats, names = featurizer(MockMol())
+        bond_feat_tensor = feats["feat"]
+
+        # num_feats = len(selected_keys)=1 + 7 (ring/metal) + (n_basis-1)=15 = 23
+        expected_width = 1 + 7 + (n_basis - 1)
+        assert bond_feat_tensor.shape == (1, expected_width), (
+            f"Expected shape (1, {expected_width}), got {bond_feat_tensor.shape}"
+        )
+        assert not torch.any(torch.isnan(bond_feat_tensor))
