@@ -273,6 +273,11 @@ class GCNLinkPred(pl.LightningModule):
 
         self.loss = self.loss_function()
 
+        if compiled and hasattr(torch.version, "hip") and torch.version.hip is not None:
+            import warnings
+            warnings.warn("torch.compile disabled on ROCm (no benefit, potential instability)")
+            compiled = False
+
         self.forward_fn = (
             torch.compile(self.compiled_forward, dynamic=True)
             if compiled

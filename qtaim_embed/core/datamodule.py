@@ -88,6 +88,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
                 validation = self.config["dataset"]["val_prop"]
                 test_size = self.config["dataset"]["test_prop"]
@@ -153,6 +154,7 @@ class QTAIMLinkTaskDataModule(pl.LightningDataModule):
                     ],
                     verbose=self.config["dataset"]["verbose"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
                 self.prepare_tf = True
                 if self.node_len is None:
@@ -274,6 +276,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -335,6 +338,7 @@ class QTAIMNodeTaskDataModule(pl.LightningDataModule):
                     bond_key=self.config["dataset"]["bond_key"],
                     map_key=self.config["dataset"]["map_key"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
                 self.prepare_tf = True
                 return (
@@ -439,6 +443,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     ],
                     verbose=self.config["dataset"]["verbose"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -507,6 +512,7 @@ class QTAIMGraphTaskDataModule(pl.LightningDataModule):
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
 
                 print("test set size: ", len(self.test_dataset))
@@ -619,6 +625,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
 
                 validation = self.config["dataset"]["val_prop"]
@@ -683,6 +690,7 @@ class QTAIMGraphTaskClassifyDataModule(pl.LightningDataModule):
                     map_key=self.config["dataset"]["map_key"],
                     verbose=self.config["dataset"]["verbose"],
                 num_workers=self.config["dataset"].get("num_workers", 1),
+                rbf_cutoff=self.config["dataset"].get("rbf_cutoff", 5.0),
                 )
                 print("test set size: ", len(self.test_dataset))
 

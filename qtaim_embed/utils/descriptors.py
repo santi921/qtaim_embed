@@ -54,7 +54,7 @@ def get_bond_features(
     bond_features = {}
 
     for key in keys:
-        if key != "bond_length" and "boo_" not in key:
+        if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
             if type(row[key]) == int:
                 if row[key] == -1:
                     return -1
@@ -75,7 +75,7 @@ def get_bond_features(
             bond_index_map = row[map_key].index(tuple(bond))
 
         for key in keys:
-            if key != "bond_length" and "boo_" not in key:
+            if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
                 if type(row[key][0]) == list:
                     bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
                 else:
@@ -101,6 +101,87 @@ def get_node_direction_expansion(distance_vec: torch.Tensor, lmax: int) -> torch
 
     edge_sh = torch.abs(edge_sh)
     return edge_sh
+
+
+def sinusoidal_bessel_rbf(
+    distances: torch.Tensor,
+    n_basis: int,
+    cutoff: float,
+) -> torch.Tensor:
+    """Sinusoidal Bessel RBF expansion with polynomial envelope (p=5).
+
+    Computes orthogonal radial basis functions on [0, cutoff] using
+    the DimeNet formulation with an inlined p=5 polynomial envelope
+    for C^4 smoothness at the cutoff boundary.
+
+    Set cutoff near the max bond length in your dataset for best results.
+
+    Args:
+        distances: [N] tensor of interatomic distances in Angstroms
+        n_basis: number of basis functions
+        cutoff: cutoff radius in Angstroms
+
+    Returns:
+        [N, n_basis] tensor of RBF features
+    """
+    # Clamp to avoid sin(x)/x singularity at 0
+    d = distances.unsqueeze(-1)  # [N, 1]
+    d_clamped = torch.clamp(d, min=1e-8)
+
+    # Basis function indices [1, 2, ..., n_basis]
+    n = torch.arange(1, n_basis + 1, dtype=distances.dtype, device=distances.device)
+
+    # Bessel: sqrt(2/cutoff) * sin(n * pi * d / cutoff) / d
+    rbf = (
+        torch.sqrt(torch.tensor(2.0 / cutoff, dtype=distances.dtype))
+        * torch.sin(n * torch.pi * d_clamped / cutoff)
+        / d_clamped
+    )
+
+    # Polynomial envelope (p=5, inlined): 1 - 21*x^5 + 35*x^6 - 15*x^7
+    d_scaled = d / cutoff
+    envelope = 1.0 - 21.0 * d_scaled**5 + 35.0 * d_scaled**6 - 15.0 * d_scaled**7
+    envelope = torch.clamp(envelope, min=0.0)
+
+    rbf = rbf * envelope
+
+    # Zero out values beyond cutoff
+    mask = (d < cutoff).float()
+    rbf = rbf * mask
+
+    return rbf
+
+
+def gaussian_rbf(
+    distances: torch.Tensor,
+    n_basis: int,
+    cutoff: float,
+) -> torch.Tensor:
+    """Fixed Gaussian RBF expansion with evenly spaced centers.
+
+    Computes Gaussian radial basis functions with centers evenly distributed
+    over [0, cutoff] and width equal to the spacing between centers (SchNet
+    formulation).
+
+    Args:
+        distances: [N] tensor of interatomic distances in Angstroms
+        n_basis: number of basis functions
+        cutoff: cutoff radius in Angstroms
+
+    Returns:
+        [N, n_basis] tensor of RBF features
+    """
+    d = distances.unsqueeze(-1)  # [N, 1]
+
+    # Evenly spaced centers from 0 to cutoff
+    centers = torch.linspace(0.0, cutoff, n_basis, dtype=distances.dtype, device=distances.device)
+
+    # Width = spacing between centers
+    spacing = cutoff / (n_basis - 1) if n_basis > 1 else cutoff
+    gamma = 1.0 / (2.0 * spacing**2)
+
+    rbf = torch.exp(-gamma * (d - centers) ** 2)
+    return rbf
 
 
 def find_rings(

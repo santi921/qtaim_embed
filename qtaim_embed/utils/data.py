@@ -42,6 +42,7 @@ def get_default_link_level_config():
             "train_batch_size": 128,
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
+            "rbf_cutoff": 5.0,
         },
         "model": {
             "classifier": False,
@@ -97,7 +98,7 @@ def get_default_link_level_config():
             "precision": "bf16",
             "accumulate_grad_batches": 1,
             "pin_memory": True,
-            "persistent_workers": True,
+            "persistent_workers": False,
             "train_batch_size": 128,
         },
     }
@@ -148,6 +149,7 @@ def get_default_node_level_config():
             "train_batch_size": 512,
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
+            "rbf_cutoff": 5.0,
         },
         "model": {
             "classifier": False,
@@ -252,6 +254,7 @@ def get_default_graph_level_config():
 
             "impute": False,
             "verbose": False,
+            "rbf_cutoff": 5.0,
         },
         "model": {
             "classifier": False,
@@ -369,7 +372,7 @@ def get_default_graph_level_config_classif():
             "test_dataset_loc": None,
             "train_dataset_loc": root + "/tests/data/labelled_data.pkl",
             "num_workers": 1,
-
+            "rbf_cutoff": 5.0,
         },
         "model": {
             "classifier": True,
