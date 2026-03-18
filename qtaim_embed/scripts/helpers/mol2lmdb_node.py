@@ -91,6 +91,7 @@ def main(argv=None):
         bond_key=config["dataset"]["bond_key"],
         map_key=config["dataset"]["map_key"],
         num_workers=num_workers,
+        rbf_cutoff=config["dataset"].get("rbf_cutoff", 5.0),
     )
 
     if split == True:
