@@ -98,7 +98,7 @@ def get_default_link_level_config():
             "precision": "bf16",
             "accumulate_grad_batches": 1,
             "pin_memory": True,
-            "persistent_workers": True,
+            "persistent_workers": False,
             "train_batch_size": 128,
         },
     }
