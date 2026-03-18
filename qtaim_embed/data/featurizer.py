@@ -15,6 +15,8 @@ from qtaim_embed.utils.descriptors import (
     ring_features_for_bonds_full,
     find_rings,
     get_node_direction_expansion,
+    sinusoidal_bessel_rbf,
+    gaussian_rbf,
 )
 from qtaim_embed.core.molwrapper import MoleculeWrapper
 
@@ -80,6 +82,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         dtype: str = "float32",
         selected_keys: Optional[List[str]] = [],
         allowed_ring_size: Optional[List[int]] = [],
+        rbf_cutoff: float = 5.0,
     ):
         super(BaseFeaturizer, self).__init__()
         self._feature_size = 0
@@ -87,6 +90,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         self.selected_keys = selected_keys
         self.dtype = dtype
         self.allowed_ring_size = allowed_ring_size
+        self.rbf_cutoff = rbf_cutoff
         if allowed_ring_size == []:
             logger.info(
                 "No ring size if no ring features are enabled, metal/nonmetal bonds are also off"
@@ -122,6 +126,28 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             if "boo_" in key:
                 bool_boo = True
                 l_order = int(key.split("_")[1])
+
+        # Parse RBF config from selected_keys (only one RBF key supported)
+        bool_rbf = False
+        rbf_type = None
+        rbf_n_basis = 0
+        rbf_key_name = None
+        for key in self.selected_keys:
+            if "rbf_" in key:
+                bool_rbf = True
+                parts = key.split("_")  # "rbf_bessel_50" -> ["rbf", "bessel", "50"]
+                rbf_type = parts[1]
+                rbf_n_basis = int(parts[2])
+                rbf_key_name = key
+                break  # only one RBF key supported
+
+        # Fix num_feats for zero-bond fallback: BOO and RBF keys expand
+        # into multiple features, but count as 1 key each above.
+        # NOTE: when adding new featurizer params that expand keys, update here.
+        if bool_boo:
+            num_feats += (l_order + 1) ** 2 - 1
+        if bool_rbf:
+            num_feats += rbf_n_basis - 1
 
         if num_bonds == 0:
             ft = [0.0 for _ in range(num_feats)]
@@ -171,9 +197,29 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                     boo_expansion = get_node_direction_expansion(dist, lmax=l_order)
                     ft += boo_expansion
 
+                if bool_rbf:
+                    bond_len_for_rbf = np.sqrt(
+                        np.sum(
+                            np.square(
+                                np.array(xyz_coordinates[bond[0]])
+                                - np.array(xyz_coordinates[bond[1]])
+                            )
+                        )
+                    )
+                    dist_tensor = torch.tensor([bond_len_for_rbf], dtype=torch.float32)
+                    if rbf_type == "bessel":
+                        expansion = sinusoidal_bessel_rbf(
+                            dist_tensor, rbf_n_basis, self.rbf_cutoff
+                        )
+                    elif rbf_type == "gaussian":
+                        expansion = gaussian_rbf(
+                            dist_tensor, rbf_n_basis, self.rbf_cutoff
+                        )
+                    ft += expansion.squeeze(0).tolist()
+
                 if self.selected_keys != None:
                     for key in self.selected_keys:
-                        if key != "bond_length" and "boo_" not in key:
+                        if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
                             ft.append(features[bond][key])
 
                 feats.append(ft)
@@ -194,9 +240,13 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             for l_num in range((l_order + 1) ** 2):
                 self._feature_name += ["boo_{}_{}".format(l_order, l_num)]
 
+        if bool_rbf:
+            for i in range(rbf_n_basis):
+                self._feature_name += ["{}_{}".format(rbf_key_name, i)]
+
         if self.selected_keys != []:
             for key in self.selected_keys:
-                if key != "bond_length" and "boo_" not in key:
+                if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
                     self._feature_name.append(key)
 
             # self._feature_name += self.selected_keys

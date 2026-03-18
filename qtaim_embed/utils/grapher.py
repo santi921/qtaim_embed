@@ -21,6 +21,7 @@ def get_grapher(
     atom_featurizer_tf=True,
     bond_featurizer_tf=True,
     global_featurizer_tf=True,
+    rbf_cutoff=5.0,
 ):
     if not atom_featurizer_tf:
         atom_featurizer = None
@@ -37,6 +38,7 @@ def get_grapher(
         bond_featurizer = BondAsNodeGraphFeaturizerGeneral(
             selected_keys=bond_keys,
             allowed_ring_size=allowed_ring_size,
+            rbf_cutoff=rbf_cutoff,
         )
 
     if not global_featurizer_tf:

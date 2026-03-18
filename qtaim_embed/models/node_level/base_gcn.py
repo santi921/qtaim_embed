@@ -273,6 +273,11 @@ class GCNNodePred(pl.LightningModule):
             torchmetrics.MeanSquaredError(squared=False), num_outputs=output_dims
         )
 
+        if compiled and hasattr(torch.version, "hip") and torch.version.hip is not None:
+            import warnings
+            warnings.warn("torch.compile disabled on ROCm (no benefit, potential instability)")
+            compiled = False
+
         self.forward_fn = (
             torch.compile(self.compiled_forward, dynamic=True)
             if compiled

@@ -642,3 +642,61 @@ class TestMemoryProfiling:
         assert peak_mb < 1024, (
             f"GPU peak memory {peak_mb:.1f} MB exceeds 1024 MB threshold"
         )
+
+
+def test_train_with_rbf_features():
+    """End-to-end: dataset with RBF bond features trains without error."""
+    from pathlib import Path
+    from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
+
+    data_file = str(Path(__file__).parent / "data" / "labelled_data.pkl")
+
+    dataset = HeteroGraphGraphLabelDataset(
+        file=data_file,
+        allowed_ring_size=[3, 4, 5, 6, 7],
+        allowed_charges=None,
+        allowed_spins=None,
+        self_loop=True,
+        element_set=[],
+        extra_keys={
+            "atom": ["extra_feat_atom_esp_total"],
+            "bond": ["rbf_bessel_10"],
+            "global": ["extra_feat_global_E1_CAM"],
+        },
+        target_list=["extra_feat_global_E1_CAM"],
+        extra_dataset_info={},
+        debug=True,
+        log_scale_features=False,
+        log_scale_targets=False,
+        standard_scale_features=True,
+        standard_scale_targets=True,
+        bond_key="bonds",
+        map_key="extra_feat_bond_indices_qtaim",
+        rbf_cutoff=5.0,
+    )
+
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset, batch_size=len(dataset.graphs), shuffle=False
+    )
+
+    model_config = get_default_graph_level_config()
+    model_config["model"]["atom_feature_size"] = dataset.feature_size["atom"]
+    model_config["model"]["bond_feature_size"] = dataset.feature_size["bond"]
+    model_config["model"]["global_feature_size"] = dataset.feature_size["global"]
+    model_config["model"]["target_dict"]["global"] = dataset.target_dict["global"]
+    model_config["model"]["initializer"] = None
+
+    model = load_graph_level_model_from_config(model_config["model"])
+
+    trainer = pl.Trainer(
+        max_epochs=2,
+        accelerator="auto",
+        devices=1,
+        enable_progress_bar=False,
+        enable_checkpointing=False,
+        log_every_n_steps=1,
+    )
+    trainer.fit(model, data_loader)
+
+    # verify bond feature width: 7 ring features + 10 RBF = 17
+    assert dataset.feature_size["bond"] == 17
