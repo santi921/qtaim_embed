@@ -1,6 +1,9 @@
 # baseline GNN model for graph-level regression
+import logging
 from copy import deepcopy
 import torch
+
+logger = logging.getLogger(__name__)
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import lr_scheduler
@@ -127,9 +130,10 @@ class GCNGraphPred(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightandMeanThenCat",
+            "WeightAndMeanThenCat",
         ], (
-            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
+            "global_pooling must be one of: WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, "
+            "WeightAndMeanThenCat, GlobalAttentionPoolingThenCat, Set2SetThenCat, "
             + f"but got {global_pooling}"
         )
 
@@ -297,7 +301,7 @@ class GCNGraphPred(pl.LightningModule):
             readout_fn = Set2SetThenCat
         elif self.hparams.global_pooling == "MeanPoolingThenCat":
             readout_fn = MeanPoolingThenCat
-        elif self.hparams.global_pooling == "WeightandMeanThenCat":
+        elif self.hparams.global_pooling == "WeightAndMeanThenCat":
             readout_fn = WeightAndMeanThenCat
 
         list_in_feats = []
@@ -361,7 +365,7 @@ class GCNGraphPred(pl.LightningModule):
         self.fc_layers.append(nn.Linear(input_size, self.hparams.ntasks))
 
         # print("number of output dims", output_dims)
-        print("... > number of tasks:", self.hparams.ntasks)
+        logger.info("Number of tasks: %d", self.hparams.ntasks)
 
         # create multioutput wrapper for metrics
         self.train_r2 = MultioutputWrapper(
@@ -574,7 +578,7 @@ class GCNGraphPred(pl.LightningModule):
         all_loss = self.compute_loss(pred=logits, target=labels)
         logits = logits.view(-1, self.hparams.ntasks)
         labels = labels.view(-1, self.hparams.ntasks)
-        if type(all_loss) == list:
+        if isinstance(all_loss, list):
             all_loss = torch.stack(all_loss)
         # log loss
         self.log(
@@ -614,49 +618,50 @@ class GCNGraphPred(pl.LightningModule):
         r2, mae, mse = self.compute_metrics(mode="train")
 
         # get epoch number
-        if type(r2) == list:
+        if isinstance(r2, list):
             r2 = torch.stack(r2)
-        if type(mae) == list:
+        if isinstance(mae, list):
             mae = torch.stack(mae)
-        if type(mse) == list:
+        if isinstance(mse, list):
             mse = torch.stack(mse)
 
         if self.trainer.current_epoch < 2:
             self.log("val_mae", 10**10, prog_bar=False)
-        self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
-        self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
+        self.log("train_r2", r2.median(), prog_bar=False, sync_dist=False)
+        self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=False)
 
     def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="val")
-        if type(r2) == list:
+        if isinstance(r2, list):
             r2 = torch.stack(r2)
-        if type(mae) == list:
+        if isinstance(mae, list):
             mae = torch.stack(mae)
-        if type(mse) == list:
+        if isinstance(mse, list):
             mse = torch.stack(mse)
         r2_median = r2.median().type(torch.float32)
-        self.log("val_r2", r2_median, prog_bar=True, sync_dist=True)
-        self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        self.log("val_r2", r2_median, prog_bar=True, sync_dist=False)
+        self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=False)
 
     def on_test_epoch_end(self):
         """
         Test epoch end
         """
         r2, mae, mse = self.compute_metrics(mode="test")
-        if type(r2) == list:
+        if isinstance(r2, list):
             r2 = torch.stack(r2)
-        if type(mae) == list:
+        if isinstance(mae, list):
             mae = torch.stack(mae)
-        if type(mse) == list:
+        if isinstance(mse, list):
             mse = torch.stack(mse)
-        self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
-        self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
+        self.log("test_r2", r2.median(), prog_bar=False, sync_dist=False)
+        self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=False)
 
     def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
         """
@@ -738,11 +743,20 @@ class GCNGraphPred(pl.LightningModule):
         return r2, torch_l1, torch_mse
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.parameters()),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
-        )
+        params = list(filter(lambda p: p.requires_grad, self.parameters()))
+        try:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+                fused=True,
+            )
+        except RuntimeError:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+            )
 
         scheduler = self._config_lr_scheduler(optimizer)
 
@@ -828,7 +842,7 @@ class GCNGraphPred(pl.LightningModule):
             y = labels_unscaled
             y_pred = preds_unscaled
             r2_manual = torchmetrics.functional.r2_score(y_pred, y)
-            print("r2 manual", r2_manual)
+            logger.debug("r2 manual: %s", r2_manual)
             mae_per_atom = torch.mean(abs_diff / n_atom_list)
             # mae_per_molecule = torch.mean(abs_diff)
             ewt_prop = torch.sum(abs_diff < 0.043) / len(abs_diff)
@@ -864,10 +878,10 @@ class GCNGraphPred(pl.LightningModule):
             r2_val = r2_eval.compute()
             mae_val = mae_eval.compute()
             mse_val = mse_eval.compute()
-            if type(r2_val) == list:
+            if isinstance(r2_val, list):
                 r2_val = torch.stack(r2_val)
-            if type(mae_val) == list:
+            if isinstance(mae_val, list):
                 mae_val = torch.stack(mae_val)
-            if type(mse_val) == list:
+            if isinstance(mse_val, list):
                 mse_val = torch.stack(mse_val)
             return r2_val, mae_val, mse_val, preds_unscaled, labels_unscaled

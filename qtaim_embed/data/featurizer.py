@@ -2,7 +2,10 @@
 Featurize a molecule heterograph of atom, bond, and global nodes with RDkit.
 """
 
+import logging
 import torch
+
+logger = logging.getLogger(__name__)
 import numpy as np
 from rdkit.Chem.rdchem import GetPeriodicTable
 from qtaim_embed.utils.descriptors import (
@@ -89,8 +92,8 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         self.allowed_ring_size = allowed_ring_size
         self.rbf_cutoff = rbf_cutoff
         if allowed_ring_size == []:
-            print(
-                "NOTE: No ring size if no ring features are enabled, metal/nonmetal bonds are also off"
+            logger.info(
+                "No ring size if no ring features are enabled, metal/nonmetal bonds are also off"
             )
         #print("selected bond keys", selected_keys)
 

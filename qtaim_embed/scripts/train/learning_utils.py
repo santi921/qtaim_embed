@@ -1,5 +1,8 @@
+import logging
 from copy import deepcopy
 from qtaim_embed.core.dataset import HeteroGraphGraphLabelDataset
+
+logger = logging.getLogger(__name__)
 
 
 def get_datasets_qm9(loc_dict):
@@ -243,10 +246,10 @@ def get_datasets_qm9(loc_dict):
             standard_scale_features=True,
             standard_scale_targets=True,
         )
-        print(dataset_train_qtaim_bl.feature_size())
-        print(dataset_train_qtaim.feature_size())
-        print(dataset_train_base_bl.feature_size())
-        print(dataset_train_base.feature_size())
+        logger.debug("dataset_train_qtaim_bl feature_size: %s", dataset_train_qtaim_bl.feature_size())
+        logger.debug("dataset_train_qtaim feature_size: %s", dataset_train_qtaim.feature_size())
+        logger.debug("dataset_train_base_bl feature_size: %s", dataset_train_base_bl.feature_size())
+        logger.debug("dataset_train_base feature_size: %s", dataset_train_base.feature_size())
 
         dict_datasets["qtaim"][key] = dataset_train_qtaim
         dict_datasets["non_qtaim"][key] = dataset_train_base
@@ -526,10 +529,10 @@ def get_datasets_qm8(loc_dict):
             standard_scale_features=True,
             standard_scale_targets=True,
         )
-        print(dataset_train_qtaim_bl.feature_size())
-        print(dataset_train_qtaim.feature_size())
-        print(dataset_train_base_bl.feature_size())
-        print(dataset_train_base.feature_size())
+        logger.debug("dataset_train_qtaim_bl feature_size: %s", dataset_train_qtaim_bl.feature_size())
+        logger.debug("dataset_train_qtaim feature_size: %s", dataset_train_qtaim.feature_size())
+        logger.debug("dataset_train_base_bl feature_size: %s", dataset_train_base_bl.feature_size())
+        logger.debug("dataset_train_base feature_size: %s", dataset_train_base.feature_size())
 
         dict_datasets["qtaim"][key] = dataset_train_qtaim
         dict_datasets["non_qtaim"][key] = dataset_train_base
@@ -844,10 +847,10 @@ def get_datasets_libe(loc_dict):
             standard_scale_features=True,
             standard_scale_targets=True,
         )
-        print(dataset_train_qtaim_bl.feature_size())
-        print(dataset_train_qtaim.feature_size())
-        print(dataset_train_base_bl.feature_size())
-        print(dataset_train_base.feature_size())
+        logger.debug("dataset_train_qtaim_bl feature_size: %s", dataset_train_qtaim_bl.feature_size())
+        logger.debug("dataset_train_qtaim feature_size: %s", dataset_train_qtaim.feature_size())
+        logger.debug("dataset_train_base_bl feature_size: %s", dataset_train_base_bl.feature_size())
+        logger.debug("dataset_train_base feature_size: %s", dataset_train_base.feature_size())
 
         dict_datasets["qtaim"][key] = dataset_train_qtaim
         dict_datasets["non_qtaim"][key] = dataset_train_base
@@ -1200,10 +1203,10 @@ def get_datasets_tmqm_low(loc_dict):
             standard_scale_features=True,
             standard_scale_targets=True,
         )
-        print(dataset_train_qtaim_bl.feature_size())
-        print(dataset_train_qtaim.feature_size())
-        print(dataset_train_base_bl.feature_size())
-        print(dataset_train_base.feature_size())
+        logger.debug("dataset_train_qtaim_bl feature_size: %s", dataset_train_qtaim_bl.feature_size())
+        logger.debug("dataset_train_qtaim feature_size: %s", dataset_train_qtaim.feature_size())
+        logger.debug("dataset_train_base_bl feature_size: %s", dataset_train_base_bl.feature_size())
+        logger.debug("dataset_train_base feature_size: %s", dataset_train_base.feature_size())
 
         dict_datasets["qtaim"][key] = dataset_train_qtaim
         dict_datasets["non_qtaim"][key] = dataset_train_base
@@ -1555,10 +1558,10 @@ def get_datasets_tmqm_high(loc_dict):
             standard_scale_features=True,
             standard_scale_targets=True,
         )
-        print(dataset_train_qtaim_bl.feature_size())
-        print(dataset_train_qtaim.feature_size())
-        print(dataset_train_base_bl.feature_size())
-        print(dataset_train_base.feature_size())
+        logger.debug("dataset_train_qtaim_bl feature_size: %s", dataset_train_qtaim_bl.feature_size())
+        logger.debug("dataset_train_qtaim feature_size: %s", dataset_train_qtaim.feature_size())
+        logger.debug("dataset_train_base_bl feature_size: %s", dataset_train_base_bl.feature_size())
+        logger.debug("dataset_train_base feature_size: %s", dataset_train_base.feature_size())
 
         dict_datasets["qtaim"][key] = dataset_train_qtaim
         dict_datasets["non_qtaim"][key] = dataset_train_base

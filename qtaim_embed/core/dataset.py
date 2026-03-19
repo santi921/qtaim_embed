@@ -1,3 +1,4 @@
+import logging
 import torch
 from torch_geometric.data import HeteroData
 from tqdm import tqdm
@@ -18,10 +19,12 @@ from qtaim_embed.data.processing import (
     HeteroGraphLogMagnitudeScaler,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _get_ndata(graph: HeteroData, key: str) -> Dict[str, torch.Tensor]:
     """
-    Helper to get a feature dict from PyG HeteroData, equivalent to DGL's g.ndata[key].
+    Helper to get a feature dict from PyG HeteroData.
     Returns a dict mapping node type -> tensor for all node types that have the attribute.
     """
     return {
@@ -33,7 +36,7 @@ def _get_ndata(graph: HeteroData, key: str) -> Dict[str, torch.Tensor]:
 
 def _set_ndata(graph: HeteroData, key: str, data_dict: Dict[str, torch.Tensor]) -> None:
     """
-    Helper to set a feature dict on PyG HeteroData, equivalent to DGL's g.ndata[key] = dict.
+    Helper to set a feature dict on PyG HeteroData.
     Sets the attribute on each node type present in data_dict.
     """
     for nt, tensor in data_dict.items():
@@ -102,7 +105,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             df = pd.read_csv(file)
 
         if debug:
-            print("... > running in debug mode")
+            logger.info("Running in debug mode")
             df = df.head(100)
         else:
             if size != None:
@@ -149,7 +152,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         else:
             # Serial graph building (original behavior)
             graph_list = []
-            print("... > Building graphs and featurizing")
+            logger.info("Building graphs and featurizing")
             for mol in tqdm(mol_wrappers):
                 graph = grapher.build_graph(mol)
                 graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
@@ -184,9 +187,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.self_loop = self_loop
 
         self.load()
-        print(
-            "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-        )
+        logger.info("LOADED DATASET")
 
     def __len__(self) -> int:
         return len(self.graphs)
@@ -248,9 +249,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             )
 
             if verbose:
-                print(
-                    f"... > Building graphs and featurizing (parallel, {actual_workers} workers)"
-                )
+                logger.info("Building graphs and featurizing (parallel, %d workers)", actual_workers)
 
             for idx, graph, names in tqdm(
                 results,
@@ -313,14 +312,12 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         self.exclude_names = exclude_names
 
         if self.verbose:
-            print("included in labels")
-            print(self.include_names)
-            print("included in graph features")
-            print(self.exclude_names)
+            logger.debug("included in labels: %s", self.include_names)
+            logger.debug("included in graph features: %s", self.exclude_names)
 
     def load(self) -> None:
         self.get_include_exclude_indices()
-        print("... > parsing labels and features in graphs")
+        logger.info("Parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
             features_new = {}
@@ -335,40 +332,40 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
             _set_ndata(graph, "labels", labels)
 
         if self.verbose:
-            print("original loader node types:", list(_get_ndata(graph, "feat").keys()))
-            print("original loader label types:", list(_get_ndata(graph, "labels").keys()))
+            logger.debug("original loader node types: %s", list(_get_ndata(graph, "feat").keys()))
+            logger.debug("original loader label types: %s", list(_get_ndata(graph, "labels").keys()))
 
         if self.log_scale_features:
-            print("... > Log scaling features")
+            logger.info("Log scaling features")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=True, shift=1)
             self.graphs = log_scaler(self.graphs)
             self.feature_scalers.append(log_scaler)
-            print("... > Log scaling features complete")
+            logger.info("Log scaling features complete")
 
         if self.standard_scale_features:
-            print("... > Scaling features")
+            logger.info("Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
             self.feature_scalers.append(scaler)
-            print("... > Scaling features complete")
-            print("... > feature mean(s): \n", scaler.mean)
-            print("... > feature std(s):  \n", scaler.std)
+            logger.info("Scaling features complete")
+            logger.debug("feature mean(s): %s", scaler.mean)
+            logger.debug("feature std(s): %s", scaler.std)
 
         if self.log_scale_labels:
-            print("... > Log scaling targets")
+            logger.info("Log scaling targets")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
             self.graphs = log_scaler(self.graphs)
             self.label_scalers.append(log_scaler)
-            print("... > Log scaling targets complete")
+            logger.info("Log scaling targets complete")
 
         if self.standard_scale_labels:
-            print("... > Scaling targets")
+            logger.info("Scaling targets")
             scaler = HeteroGraphStandardScaler(features_tf=False)
             self.graphs = scaler(self.graphs)
             self.label_scalers.append(scaler)
-            print("... > Scaling targets complete")
-            print("... > feature mean(s): \n", scaler.mean)
-            print("... > feature std(s):  \n", scaler.std)
+            logger.info("Scaling targets complete")
+            logger.debug("feature mean(s): %s", scaler.mean)
+            logger.debug("feature std(s): %s", scaler.std)
 
     @property
     def feature_names(self) -> Dict[str, List[str]]:
@@ -398,7 +395,7 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         ), "a scaler must be used to unscale features"
         graphs_ret = deepcopy(graphs)
         if self.standard_scale_features and self.log_scale_features:
-            print("unscaling feats with log and standard scalers")
+            logger.debug("Unscaling features with log and standard scalers")
             graphs_ret = self.feature_scalers[1].inverse(graphs_ret)
             graphs_ret = self.feature_scalers[0].inverse(graphs_ret)
 
@@ -422,14 +419,14 @@ class HeteroGraphNodeLabelDataset(torch.utils.data.Dataset):
         graphs_ret = deepcopy(graphs)
 
         if self.standard_scale_labels and self.log_scale_labels:
-            print("unscaling feats with log and standard scalers")
+            logger.debug("Unscaling targets with log and standard scalers")
             graphs_ret = self.label_scalers[1].inverse(graphs_ret)
             graphs_ret = self.label_scalers[0].inverse(graphs_ret)
         elif self.log_scale_labels or self.standard_scale_labels:
             if self.log_scale_labels:
-                print("unscaling feats with log scaler")
+                logger.debug("Unscaling targets with log scaler")
             if self.standard_scale_labels:
-                print("unscaling feats with standard scaler")
+                logger.debug("Unscaling targets with standard scaler")
             graphs_ret = self.label_scalers[0].inverse(graphs_ret)
         return graphs_ret
 
@@ -497,7 +494,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             df = pd.read_csv(file)
 
         if debug:
-            print("... > running in debug mode")
+            logger.info("Running in debug mode")
             df = df.head(100)
         else:
             if size != None:
@@ -507,9 +504,9 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         for key_check in ["atom", "bond", "global"]:
             if key_check not in extra_keys.keys():
                 extra_keys[key_check] = []
-        
-        print("pandas df dims: ", df.shape)
-        
+
+        logger.debug("pandas df dims: %s", df.shape)
+
         mol_wrappers, element_set_ret = mol_wrappers_from_df(
             df=df,
             bond_key=bond_key,
@@ -527,7 +524,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             self.element_set = sorted(element_set_ret)
         else:
             self.element_set = element_set
-        print("element set: ", self.element_set)
+        logger.debug("element set: %s", self.element_set)
 
         grapher = get_grapher(
             element_set=self.element_set,
@@ -549,7 +546,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         else:
             # Serial graph building (original behavior)
             graph_list = []
-            print("... > Building graphs and featurizing")
+            logger.info("Building graphs and featurizing")
             for mol in tqdm(mol_wrappers):
                 graph = grapher.build_graph(mol)
                 graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
@@ -584,9 +581,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self.verbose = verbose
 
         self.load()
-        print(
-            "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-        )
+        logger.info("LOADED DATASET")
 
     def __len__(self) -> int:
         return len(self.graphs)
@@ -649,9 +644,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             )
 
             if verbose:
-                print(
-                    f"... > Building graphs and featurizing (parallel, {actual_workers} workers)"
-                )
+                logger.info("Building graphs and featurizing (parallel, %d workers)", actual_workers)
 
             for idx, graph, names in tqdm(
                 results,
@@ -667,12 +660,12 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
                     # Log error but continue (error already printed by worker)
                     pass
 
-        if feat_names is None:  
-            raise RuntimeError(  
-                "No graphs were successfully built in parallel processing; "  
-                "feature names could not be determined."  
-            )  
-        
+        if feat_names is None:
+            raise RuntimeError(
+                "No graphs were successfully built in parallel processing; "
+                "feature names could not be determined."
+            )
+
         return graph_list, feat_names
 
 
@@ -726,13 +719,11 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         self.include_names = include_names
         self.exclude_names = exclude_names
         if self.verbose:
-            print("included in graph features")
-            # print(self.exclude_locs)
-            print(self.exclude_names)
+            logger.debug("included in graph features: %s", self.exclude_names)
 
     def load(self) -> None:
         self.get_include_exclude_indices()
-        print("... > parsing labels and features in graphs")
+        logger.info("Parsing labels and features in graphs")
         for graph in tqdm(self.graphs):
             labels = {}
             features_new = {}
@@ -747,38 +738,38 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
             _set_ndata(graph, "labels", labels)
 
         if self.log_scale_features:
-            print("... > Log scaling features")
+            logger.info("Log scaling features")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=True, shift=1)
             self.graphs = log_scaler(self.graphs)
             self.feature_scalers.append(log_scaler)
-            print("... > Log scaling features complete")
+            logger.info("Log scaling features complete")
 
         if self.standard_scale_features:
-            print("... > Scaling features")
+            logger.info("Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
             self.feature_scalers.append(scaler)
 
             if self.verbose:
-                print("... > feature mean(s): \n", scaler.mean)
-                print("... > feature std(s):  \n", scaler.std)
+                logger.debug("feature mean(s): %s", scaler.mean)
+                logger.debug("feature std(s): %s", scaler.std)
 
         if self.log_scale_labels:
-            print("... > Log scaling targets")
+            logger.info("Log scaling targets")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=False, shift=1)
             self.graphs = log_scaler(self.graphs)
             self.label_scalers.append(log_scaler)
-            print("... > Log scaling targets complete")
+            logger.info("Log scaling targets complete")
 
         if self.standard_scale_labels:
-            print("... > Scaling targets")
+            logger.info("Scaling targets")
             scaler = HeteroGraphStandardScaler(features_tf=False)
             self.graphs = scaler(self.graphs)
             self.label_scalers.append(scaler)
 
             if self.verbose:
-                print("... > feature mean(s): \n", scaler.mean)
-                print("... > feature std(s):  \n", scaler.std)
+                logger.debug("feature mean(s): %s", scaler.mean)
+                logger.debug("feature std(s): %s", scaler.std)
 
     @property
     def feature_names(self) -> Dict[str, List[str]]:
@@ -808,7 +799,7 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         ), "a scaler must be used to unscale features"
         graphs_ret = deepcopy(graphs)
         if self.standard_scale_features and self.log_scale_features:
-            print("unscaling feats with log and standard scalers")
+            logger.debug("Unscaling features with log and standard scalers")
             graphs_ret = self.feature_scalers[1].inverse(graphs_ret)
             graphs_ret = self.feature_scalers[0].inverse(graphs_ret)
 
@@ -832,14 +823,14 @@ class HeteroGraphGraphLabelDataset(torch.utils.data.Dataset):
         graphs_ret = deepcopy(graphs)
 
         if self.standard_scale_labels and self.log_scale_labels:
-            print("unscaling feats with log and standard scalers")
+            logger.debug("Unscaling targets with log and standard scalers")
             graphs_ret = self.label_scalers[1].inverse(graphs_ret)
             graphs_ret = self.label_scalers[0].inverse(graphs_ret)
         elif self.log_scale_labels or self.standard_scale_labels:
             if self.log_scale_labels:
-                print("unscaling feats with log scaler")
+                logger.debug("Unscaling targets with log scaler")
             if self.standard_scale_labels:
-                print("unscaling feats with standard scaler")
+                logger.debug("Unscaling targets with standard scaler")
             graphs_ret = self.label_scalers[0].inverse(graphs_ret)
         return graphs_ret
 
@@ -903,7 +894,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             df = pd.read_csv(file)
 
         if debug:
-            print("... > running in debug mode")
+            logger.info("Running in debug mode")
             df = df.head(100)
         else:
             if size != None:
@@ -929,7 +920,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             self.element_set = sorted(element_set_ret)
         else:
             self.element_set = element_set
-        print("element set: ", self.element_set)
+        logger.debug("element set: %s", self.element_set)
         grapher = get_grapher(
             element_set=self.element_set,
             atom_keys=extra_keys["atom"],
@@ -950,7 +941,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         else:
             graph_list = []
             if verbose:
-                print("... > Building graphs and featurizing")
+                logger.info("Building graphs and featurizing")
             for mol in tqdm(mol_wrappers, disable=not verbose):
                 graph = grapher.build_graph(mol)
                 graph, names = grapher.featurize(graph, mol, ret_feat_names=True)
@@ -972,9 +963,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.verbose = verbose
 
         self.load()
-        print(
-            "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LOADED DATASET %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"
-        )
+        logger.info("LOADED DATASET")
 
     def __len__(self) -> int:
         return len(self.graphs)
@@ -1033,7 +1022,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
             )
 
             if verbose:
-                print(f"... > Building graphs and featurizing (parallel, {actual_workers} workers)")
+                logger.info("Building graphs and featurizing (parallel, %d workers)", actual_workers)
 
             for idx, graph, names in tqdm(
                 results,
@@ -1096,16 +1085,12 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.exclude_locs = exclude_locs
         self.include_names = include_names
         self.exclude_names = exclude_names
-        print("included in labels")
-        # print(self.include_locs)
-        print(self.include_names)
-        print("included in graph features")
-        # print(self.exclude_locs)
-        print(self.exclude_names)
+        logger.debug("included in labels: %s", self.include_names)
+        logger.debug("included in graph features: %s", self.exclude_names)
 
     def load(self) -> None:
         self.get_include_exclude_indices()
-        print("... > parsing labels and features in graphs")
+        logger.info("Parsing labels and features in graphs")
         filtered_graph_count = 0
         filter_ind = []
         categories_set_list = [set([]) for i in range(len(self.include_locs["global"]))]
@@ -1218,40 +1203,38 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         self.graphs = graphs_filtered
         self.data = mol_wrappers_filtered
         self.dict_distro = dict_distro
-        print("... > number of categories for each label: ")
+        logger.info("Number of categories for each label:")
         for i, category_set in enumerate(categories_set_list):
-            print(
-                "...... > label ",
+            logger.info(
+                "label %s: %d with distribution: %s",
                 self.include_names["global"][i],
-                ": ",
                 len(category_set),
-                "with distribution: ",
                 dict_distro[i],
             )
-        print("original loader node types:", list(_get_ndata(graph, "feat").keys()))
-        print("original loader label types:", list(_get_ndata(graph, "labels").keys()))
+        logger.debug("original loader node types: %s", list(_get_ndata(graph, "feat").keys()))
+        logger.debug("original loader label types: %s", list(_get_ndata(graph, "labels").keys()))
 
         if self.impute:
-            print("number of graphs imputed: ", filtered_graph_count)
+            logger.info("Number of graphs imputed: %d", filtered_graph_count)
         else:
-            print("number of graphs filtered: ", filtered_graph_count)
+            logger.info("Number of graphs filtered: %d", filtered_graph_count)
 
         if self.log_scale_features:
-            print("... > Log scaling features")
+            logger.info("Log scaling features")
             log_scaler = HeteroGraphLogMagnitudeScaler(features_tf=True, shift=1)
             self.graphs = log_scaler(self.graphs)
             self.feature_scalers.append(log_scaler)
-            print("... > Log scaling features complete")
+            logger.info("Log scaling features complete")
 
         if self.standard_scale_features:
-            print("... > Scaling features")
+            logger.info("Scaling features")
             scaler = HeteroGraphStandardScaler()
             self.graphs = scaler(self.graphs)
             self.feature_scalers.append(scaler)
-            print("... > Scaling features complete")
+            logger.info("Scaling features complete")
             if self.verbose:
-                print("... > feature mean(s): \n", scaler.mean)
-                print("... > feature std(s):  \n", scaler.std)
+                logger.debug("feature mean(s): %s", scaler.mean)
+                logger.debug("feature std(s): %s", scaler.std)
 
     @property
     def feature_names(self) -> Dict[str, List[str]]:
@@ -1281,7 +1264,7 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
         ), "a scaler must be used to unscale features"
         graph_ret = deepcopy(graphs)
         if self.standard_scale_features and self.log_scale_features:
-            print("unscaling feats with log and standard scalers")
+            logger.debug("Unscaling features with log and standard scalers")
             graph_ret = self.feature_scalers[1].inverse(graph_ret)
             graph_ret = self.feature_scalers[0].inverse(graph_ret)
 
@@ -1297,13 +1280,17 @@ class LMDBBaseDataset(Dataset):
 
         self.config = config
         self.path = Path(self.config["src"])
+        self._worker_env = None
+        self._worker_envs = None
 
         if not self.path.is_file():
             db_paths = sorted(self.path.glob("*.lmdb"))
             assert len(db_paths) > 0, f"No LMDBs found in '{self.path}'"
-            # self.metadata_path = self.path / "metadata.npz"
+            self._db_paths = list(db_paths)
 
             self._keys = []
+            # Open envs in main process to read metadata; kept for property access.
+            # __getitem__ lazily reopens per-worker to support num_workers > 0.
             self.envs = []
             for db_path in db_paths:
                 cur_env = self.connect_db(db_path)
@@ -1325,8 +1312,8 @@ class LMDBBaseDataset(Dataset):
             self.num_samples = sum(keylens)
 
         else:
-            # Get metadata in case
-            # self.metadata_path = self.path.parent / "metadata.npz"
+            self._db_paths = None
+            # Open env in main process for metadata; kept for property access.
             self.env = self.connect_db(self.path)
 
             # If "length" encoded as ascii is present, use that
@@ -1366,6 +1353,11 @@ class LMDBBaseDataset(Dataset):
             idx = self.available_indices[idx]
 
         if not self.path.is_file():
+            # Lazy per-worker init: each DataLoader worker opens its own env
+            # after fork, avoiding shared-handle conflicts with max_readers > 1.
+            if self._worker_envs is None:
+                self._worker_envs = [self.connect_db(p) for p in self._db_paths]
+
             # Figure out which db this should be indexed from.
             db_idx = bisect.bisect(self._keylen_cumulative, idx)
             # Extract index of element within that db.
@@ -1376,16 +1368,18 @@ class LMDBBaseDataset(Dataset):
 
             # Return features.
             datapoint_pickled = (
-                self.envs[db_idx]
+                self._worker_envs[db_idx]
                 .begin()
                 .get(f"{self._keys[db_idx][el_idx]}".encode("ascii"))
             )
             data_object = pickle.loads(datapoint_pickled)
-            # data_object.id = f"{db_idx}_{el_idx}"
 
         else:
-            #!CHECK, _keys should be less then total numbers of keys as there are more properties.
-            datapoint_pickled = self.env.begin().get(
+            # Lazy per-worker init: each DataLoader worker opens its own env.
+            if self._worker_env is None:
+                self._worker_env = self.connect_db(self.path)
+
+            datapoint_pickled = self._worker_env.begin().get(
                 f"{self._keys[idx]}".encode("ascii")
             )
 
@@ -1414,6 +1408,19 @@ class LMDBBaseDataset(Dataset):
                 env.close()
         else:
             self.env.close()
+
+    def _close_worker_envs(self) -> None:
+        """Close lazily-opened per-worker LMDB environments."""
+        if self._worker_envs is not None:
+            for env in self._worker_envs:
+                env.close()
+            self._worker_envs = None
+        if self._worker_env is not None:
+            self._worker_env.close()
+            self._worker_env = None
+
+    def __del__(self) -> None:
+        self._close_worker_envs()
 
     def get_metadata(self, num_samples: int = 100) -> None:
         pass

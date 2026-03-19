@@ -1,5 +1,8 @@
+import logging
 from tqdm import tqdm
 from qtaim_embed.core.molwrapper import MoleculeWrapper
+
+logger = logging.getLogger(__name__)
 from qtaim_embed.utils.descriptors import (
     get_atom_feats,
     get_bond_features,
@@ -21,7 +24,7 @@ def mol_wrappers_from_df(
     Creates a list of MoleculeWrapper objects from a dataframe
     Takes:
         df: dataframe with the following columns:
-            - molecule_graph: dgl graph
+            - molecule_graph: PyG HeteroData
             - molecule: pymatgen molecule
             - ids: molecule id
             - names: molecule name
@@ -37,7 +40,7 @@ def mol_wrappers_from_df(
 
     element_set = set()
     mol_wrappers = []
-    print("... > creating MoleculeWrapper objects")
+    logger.info("Creating MoleculeWrapper objects")
     bond_feats_error_count = 0
     atom_feats_error_count = 0
     # print("... > bond_key: ", bond_key)
@@ -101,8 +104,8 @@ def mol_wrappers_from_df(
             if atom_feats == -1:
                 atom_feats_error_count += 1
 
-    print("... > bond_feats_error_count: ", bond_feats_error_count)
-    print("... > atom_feats_error_count: ", atom_feats_error_count)
+    logger.info("Bond feats error count: %d", bond_feats_error_count)
+    logger.info("Atom feats error count: %d", atom_feats_error_count)
     # sort element set
     element_set = set(sorted(list(element_set)))
     return mol_wrappers, element_set

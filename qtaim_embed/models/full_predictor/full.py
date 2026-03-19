@@ -9,9 +9,12 @@ The loop allows the graph topology and node features to be refined iteratively,
 enabling prediction of QTAIM-style labeled graphs from molecular geometries.
 """
 
+import logging
 from typing import Dict, List, Optional, Tuple, Union
 import warnings
 import torch
+
+logger = logging.getLogger(__name__)
 import torch.nn as nn
 import numpy as np
 from torch_geometric.data import Data, HeteroData
@@ -75,14 +78,13 @@ class FullPredictor(nn.Module):
 
         # Load pretrained models
         self.link_model = self._load_link_model(config["link_model_path"])
-        print("Link model loaded.")
-        # print feature size and names 
-        print("link input model:",self.link_model.hparams.input_size)
+        logger.info("Link model loaded.")
+        logger.debug("Link input model: %s", self.link_model.hparams.input_size)
         self.node_model = self._load_node_model(config["node_model_path"])
-        print("Node model loaded.")
-        print("node input model(atom):",self.node_model.hparams.atom_input_size)
-        print("node input model(bond):",self.node_model.hparams.bond_input_size)
-        print("node input model(global):",self.node_model.hparams.global_input_size)
+        logger.info("Node model loaded.")
+        logger.debug("Node input model (atom): %s", self.node_model.hparams.atom_input_size)
+        logger.debug("Node input model (bond): %s", self.node_model.hparams.bond_input_size)
+        logger.debug("Node input model (global): %s", self.node_model.hparams.global_input_size)
 
         # Move models to device
         self.link_model = self.link_model.to(self.device)
@@ -98,7 +100,7 @@ class FullPredictor(nn.Module):
         # Create geometry converter with matching element_set
         distance_cutoff = config.get("distance_cutoff", 1.8)
         if self.grapher_config is not None:
-            print(f"Using element_set from model: {self.grapher_config.get('element_set', [])[:5]}...")
+            logger.info(f"Using element_set from model: {self.grapher_config.get('element_set', [])[:5]}...")
             self.geometry_converter = GeometryToGraph.from_grapher_config(
                 self.grapher_config,
                 distance_cutoff=distance_cutoff,
@@ -119,7 +121,7 @@ class FullPredictor(nn.Module):
         """Load link prediction model from checkpoint."""
         try:
             model = GCNLinkPred.load_from_checkpoint(checkpoint_path=path)
-            print(f"Link model loaded from {path}")
+            logger.info(f"Link model loaded from {path}")
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load link model from {path}: {e}")
@@ -128,7 +130,7 @@ class FullPredictor(nn.Module):
         """Load node prediction model from checkpoint."""
         try:
             model = GCNNodePred.load_from_checkpoint(checkpoint_path=path)
-            print(f"Node model loaded from {path}")
+            logger.info(f"Node model loaded from {path}")
             return model
         except Exception as e:
             raise RuntimeError(f"Failed to load node model from {path}: {e}")

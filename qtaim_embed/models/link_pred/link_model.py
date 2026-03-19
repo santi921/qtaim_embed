@@ -1,6 +1,9 @@
+import logging
 from typing import List, Tuple, Dict, Optional
 
 import torch
+
+logger = logging.getLogger(__name__)
 import torch.nn as nn
 from torch.optim import lr_scheduler
 import pytorch_lightning as pl
@@ -112,7 +115,7 @@ class GCNLinkPred(pl.LightningModule):
                 "batch_norm": False,
                 "activation": "ReLU",
             }
-            print("...> Using default predictor parameters for MLP predictor!")
+            logger.warning("Using default predictor parameters for MLP predictor!")
 
         params = {
             "input_size": input_size,
@@ -478,27 +481,28 @@ class GCNLinkPred(pl.LightningModule):
 
         if self.trainer.current_epoch < 2:
             self.log("val_f1", 0.0, prog_bar=False)
-        self.log("train_f1", f1, prog_bar=True, sync_dist=True)
-        self.log("train_auc", auc, prog_bar=False, sync_dist=True)
-        self.log("train_accuracy", acc, prog_bar=False, sync_dist=True)
+        # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
+        self.log("train_f1", f1, prog_bar=True, sync_dist=False)
+        self.log("train_auc", auc, prog_bar=False, sync_dist=False)
+        self.log("train_accuracy", acc, prog_bar=False, sync_dist=False)
 
     def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
         acc, f1, auc = self.compute_metrics(mode="val")
-        self.log("val_f1", f1, prog_bar=True, sync_dist=True)
-        self.log("val_auc", auc, prog_bar=False, sync_dist=True)
-        self.log("val_accuracy", acc, prog_bar=False, sync_dist=True)
+        self.log("val_f1", f1, prog_bar=True, sync_dist=False)
+        self.log("val_auc", auc, prog_bar=False, sync_dist=False)
+        self.log("val_accuracy", acc, prog_bar=False, sync_dist=False)
 
     def on_test_epoch_end(self):
         """
         Test epoch end
         """
         acc, f1, auc = self.compute_metrics(mode="test")
-        self.log("test_f1", f1, prog_bar=True, sync_dist=True)
-        self.log("test_auc", auc, prog_bar=False, sync_dist=True)
-        self.log("test_accuracy", acc, prog_bar=False, sync_dist=True)
+        self.log("test_f1", f1, prog_bar=True, sync_dist=False)
+        self.log("test_auc", auc, prog_bar=False, sync_dist=False)
+        self.log("test_accuracy", acc, prog_bar=False, sync_dist=False)
 
     def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
         """
@@ -551,11 +555,20 @@ class GCNLinkPred(pl.LightningModule):
         return acc, f1, auc
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.parameters()),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
-        )
+        params = list(filter(lambda p: p.requires_grad, self.parameters()))
+        try:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+                fused=True,
+            )
+        except RuntimeError:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+            )
 
         scheduler = self._config_lr_scheduler(optimizer)
 

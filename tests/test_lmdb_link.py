@@ -13,8 +13,6 @@ def test_write():
     config_w_test = get_default_link_level_config()
 
     dm = QTAIMLinkTaskDataModule(config=config_w_test)
-    feature_size, feat_name = dm.prepare_data("fit")
-
     dm.setup("fit")
 
     train_dl_size = len(dm.train_dataset)
@@ -47,7 +45,7 @@ def test_multi_out():
 
     config_def["dataset"]["verbose"] = False
     dm = QTAIMLinkTaskDataModule(config=config_def)
-    feature_size, feat_name = dm.prepare_data()
+    dm.setup("fit")
     construct_lmdb_and_save_dataset(dm.train_dataset, "./data/lmdb_link/train/")
 
     config_w_test = {
@@ -73,7 +71,6 @@ def test_multi_out():
 
     # check that the folders have been created with the correct number of files
     dm_lmdb = LMDBLinkDataModule(config=config_w_test)
-    dm_lmdb.prepare_data()
     dm_lmdb.setup("fit")
     config_w_test["model"]["input_size"] = dm.node_len
 
@@ -95,13 +92,10 @@ def test_model_lmdb():
 
     # check that the folders have been created with the correct number of files
     dm_lmdb = LMDBLinkDataModule(config=config)
-    feat_name, feature_size = dm_lmdb.prepare_data()
     dm_lmdb.setup("fit")
-    # print(config["model"])
-    config["model"]["input_size"] = dm_lmdb.node_len
-    model = load_link_model_from_config(config["model"])  # error here
-
     dl = dm_lmdb.train_dataloader()
+    config["model"]["input_size"] = dm_lmdb.node_len
+    model = load_link_model_from_config(config["model"])
 
     trainer = pl.Trainer(
         max_epochs=1,
@@ -128,7 +122,6 @@ def test_lmdb_link_test_stage():
     }
 
     dm_lmdb = LMDBLinkDataModule(config=config)
-    dm_lmdb.prepare_data()
     dm_lmdb.setup("test")
 
     dl = dm_lmdb.test_dataloader()

@@ -1,3 +1,4 @@
+import logging
 import torch
 import numpy as np
 import pytorch_lightning as pl
@@ -8,6 +9,8 @@ from qtaim_embed.models.graph_level.base_gcn_classifier import GCNGraphPredClass
 from qtaim_embed.models.link_pred.link_model import GCNLinkPred
 from qtaim_embed.data.dataloader import DataLoaderMoleculeGraphTask
 from qtaim_embed.models.initializers import xavier_init, kaiming_init, equi_var_init
+
+logger = logging.getLogger(__name__)
 
 
 def get_grapher_config_from_model(model):
@@ -32,7 +35,7 @@ def load_graph_level_model_from_config(config):
         optimizer (pytorch optimizer obj): optimizer
     """
     if config["restore"]:
-        print(":::RESTORING MODEL FROM EXISTING FILE:::")
+        logger.info("RESTORING MODEL FROM EXISTING FILE")
 
         if config["restore_path"] is not None:
             try:
@@ -40,29 +43,29 @@ def load_graph_level_model_from_config(config):
                     model = GCNGraphPred.load_from_checkpoint(
                         checkpoint_path=config["restore_path"]
                     )
-                    print(":::MODEL LOADED:::")
+                    logger.info("MODEL LOADED")
                     return model
                 except Exception as e:
-                    print(f":::GCNGraphPred load failed: {e}, trying GCNGraphPredClassifier:::")
+                    logger.warning(f"GCNGraphPred load failed: {e}, trying GCNGraphPredClassifier")
                     model = GCNGraphPredClassifier.load_from_checkpoint(
                         checkpoint_path=config["restore_path"]
                     )
-                    print(":::MODEL LOADED:::")
+                    logger.info("MODEL LOADED")
                     return model
             except Exception as e:
-                print(f":::Checkpoint load failed: {e}:::")
-            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+                logger.warning(f"Checkpoint load failed: {e}")
+            logger.warning("NO MODEL FOUND LOADING FRESH MODEL")
         else:
             load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNGraphPred.load_from_checkpoint(
                     checkpoint_path=load_dir + "/last.ckpt"
                 )
-                print(":::MODEL LOADED:::")
+                logger.info("MODEL LOADED")
                 return model
             except Exception as e:
-                print(f":::Checkpoint load failed: {e}:::")
-                print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+                logger.warning(f"Checkpoint load failed: {e}")
+                logger.warning("NO MODEL FOUND LOADING FRESH MODEL")
 
     shape_fc = config["shape_fc"]
     base_fc = config["fc_hidden_size_1"]
@@ -72,7 +75,7 @@ def load_graph_level_model_from_config(config):
     else:
         fc_layers = [int(base_fc / (2**i)) for i in range(config["fc_num_layers"])]
     if config["classifier"]:
-        print(":::CLASSIFIER MODEL:::")
+        logger.info("CLASSIFIER MODEL")
         model = GCNGraphPredClassifier(
             atom_input_size=config["atom_feature_size"],
             bond_input_size=config["bond_feature_size"],
@@ -110,7 +113,7 @@ def load_graph_level_model_from_config(config):
             residual_gat=config["residual_gat"],
         )
     else:
-        print(":::REGRESSION MODEL:::")
+        logger.info("REGRESSION MODEL")
         model = GCNGraphPred(
             atom_input_size=config["atom_feature_size"],
             bond_input_size=config["bond_feature_size"],
@@ -151,19 +154,19 @@ def load_graph_level_model_from_config(config):
     # model.to(device)
 
     if config["initializer"] == "kaiming":
-        print(":::USING KAIMING INITIALIZER:::")
+        logger.debug("Using kaiming initializer")
         kaiming_init(model)
 
     elif config["initializer"] == "xavier":
-        print(":::USING XAVIER INITIALIZER:::")
+        logger.debug("Using xavier initializer")
         xavier_init(model)
 
     elif config["initializer"] == "equi_var":
-        print(":::USING EQUIVARIANCE INITIALIZER:::")
+        logger.debug("Using equivariance initializer")
         equi_var_init(model)
 
     else:
-        print(":::NO INITIALIZER USED:::")
+        logger.debug("No initializer used")
 
     return model
 
@@ -179,32 +182,32 @@ def load_node_level_model_from_config(config):
         optimizer (pytorch optimizer obj): optimizer
     """
     if config["restore"]:
-        print(":::RESTORING MODEL FROM EXISTING FILE:::")
+        logger.info("RESTORING MODEL FROM EXISTING FILE")
 
         if config["restore_path"] is not None:
             try:
                 model = GCNNodePred.load_from_checkpoint(
                     checkpoint_path=config["restore_path"]
                 )
-                print(":::MODEL LOADED:::")
+                logger.info("MODEL LOADED")
                 return model
             except Exception as e:
-                print(f":::Checkpoint load failed: {e}:::")
-            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+                logger.warning(f"Checkpoint load failed: {e}")
+            logger.warning("NO MODEL FOUND LOADING FRESH MODEL")
         else:
             load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNNodePred.load_from_checkpoint(
                     checkpoint_path=load_dir + "/last.ckpt"
                 )
-                print(":::MODEL LOADED:::")
+                logger.info("MODEL LOADED")
                 return model
             except Exception as e:
-                print(f":::Checkpoint load failed: {e}:::")
-                print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+                logger.warning(f"Checkpoint load failed: {e}")
+                logger.warning("NO MODEL FOUND LOADING FRESH MODEL")
 
-    print(config)
-    print(":::NODE-LEVEL REGRESSION MODEL:::")
+    logger.debug(f"{config}")
+    logger.info("NODE-LEVEL REGRESSION MODEL")
     model = GCNNodePred(
         atom_input_size=config["atom_feature_size"],
         bond_input_size=config["bond_feature_size"],
@@ -236,19 +239,19 @@ def load_node_level_model_from_config(config):
     # model.to(device)
 
     if config["initializer"] == "kaiming":
-        print(":::USING KAIMING INITIALIZER:::")
+        logger.debug("Using kaiming initializer")
         kaiming_init(model)
 
     elif config["initializer"] == "xavier":
-        print(":::USING XAVIER INITIALIZER:::")
+        logger.debug("Using xavier initializer")
         xavier_init(model)
 
     elif config["initializer"] == "equi_var":
-        print(":::USING EQUIVARIANCE INITIALIZER:::")
+        logger.debug("Using equivariance initializer")
         equi_var_init(model)
 
     else:
-        print(":::NO INITIALIZER USED:::")
+        logger.debug("No initializer used")
 
     return model
 
@@ -264,32 +267,32 @@ def load_link_model_from_config(config):
         optimizer (pytorch optimizer obj): optimizer
     """
     if config["restore"]:
-        print(":::RESTORING MODEL FROM EXISTING FILE:::")
+        logger.info("RESTORING MODEL FROM EXISTING FILE")
 
         if config["restore_path"] is not None:
             try:
                 model = GCNLinkPred.load_from_checkpoint(
                     checkpoint_path=config["restore_path"]
                 )
-                print(":::MODEL LOADED:::")
+                logger.info("MODEL LOADED")
                 return model
             except Exception as e:
-                print(f":::Checkpoint load failed: {e}:::")
-            print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+                logger.warning(f"Checkpoint load failed: {e}")
+            logger.warning("NO MODEL FOUND LOADING FRESH MODEL")
         else:
             load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNLinkPred.load_from_checkpoint(
                     checkpoint_path=load_dir + "/last.ckpt"
                 )
-                print(":::MODEL LOADED:::")
+                logger.info("MODEL LOADED")
                 return model
             except Exception as e:
-                print(f":::Checkpoint load failed: {e}:::")
-                print(":::NO MODEL FOUND LOADING FRESH MODEL:::")
+                logger.warning(f"Checkpoint load failed: {e}")
+                logger.warning("NO MODEL FOUND LOADING FRESH MODEL")
 
-    print(config)
-    print(":::LINK-PRED MODEL:::")
+    logger.debug(f"{config}")
+    logger.info("LINK-PRED MODEL")
     model = GCNLinkPred(
         input_size=config["input_size"],
         n_conv_layers=config["n_conv_layers"],
@@ -320,19 +323,19 @@ def load_link_model_from_config(config):
     # model.to(device)
 
     if config["initializer"] == "kaiming":
-        print(":::USING KAIMING INITIALIZER:::")
+        logger.debug("Using kaiming initializer")
         kaiming_init(model)
 
     elif config["initializer"] == "xavier":
-        print(":::USING XAVIER INITIALIZER:::")
+        logger.debug("Using xavier initializer")
         xavier_init(model)
 
     elif config["initializer"] == "equi_var":
-        print(":::USING EQUIVARIANCE INITIALIZER:::")
+        logger.debug("Using equivariance initializer")
         equi_var_init(model)
 
     else:
-        print(":::NO INITIALIZER USED:::")
+        logger.debug("No initializer used")
 
     return model
 
@@ -348,6 +351,8 @@ class LogParameters(pl.Callback):
             self.d_parameters[n] = []
 
     def on_validation_epoch_end(self, trainer, pl_module):
+        if not trainer.is_global_zero:
+            return
         if not trainer.sanity_checking:  # WARN: sanity_check is turned on by default
             lp = []
             tensorboard_logger_index = 0
@@ -401,8 +406,8 @@ def test_and_predict_libe(dataset_test, dataset_train, model):
     mse = mse.numpy()[0]
     statistics_dict["train"] = {"r2": r2_pre, "mae": mae, "mse": mse}
 
-    print("--" * 50)
-    print(
+    logger.info("--" * 50)
+    logger.info(
         "Performance training set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
             r2_pre, mae, mse
         )
@@ -422,12 +427,12 @@ def test_and_predict_libe(dataset_test, dataset_train, model):
     mae = mae.numpy()[0]
     mse = mse.numpy()[0]
 
-    print(
+    logger.info(
         "Performance test set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
             r2_pre, mae, mse
         )
     )
-    print("--" * 50)
+    logger.info("--" * 50)
     statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
 
     feat_dict = {nt: batch_graph[nt].feat for nt in batch_graph.node_types if hasattr(batch_graph[nt], "feat")}
@@ -484,8 +489,8 @@ def test_and_predict(dataset_test, dataset_train, model):
     mse = mse.numpy()[0]
     statistics_dict["train"] = {"r2": r2_pre, "mae": mae, "mse": mse}
 
-    print("--" * 50)
-    print(
+    logger.info("--" * 50)
+    logger.info(
         "Performance training set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
             r2_pre, mae, mse
         )
@@ -509,12 +514,12 @@ def test_and_predict(dataset_test, dataset_train, model):
     mae = mae.numpy()[0]
     mse = mse.numpy()[0]
 
-    print(
+    logger.info(
         "Performance test set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
             r2_pre, mae, mse
         )
     )
-    print("--" * 50)
+    logger.info("--" * 50)
     statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
 
     # return preds_test, preds_train, label_list, label_list_train, statistics_dict, charge_list_test, spin_list_test, charge_list_train, spin_list_train
@@ -597,12 +602,12 @@ def test_and_predict_tmqm(dataset_test, model, batch_size=100):
     r2_pre = 1 - ss_res / ss_tot
     mae = torch.mean(torch.abs(y - y_pred))
     mse = torch.mean((y - y_pred) ** 2)
-    print(
+    logger.info(
         "Performance test set:\t r2: {:.4f}\t mae: {:.4f}\t mse: {:.4f}".format(
             r2_pre, mae, mse
         )
     )
-    print("--" * 50)
+    logger.info("--" * 50)
     statistics_dict["test"] = {"r2": r2_pre, "mae": mae, "mse": mse}
 
     # return preds_test, preds_train, label_list, label_list_train, statistics_dict, charge_list_test, spin_list_test, charge_list_train, spin_list_train

@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+import logging
 import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
 
 import pytorch_lightning as pl
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
@@ -65,13 +69,16 @@ def main(argv=None):
 
     if debug:
         config["dataset"]["debug"] = debug
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     # for k, v in config.items():
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
     dm = QTAIMGraphTaskClassifyDataModule(config=config)
 
-    feature_names, feature_size = dm.prepare_data(stage="fit")
+    # setup() runs on all ranks (DDP-safe); prepare_data() is a no-op
+    dm.setup(stage="fit")
+    feature_names = dm.train_dataset.feature_names
+    feature_size = dm.train_dataset.feature_size
     config["model"]["classifier"] = True
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
@@ -79,14 +86,14 @@ def main(argv=None):
     config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
     # config["dataset"]["feature_names"] = feature_names
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
     for k, v in config.items():
-        print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
+        logger.info("%s\t\t\t%s", str(k).ljust(20), str(v).ljust(20))
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     model = load_graph_level_model_from_config(config["model"])
-    print("model constructed!")
+    logger.info("Model constructed")
 
     with wandb.init(project=project_name) as run:
         log_parameters = LogParameters()
@@ -109,6 +116,12 @@ def main(argv=None):
             monitor="val_loss", min_delta=0.00, patience=200, verbose=False, mode="min"
         )
 
+        # DDP Strategy Note:
+        # This project requires strategy="ddp" (not "ddp_spawn") for multi-GPU
+        # training. LMDB datasets use lazy per-worker env init that is compatible
+        # with fork-based DDP but not spawn-based ddp_spawn (LMDB environments
+        # are not picklable). For PCIe GPUs without NVLink (e.g. A5000), set
+        # NCCL_P2P_DISABLE=1 before launching.
         trainer = pl.Trainer(
             max_epochs=config["model"]["max_epochs"],
             accelerator="gpu",

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
+import logging
 import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
     EarlyStopping,
@@ -37,9 +41,9 @@ class TrainingObject:
         self.dataset_loc = dataset_loc
         self.lmdbs = lmdbs
 
-        print("debug value: ", self.sweep_config["parameters"]["debug"]["values"])
+        logger.info("debug value: %s", self.sweep_config["parameters"]["debug"]["values"])
         if self.lmdbs:
-            print("using lmdbs!")
+            logger.info("Using LMDBs")
             dm_config = {
                 "dataset": {
                     "train_lmdb": self.sweep_config["parameters"]["train_lmdb"][
@@ -153,16 +157,16 @@ class TrainingObject:
                     "map_key": self.sweep_config["parameters"]["map_key"]["values"][0],
                 },
             }
-            print("config settings:")
+            logger.info("config settings:")
             for k, v in dm_config.items():
-                print("--> Level - {}".format(k))
+                logger.info("Level - %s", k)
                 for kk, vv in v.items():
-                    print("{}\t\t{}".format(str(kk).ljust(20), str(vv).ljust(20)))
+                    logger.info("%s\t\t%s", str(kk).ljust(20), str(vv).ljust(20))
             self.dm = QTAIMNodeTaskDataModule(config=dm_config)
 
-        feature_names, feature_size = self.dm.prepare_data(stage="fit")
-        self.feature_names = feature_names
-        self.feature_size = feature_size
+        self.dm.setup(stage="fit")
+        self.feature_names = self.dm.train_dataset.feature_names
+        self.feature_size = self.dm.train_dataset.feature_size
         self.config = dm_config
 
     def make_model(self, config):
@@ -174,11 +178,11 @@ class TrainingObject:
         if "target_dict" not in config["model"]:
             config["model"]["target_dict"] = self.config["dataset"]["target_dict"]
 
-        print("config settings:")
-        print("atom_feature_size: {}".format(config["model"]["atom_feature_size"]))
-        print("bond_feature_size: {}".format(config["model"]["bond_feature_size"]))
-        print("global_feature_size: {}".format(config["model"]["global_feature_size"]))
-        print("target_dict: {}".format(config["model"]["target_dict"]))
+        logger.info("config settings:")
+        logger.info("atom_feature_size: %s", config["model"]["atom_feature_size"])
+        logger.info("bond_feature_size: %s", config["model"]["bond_feature_size"])
+        logger.info("global_feature_size: %s", config["model"]["global_feature_size"])
+        logger.info("target_dict: %s", config["model"]["target_dict"])
         model = load_node_level_model_from_config(config["model"])
         return model
 
@@ -372,12 +376,12 @@ def main(argv=None):
         lmdbs=use_lmdb,
     )
 
-    print("method: {}".format(method))
+    logger.info("method: %s", method)
     # print("on_gpu: {}".format(on_gpu))
-    print("debug: {}".format(debug))
-    print("dataset_loc: {}".format(dataset_loc))
-    print("log_save_dir: {}".format(log_save_dir))
-    print("wandb_project_name: {}".format(wandb_project_name))
-    print("sweep_config_loc: {}".format(sweep_config_loc))
-    print("use_lmdb: {}".format(use_lmdb))
+    logger.info("debug: %s", debug)
+    logger.info("dataset_loc: %s", dataset_loc)
+    logger.info("log_save_dir: %s", log_save_dir)
+    logger.info("wandb_project_name: %s", wandb_project_name)
+    logger.info("sweep_config_loc: %s", sweep_config_loc)
+    logger.info("use_lmdb: %s", use_lmdb)
     wandb.agent(sweep_id, function=training_obj.train, count=3000, entity="santi")

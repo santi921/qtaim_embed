@@ -1,7 +1,10 @@
 # baseline GNN model for graph-level classification
+import logging
 from copy import deepcopy
 import numpy as np
 import torch
+
+logger = logging.getLogger(__name__)
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import lr_scheduler
@@ -112,9 +115,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "GlobalAttentionPoolingThenCat",
             "Set2SetThenCat",
             "MeanPoolingThenCat",
-            "WeightedMeanPoolingThenCat",
+            "WeightAndMeanThenCat",
         ], (
-            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, WeightandMeanThenCat, or GlobalAttentionPoolingThenCat"
+            "global_pooling must be one of: WeightAndSumThenCat, SumPoolingThenCat, MeanPoolingThenCat, "
+            "WeightAndMeanThenCat, GlobalAttentionPoolingThenCat, Set2SetThenCat, "
             + f"but got {global_pooling}"
         )
 
@@ -123,18 +127,6 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
             )
-
-        assert global_pooling in [
-            "WeightAndSumThenCat",
-            "SumPoolingThenCat",
-            "GlobalAttentionPoolingThenCat",
-            "Set2SetThenCat",
-            "MeanPoolingThenCat",
-            "WeightedMeanPoolingThenCat",
-        ], (
-            "global_pooling must be either WeightAndSumThenCat, SumPoolingThenCat, or GlobalAttentionPoolingThenCat"
-            + f"but got {global_pooling}"
-        )
 
         params = {
             "atom_input_size": atom_input_size,
@@ -320,7 +312,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             readout_fn = Set2SetThenCat
         elif self.hparams.global_pooling == "MeanPoolingThenCat":
             readout_fn = MeanPoolingThenCat
-        elif self.hparams.global_pooling == "WeightedMeanPoolingThenCat":
+        elif self.hparams.global_pooling == "WeightAndMeanThenCat":
             readout_fn = WeightAndMeanThenCat
 
         list_in_feats = []
@@ -374,7 +366,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             if self.hparams.fc_dropout > 0:
                 self.fc_layers.append(nn.Dropout(self.hparams.fc_dropout))
             input_size = out_size
-        print("... > number of tasks:", self.hparams.ntasks)
+        logger.info("Number of tasks: %d", self.hparams.ntasks)
         # add softmax layer
         if self.hparams.ntasks > 1:
             # create a dict of softmax layers
@@ -573,7 +565,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             batch_size=len(labels),
-            sync_dist=False,
+            sync_dist=True,
             logger=True,
         )
 
@@ -602,17 +594,17 @@ class GCNGraphPredClassifier(pl.LightningModule):
         Training epoch end
         """
         f1, auroc = self.compute_metrics(mode="train")
-        self.log("train_f1", f1.mean(), prog_bar=False, sync_dist=True)
-        self.log("train_auroc", auroc.mean(), prog_bar=False, sync_dist=True)
-        # get epoch number
+        # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
+        self.log("train_f1", f1.mean(), prog_bar=False, sync_dist=False)
+        self.log("train_auroc", auroc.mean(), prog_bar=False, sync_dist=False)
 
     def on_validation_epoch_end(self):
         """
         Validation epoch end
         """
         f1, auroc = self.compute_metrics(mode="val")
-        self.log("val_f1", f1.mean(), prog_bar=True, sync_dist=True)
-        self.log("val_auroc", auroc.mean(), prog_bar=True, sync_dist=True)
+        self.log("val_f1", f1.mean(), prog_bar=True, sync_dist=False)
+        self.log("val_auroc", auroc.mean(), prog_bar=True, sync_dist=False)
         return {"val_f1": f1.mean(), "val_auroc": auroc.mean()}
 
     def on_test_epoch_end(self):
@@ -620,8 +612,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
         Test epoch end
         """
         f1, auroc = self.compute_metrics(mode="test")
-        self.log("test_f1", f1.mean(), prog_bar=False, sync_dist=True)
-        self.log("test_auroc", auroc.mean(), prog_bar=False, sync_dist=True)
+        self.log("test_f1", f1.mean(), prog_bar=False, sync_dist=False)
+        self.log("test_auroc", auroc.mean(), prog_bar=False, sync_dist=False)
 
     def update_metrics(self, pred, target, mode):
         """
@@ -666,11 +658,20 @@ class GCNGraphPredClassifier(pl.LightningModule):
         return f1, auroc
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.parameters()),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
-        )
+        params = list(filter(lambda p: p.requires_grad, self.parameters()))
+        try:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+                fused=True,
+            )
+        except RuntimeError:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+            )
 
         scheduler = self._config_lr_scheduler(optimizer)
 

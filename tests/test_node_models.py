@@ -95,7 +95,9 @@ class TestNodePred:
     }
 
     dm = QTAIMNodeTaskDataModule(config=config_base)
-    names, feature_size = dm.prepare_data(stage="fit")
+    dm.setup(stage="fit")
+    names = dm.train_dataset.feature_names
+    feature_size = dm.train_dataset.feature_size
 
     val_dataloader = dm.val_dataloader()
     scalers = dm.full_dataset.label_scalers

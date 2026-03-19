@@ -1,7 +1,10 @@
+import logging
 from copy import deepcopy
 import numpy as np
 import torch
 from torch_geometric.utils import to_networkx
+
+logger = logging.getLogger(__name__)
 from qtaim_embed.utils.grapher import (
     get_bond_list_from_heterograph,
     get_fts_from_het_graph,
@@ -34,7 +37,7 @@ def get_networkx_explaination_graph(edge_mask, g, dataset, filter=False):
     edge_mask_z_processed = process_edge_mask(edge_mask_z, scale=True)
     # elements from heterographs
     elems_in_graph = get_element_list_heterograph(g, dataset)
-    print(elems_in_graph)
+    logger.debug("Elements in graph: %s", elems_in_graph)
     # get blank template
     homo_graph_empty = construct_homograph_blank(nodes, bonds)
     # add processed data

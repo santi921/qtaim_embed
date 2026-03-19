@@ -1,15 +1,18 @@
+import logging
 from shutil import copy
 import torch
 from torch_geometric.data import HeteroData
 from collections import defaultdict
 from typing import Optional, Dict, List
 
+logger = logging.getLogger(__name__)
+
 from qtaim_embed.utils.scalers import _transform
 
 
 def _get_ndata(data, key):
     """
-    Helper to get a feature dict from PyG HeteroData, equivalent to DGL's g.ndata[key].
+    Helper to get a feature dict from PyG HeteroData.
     Returns a dict mapping node type -> tensor for all node types that have the attribute.
     """
     return {nt: getattr(data[nt], key) for nt in data.node_types if hasattr(data[nt], key)}
@@ -116,9 +119,9 @@ class HeteroGraphStandardScaler:
         """
         Perform inverse standardization on the given features.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized features
+            graphs: list of PyG HeteroData graphs with inverse standardized features
         """
         # check that mean and std are not None
         assert (
@@ -154,16 +157,16 @@ class HeteroGraphStandardScaler:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
                 setattr(g[nt], graph_key, ft.clone())
-        print("... > standard scaler - inverse done")
+        logger.debug("Standard scaler - inverse done")
         return graphs
 
     def inverse_feats(self, feats):
         """
         Perform inverse standardization on the given features.
         Takes:
-            feats: list of dgl graphs
+            feats: list of PyG HeteroData graphs
         Returns:
-            feats: list of dgl graphs with inverse standardized features
+            feats: list of PyG HeteroData graphs with inverse standardized features
         """
         # node_feats = defaultdict(list)
         feats_ret = {}
@@ -266,7 +269,7 @@ class HeteroGraphStandardScalerIterative:
         Update the class mean and std values from the given graphs.
         Don't standardize the graphs in this pass
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         """
         g = graphs[0]
         # node_types = g.ntypes
@@ -339,7 +342,7 @@ class HeteroGraphStandardScalerIterative:
         # compute std from mean and sum_x2
         assert self.finalized == False, "scaler already finalized"
         
-        print("...> finalizing scaler")
+        logger.debug("Finalizing scaler")
         for nt in self._mean.keys():
             if self.dict_node_sizes[nt] > 0:
                 self._std[nt] = torch.sqrt(
@@ -405,9 +408,9 @@ class HeteroGraphStandardScalerIterative:
         """
         Perform inverse standardization on the given features.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized features
+            graphs: list of PyG HeteroData graphs with inverse standardized features
         """
         # check that mean and std are not None
         assert (
@@ -445,16 +448,16 @@ class HeteroGraphStandardScalerIterative:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
                 setattr(g[nt], graph_key, ft.clone())
-        print("... > standard scaler - inverse done")
+        logger.debug("Standard scaler - inverse done")
         return graphs
 
     def inverse_feats(self, feats):
         """
         Perform inverse standardization on the given features.
         Takes:
-            feats: list of dgl graphs
+            feats: list of PyG HeteroData graphs
         Returns:
-            feats: list of dgl graphs with inverse standardized features
+            feats: list of PyG HeteroData graphs with inverse standardized features
         """
         # node_feats = defaultdict(list)
         assert self.finalized, "must finalize the scaler before using it"
@@ -582,9 +585,9 @@ class HeteroGraphLogMagnitudeScaler:
         """
         Perform inverse standardization on the given features.
         Takes:
-            graphs: list of dgl graphs
+            graphs: list of PyG HeteroData graphs
         Returns:
-            graphs: list of dgl graphs with inverse standardized features
+            graphs: list of PyG HeteroData graphs with inverse standardized features
         """
         g = graphs[0]
         # node_types = g.ntypes
@@ -630,16 +633,16 @@ class HeteroGraphLogMagnitudeScaler:
             feats = torch.split(node_feats[nt], node_feats_size[nt])
             for g, ft in zip(graphs, feats):
                 setattr(g[nt], graph_key, ft.clone())
-        print("... > log scaler - inverse done")
+        logger.debug("Log scaler - inverse done")
         return graphs
 
     def inverse_feats(self, feats):
         """
         Perform inverse standardization on the given features.
         Takes:
-            feats: list of dgl graphs
+            feats: list of PyG HeteroData graphs
         Returns:
-            feats: list of dgl graphs with inverse standardized features
+            feats: list of PyG HeteroData graphs with inverse standardized features
         """
         # node_feats = defaultdict(list)
         feats_ret = {}
@@ -773,9 +776,9 @@ def standard_scale_from_dict(dict_params):
     Returns:
         standard_scale: HeteroGraphStandardScaler object
     """
-    if type(dict_params["mean"]) != torch.Tensor:
+    if not isinstance(dict_params["mean"], torch.Tensor):
         dict_params["mean"] = torch.tensor(dict_params["mean"])
-    if type(dict_params["std"]) != torch.Tensor:
+    if not isinstance(dict_params["std"], torch.Tensor):
         dict_params["std"] = torch.tensor(dict_params["std"])
 
     return HeteroGraphStandardScaler(

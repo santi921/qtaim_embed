@@ -1,6 +1,9 @@
 # baseline GNN model for node-level regression
+import logging
 from copy import deepcopy
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 import torch
 import torch.nn as nn
@@ -239,7 +242,7 @@ class GCNNodePred(pl.LightningModule):
 
         self.loss = self.loss_function()
 
-        print("number of output dims", output_dims)
+        logger.debug("Number of output dims: %d", output_dims)
 
         # create multioutput wrapper for metrics
         self.train_r2 = MultioutputWrapper(
@@ -389,7 +392,7 @@ class GCNNodePred(pl.LightningModule):
             all_loss = self.compute_loss(logits, labels)
 
             # compat with older torchmetrics
-            if type(all_loss) == list:
+            if isinstance(all_loss, list):
                 all_loss = torch.stack(all_loss)
 
         # log loss
@@ -479,20 +482,21 @@ class GCNNodePred(pl.LightningModule):
         """
         r2, mae, mse = self.compute_metrics(mode="train")
 
-        if type(r2) == list:
+        if isinstance(r2, list):
             r2 = torch.stack(r2)
-        if type(mae) == list:
+        if isinstance(mae, list):
             mae = torch.stack(mae)
-        if type(mse) == list:
+        if isinstance(mse, list):
             mse = torch.stack(mse)
 
         # get epoch number
         if self.trainer.current_epoch == 0:
-            self.log("val_mae", 10000000.0, prog_bar=False, sync_dist=True)
+            self.log("val_mae", 10000000.0, prog_bar=False, sync_dist=False)
 
-        self.log("train_r2", r2.median(), prog_bar=False, sync_dist=True)
-        self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
+        self.log("train_r2", r2.median(), prog_bar=False, sync_dist=False)
+        self.log("train_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("train_mse", mse.mean(), prog_bar=True, sync_dist=False)
 
         for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
@@ -501,13 +505,13 @@ class GCNNodePred(pl.LightningModule):
                         f"train_r2_{target_type}_{target}",
                         r2[i],
                         prog_bar=False,
-                        sync_dist=True,
+                        sync_dist=False,
                     )
                     self.log(
                         f"train_mae_{target_type}_{target}",
                         mae[i],
                         prog_bar=False,
-                        sync_dist=True,
+                        sync_dist=False,
                     )
 
     def on_validation_epoch_end(self):
@@ -516,17 +520,17 @@ class GCNNodePred(pl.LightningModule):
         """
         r2, mae, mse = self.compute_metrics(mode="val")
 
-        if type(r2) == list:
+        if isinstance(r2, list):
             r2 = torch.stack(r2)
-        if type(mae) == list:
+        if isinstance(mae, list):
             mae = torch.stack(mae)
-        if type(mse) == list:
+        if isinstance(mse, list):
             mse = torch.stack(mse)
 
         r2_median = r2.median().type(torch.float32)
-        self.log("val_r2", r2_median, prog_bar=True, sync_dist=True)
-        self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=True)
+        self.log("val_r2", r2_median, prog_bar=True, sync_dist=False)
+        self.log("val_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("val_mse", mse.mean(), prog_bar=True, sync_dist=False)
 
         # log each target r2 and mae
         for target_type, target_list in self.target_dict.items():
@@ -536,13 +540,13 @@ class GCNNodePred(pl.LightningModule):
                         f"val_r2_{target_type}_{target}",
                         r2[i],
                         prog_bar=False,
-                        sync_dist=True,
+                        sync_dist=False,
                     )
                     self.log(
                         f"val_mae_{target_type}_{target}",
                         mae[i],
                         prog_bar=False,
-                        sync_dist=True,
+                        sync_dist=False,
                     )
 
     def on_test_epoch_end(self):
@@ -552,16 +556,16 @@ class GCNNodePred(pl.LightningModule):
         r2, mae, mse = self.compute_metrics(mode="test")
 
         # compat with older torchmetrics
-        if type(r2) == list:
+        if isinstance(r2, list):
             r2 = torch.stack(r2)
-        if type(mae) == list:
+        if isinstance(mae, list):
             mae = torch.stack(mae)
-        if type(mse) == list:
+        if isinstance(mse, list):
             mse = torch.stack(mse)
 
-        self.log("test_r2", r2.median(), prog_bar=False, sync_dist=True)
-        self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=True)
-        self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=True)
+        self.log("test_r2", r2.median(), prog_bar=False, sync_dist=False)
+        self.log("test_mae", mae.mean(), prog_bar=False, sync_dist=False)
+        self.log("test_mse", mse.mean(), prog_bar=False, sync_dist=False)
 
         for target_type, target_list in self.target_dict.items():
             if target_list != [None] and len(target_list) > 0:
@@ -570,13 +574,13 @@ class GCNNodePred(pl.LightningModule):
                         f"test_r2_{target_type}_{target}",
                         r2[i],
                         prog_bar=False,
-                        sync_dist=True,
+                        sync_dist=False,
                     )
                     self.log(
                         f"test_mae_{target_type}_{target}",
                         mae[i],
                         prog_bar=False,
-                        sync_dist=True,
+                        sync_dist=False,
                     )
 
     def update_metrics(self, pred: torch.Tensor, target: torch.Tensor, mode: str):
@@ -603,26 +607,55 @@ class GCNNodePred(pl.LightningModule):
         Compute metrics using torchmetrics interfaces
         """
 
+        _nan = torch.tensor([float("nan")])
+
         if mode == "train":
-            r2 = self.train_r2.compute()
-            torch_l1 = self.train_torch_l1.compute()
-            torch_mse = self.train_torch_mse.compute()
+            try:
+                r2 = self.train_r2.compute()
+            except ValueError:
+                r2 = _nan
+            try:
+                torch_l1 = self.train_torch_l1.compute()
+            except ValueError:
+                torch_l1 = _nan
+            try:
+                torch_mse = self.train_torch_mse.compute()
+            except ValueError:
+                torch_mse = _nan
             self.train_r2.reset()
             self.train_torch_l1.reset()
             self.train_torch_mse.reset()
 
         elif mode == "val":
-            r2 = self.val_r2.compute()
-            torch_l1 = self.val_torch_l1.compute()
-            torch_mse = self.val_torch_mse.compute()
+            try:
+                r2 = self.val_r2.compute()
+            except ValueError:
+                r2 = _nan
+            try:
+                torch_l1 = self.val_torch_l1.compute()
+            except ValueError:
+                torch_l1 = _nan
+            try:
+                torch_mse = self.val_torch_mse.compute()
+            except ValueError:
+                torch_mse = _nan
             self.val_r2.reset()
             self.val_torch_l1.reset()
             self.val_torch_mse.reset()
 
         elif mode == "test":
-            r2 = self.test_r2.compute()
-            torch_l1 = self.test_torch_l1.compute()
-            torch_mse = self.test_torch_mse.compute()
+            try:
+                r2 = self.test_r2.compute()
+            except ValueError:
+                r2 = _nan
+            try:
+                torch_l1 = self.test_torch_l1.compute()
+            except ValueError:
+                torch_l1 = _nan
+            try:
+                torch_mse = self.test_torch_mse.compute()
+            except ValueError:
+                torch_mse = _nan
             self.test_r2.reset()
             self.test_torch_l1.reset()
             self.test_torch_mse.reset()
@@ -630,11 +663,20 @@ class GCNNodePred(pl.LightningModule):
         return r2, torch_l1, torch_mse
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, self.parameters()),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
-        )
+        params = list(filter(lambda p: p.requires_grad, self.parameters()))
+        try:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+                fused=True,
+            )
+        except RuntimeError:
+            optimizer = torch.optim.Adam(
+                params,
+                lr=self.hparams.lr,
+                weight_decay=self.hparams.weight_decay,
+            )
 
         scheduler = self._config_lr_scheduler(optimizer)
 

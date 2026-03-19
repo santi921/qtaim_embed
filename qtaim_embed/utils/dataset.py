@@ -1,7 +1,10 @@
+import logging
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+logger = logging.getLogger(__name__)
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -26,7 +29,7 @@ def gather_atom_level_stats(dataset_dev):
     feat_dict_complete = {}
 
     for probe_atom_type in atoms_in:
-        print("capturing stats for atom type: ", probe_atom_type)
+        logger.debug("Capturing stats for atom type: %s", probe_atom_type)
         for probe_descriptor in atom_feats_qtaim:
             # probe_atom_type = "C"
             # probe_descriptor = "extra_feat_atom_Lagrangian_K"
@@ -120,16 +123,14 @@ def print_summary_complete(feat_complete):
     """
     for k, v in feat_complete.items():
         try:
-            print(
-                "{}:\t mean: {:.3f} std:{:.3f} min: {:.3f} max: {:.3f}".format(
-                    k[16:], v["mean"], v["std"], v["min"], v["max"]
-                )
+            logger.info(
+                "%s:\t mean: %.3f std:%.3f min: %.3f max: %.3f",
+                k[16:], v["mean"], v["std"], v["min"], v["max"]
             )
-        except:
-            print(
-                "{}:\t mean: {:.3f} std:{:.3f} min: {:.3f} max: {:.3f}".format(
-                    k[16:], np.mean(v), np.std(v), np.min(v), np.max(v)
-                )
+        except Exception:
+            logger.info(
+                "%s:\t mean: %.3f std:%.3f min: %.3f max: %.3f",
+                k[16:], np.mean(v), np.std(v), np.min(v), np.max(v)
             )
 
 
@@ -139,13 +140,12 @@ def print_summary_atom_level(feat_dict_atoms):
         feat_dict_atoms - dict of dicts of lists
     """
     for k_super, v_super in feat_dict_atoms.items():
-        print(k_super)
-        print("====================================")
+        logger.info(k_super)
+        logger.info("====================================")
         for k, v in v_super.items():
-            print(
-                "{}:\t mean: {:.3f} std:{:.3f} min: {:.3f} max: {:.3f}".format(
-                    k[16:], v["mean"], v["std"], v["min"], v["max"]
-                )
+            logger.info(
+                "%s:\t mean: %.3f std:%.3f min: %.3f max: %.3f",
+                k[16:], v["mean"], v["std"], v["min"], v["max"]
             )
 
 

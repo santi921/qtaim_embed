@@ -55,6 +55,7 @@ channels = ["conda-forge", "defaults"]
 # Custom pip dependencies or indexes can be specified here for documentation purposes.
 # To install with CUDA 12.4, use:
 # pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu124
+# pip install torch_geometric torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-2.4.0+cu124.html
 # To install with ROCm 6.x, use:
 # pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/rocm6.1
 dependencies = [

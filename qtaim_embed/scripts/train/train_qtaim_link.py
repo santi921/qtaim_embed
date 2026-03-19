@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
+import logging
 import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
 import pandas as pd
 
 import pytorch_lightning as pl
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning.callbacks import (
     LearningRateMonitor,
@@ -51,18 +55,18 @@ def main(argv=None):
     wandb_entity = args.wandb_entity
     config = args.config
 
-    # print options
-    print("debug: ", debug)
-    print("use_lmdb: ", use_lmdb)
-    print("project_name: ", project_name)
-    print("dataset_loc: ", dataset_loc)
-    print("dataset_test_loc: ", dataset_test_loc)
-    print("log_save_dir: ", log_save_dir)
-    print("wandb_entity: ", wandb_entity)
-    print("config: ", config)
+    # log options
+    logger.info("debug: %s", debug)
+    logger.info("use_lmdb: %s", use_lmdb)
+    logger.info("project_name: %s", project_name)
+    logger.info("dataset_loc: %s", dataset_loc)
+    logger.info("dataset_test_loc: %s", dataset_test_loc)
+    logger.info("log_save_dir: %s", log_save_dir)
+    logger.info("wandb_entity: %s", wandb_entity)
+    logger.info("config: %s", config)
 
     if config is None:
-        print("...using default config!")
+        logger.info("Using default config")
         config = get_default_link_level_config()
     else:
         with open(config, "r") as f:
@@ -74,7 +78,7 @@ def main(argv=None):
     if args.num_workers is not None:
         config["dataset"]["num_workers"] = args.num_workers
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
 
     # for k, v in config.items():
     #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
@@ -84,7 +88,7 @@ def main(argv=None):
     #    config["model"]["target_dict"] = config["dataset"]["target_dict"]
 
     if use_lmdb:
-        print("...using lmdbs!")
+        logger.info("Using LMDBs")
         dm = LMDBLinkDataModule(config=config)
 
     else:
@@ -108,24 +112,27 @@ def main(argv=None):
             dm_test = QTAIMLinkTaskDataModule(
                 config=test_config,
             )
-            dm_test.prepare_data(stage="test")
+            dm_test.setup(stage="test")
 
-    feature_names, feature_size = dm.prepare_data(stage="fit")
+    # setup() runs on all ranks (DDP-safe); prepare_data() is a no-op
+    dm.setup(stage="fit")
+    feature_names = dm.train_dataset.feature_names
+    feature_size = dm.train_dataset.feature_size
     if hasattr(dm, "node_len") and dm.node_len is not None:
         config["model"]["input_size"] = dm.node_len
     else:
         # Derive node_len from LMDB feature_size (atom + global)
         config["model"]["input_size"] = feature_size["atom"] + feature_size["global"]
-    print("feature size dict: ", config["model"]["input_size"])
+    logger.debug("feature size dict: %s", config["model"]["input_size"])
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
     for k, v in config.items():
-        print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
+        logger.info("%s\t\t\t%s", str(k).ljust(20), str(v).ljust(20))
 
-    print(">" * 40 + "config_settings" + "<" * 40)
+    logger.info("config_settings")
     # this ought to grab before preparing
     model = load_link_model_from_config(config["model"])
-    print("model constructed!")
+    logger.info("Model constructed")
 
     with wandb.init(project=project_name) as run:
         log_parameters = LogParameters()
@@ -156,6 +163,12 @@ def main(argv=None):
 
         dm.setup(stage="fit")
 
+        # DDP Strategy Note:
+        # This project requires strategy="ddp" (not "ddp_spawn") for multi-GPU
+        # training. LMDB datasets use lazy per-worker env init that is compatible
+        # with fork-based DDP but not spawn-based ddp_spawn (LMDB environments
+        # are not picklable). For PCIe GPUs without NVLink (e.g. A5000), set
+        # NCCL_P2P_DISABLE=1 before launching.
         trainer = pl.Trainer(
             max_epochs=config["model"]["max_epochs"],
             accelerator="gpu",
@@ -181,11 +194,11 @@ def main(argv=None):
         run.config.update(config["dataset"], allow_val_change=True)
         run.config.update(config["optim"], allow_val_change=True)
 
-        print("dataset and optim settings logged!")
-        print("fitting model!")
+        logger.info("Dataset and optim settings logged")
+        logger.info("Fitting model")
         trainer.fit(model, dm)
 
-        print("model fitted, testing!")
+        logger.info("Model fitted, testing")
         if use_lmdb:
             if "test_lmdb" in config["dataset"]:
                 trainer.test(model, dm)
