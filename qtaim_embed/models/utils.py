@@ -111,6 +111,7 @@ def load_graph_level_model_from_config(config):
             dropout_attn_gat=config["dropout_attn_gat"],
             hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
+            class_weights=config.get("class_weights", None),
         )
     else:
         logger.info("REGRESSION MODEL")

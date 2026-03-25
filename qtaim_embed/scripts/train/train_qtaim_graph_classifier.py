@@ -2,8 +2,6 @@
 
 import logging
 import wandb, argparse, torch, json
-import numpy as np
-from copy import deepcopy
 
 import pytorch_lightning as pl
 
@@ -15,7 +13,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from qtaim_embed.core.datamodule import QTAIMGraphTaskClassifyDataModule
+from qtaim_embed.core.datamodule import QTAIMGraphTaskClassifyDataModule, LMDBDataModule
 from qtaim_embed.models.utils import LogParameters, load_graph_level_model_from_config
 from qtaim_embed.utils.data import get_default_graph_level_config_classif
 
@@ -32,6 +30,8 @@ def main(argv=None):
     parser.add_argument("-dataset_loc", type=str, default=None)
     parser.add_argument("-log_save_dir", type=str, default="./test_logs/")
     parser.add_argument("-config", type=str, default=None)
+    parser.add_argument("-wandb_entity", type=str, default="santi")
+    parser.add_argument("--use_lmdb", default=False, action="store_true")
     parser.add_argument(
         "--num_workers",
         type=int,
@@ -43,9 +43,11 @@ def main(argv=None):
 
     on_gpu = bool(args.on_gpu)
     debug = bool(args.debug)
+    use_lmdb = bool(args.use_lmdb)
     project_name = args.project_name
     dataset_loc = args.dataset_loc
     log_save_dir = args.log_save_dir
+    wandb_entity = args.wandb_entity
     config = args.config
 
     if config is None:
@@ -62,35 +64,36 @@ def main(argv=None):
     # set num_workers from CLI (overrides config file)
     config["dataset"]["num_workers"] = args.num_workers
 
-    # dataset
-    if dataset_loc is not None:
-        config["dataset"]["train_dataset_loc"] = dataset_loc
-    extra_keys = config["dataset"]["extra_keys"]
+    if use_lmdb:
+        logger.info("Using LMDBs")
+        dm = LMDBDataModule(config=config)
+        config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
+    else:
+        # dataset
+        if dataset_loc is not None:
+            config["dataset"]["train_dataset_loc"] = dataset_loc
 
-    if debug:
-        config["dataset"]["debug"] = debug
+        if debug:
+            config["dataset"]["debug"] = debug
+
+        dm = QTAIMGraphTaskClassifyDataModule(config=config)
+        config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
+
     logger.info("config_settings")
-
-    # for k, v in config.items():
-    #    print("{}\t\t\t{}".format(str(k).ljust(20), str(v).ljust(20)))
-    dm = QTAIMGraphTaskClassifyDataModule(config=config)
 
     # setup() runs on all ranks (DDP-safe); prepare_data() is a no-op
     dm.setup(stage="fit")
-    feature_names = dm.train_dataset.feature_names
+
     feature_size = dm.train_dataset.feature_size
+
     config["model"]["classifier"] = True
     config["model"]["atom_feature_size"] = feature_size["atom"]
     config["model"]["bond_feature_size"] = feature_size["bond"]
     config["model"]["global_feature_size"] = feature_size["global"]
-    config["model"]["target_dict"]["global"] = config["dataset"]["target_list"]
-    # config["dataset"]["feature_names"] = feature_names
 
     logger.info("config_settings")
     for k, v in config.items():
         logger.info("%s\t\t\t%s", str(k).ljust(20), str(v).ljust(20))
-
-    logger.info("config_settings")
 
     model = load_graph_level_model_from_config(config["model"])
     logger.info("Model constructed")
@@ -100,12 +103,14 @@ def main(argv=None):
         logger_tb = TensorBoardLogger(
             config["dataset"]["log_save_dir"], name="test_logs"
         )
-        logger_wb = WandbLogger(project=project_name, name="test_logs", entity="santi")
+        logger_wb = WandbLogger(
+            project=project_name, name="test_logs", entity=wandb_entity
+        )
         lr_monitor = LearningRateMonitor(logging_interval="step")
 
         checkpoint_callback = ModelCheckpoint(
             dirpath=config["dataset"]["log_save_dir"],
-            filename="model_lightning_{epoch:02d}-{val_loss:.2f}",
+            filename="model_lightning_{epoch:02d}-{val_loss:.4f}",
             monitor="val_loss",
             mode="min",
             auto_insert_metric_name=True,
@@ -113,7 +118,11 @@ def main(argv=None):
         )
 
         early_stopping_callback = EarlyStopping(
-            monitor="val_loss", min_delta=0.00, patience=200, verbose=False, mode="min"
+            monitor="val_loss",
+            min_delta=0.00,
+            patience=config["model"].get("extra_stop_patience", 200),
+            verbose=False,
+            mode="min",
         )
 
         # DDP Strategy Note:
@@ -143,7 +152,16 @@ def main(argv=None):
             precision=config["optim"]["precision"],
         )
 
+        run.config.update(config["dataset"], allow_val_change=True)
+        run.config.update(config["optim"], allow_val_change=True)
+
         trainer.fit(model, dm)
-        if config["dataset"]["test_prop"] > 0.0:
-            trainer.test(model, dm)
+
+        if use_lmdb:
+            if "test_lmdb" in config["dataset"]:
+                trainer.test(model, dm)
+        else:
+            if config["dataset"]["test_prop"] > 0.0:
+                trainer.test(model, dm)
+
     run.finish()

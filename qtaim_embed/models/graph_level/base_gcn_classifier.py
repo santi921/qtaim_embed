@@ -101,6 +101,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         output_dims=2,
         pooling_ntypes=["atom", "bond"],
         pooling_ntypes_direct=["global"],
+        class_weights=None,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -166,6 +167,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "residual": residual_gat,
             "hidden_size": hidden_size,
             "ntasks": len(target_dict["global"]),
+            "class_weights": class_weights,
         }
 
         self.hparams.update(params)
@@ -472,17 +474,18 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         Initialize loss function
         """
+        # Support class weights for imbalanced datasets
+        weights = None
+        if hasattr(self.hparams, "class_weights") and self.hparams.class_weights is not None:
+            weights = torch.tensor(self.hparams.class_weights, dtype=torch.float32)
+
         if self.hparams.loss_fn == "cross_entropy":
             if self.hparams.ntasks > 1:
-                # loss_fn = MultioutputWrapper(
-                #    nn.CrossEntropyLoss(), num_outputs=self.hparams.ntasks
-                # )
-                # create module list
                 loss_fn = nn.ModuleList()
                 for i in range(self.hparams.ntasks):
-                    loss_fn.append(nn.CrossEntropyLoss(reduction="mean"))
+                    loss_fn.append(nn.CrossEntropyLoss(weight=weights, reduction="mean"))
             else:
-                loss_fn = nn.CrossEntropyLoss(reduction="mean")
+                loss_fn = nn.CrossEntropyLoss(weight=weights, reduction="mean")
         return loss_fn
 
     def compute_loss(self, target, pred):
