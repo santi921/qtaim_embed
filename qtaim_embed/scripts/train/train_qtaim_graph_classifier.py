@@ -165,3 +165,7 @@ def main(argv=None):
                 trainer.test(model, dm)
 
     run.finish()
+
+
+if __name__ == "__main__":
+    main()

@@ -449,14 +449,17 @@ class GCNGraphPredClassifier(pl.LightningModule):
             else:
                 feats = conv(feats, edge_index_dict)
             if self.hparams.conv_fn == "GATConv":
-                if ind < self.hparams.n_conv_layers - 1:
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(
+                reshaped_feats = {}
+                for k, v in feats.items():
+                    if ind < self.hparams.n_conv_layers - 1:
+                        reshaped_feats[k] = v.reshape(
                             -1, self.hparams.num_heads * self.hparams.hidden_size
                         )
-                else:
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.input_size[k])
+                    else:
+                        reshaped_feats[k] = v.reshape(
+                            -1, self.conv_out_size[k]
+                        )
+                feats = reshaped_feats
 
         # Build batch_dict for pooling
         batch_dict = {
@@ -662,12 +665,14 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
     def configure_optimizers(self):
         params = list(filter(lambda p: p.requires_grad, self.parameters()))
+        # fused Adam is incompatible with gradient clipping under mixed precision
+        use_fused = self.trainer.gradient_clip_val in (None, 0, 0.0)
         try:
             optimizer = torch.optim.Adam(
                 params,
                 lr=self.hparams.lr,
                 weight_decay=self.hparams.weight_decay,
-                fused=True,
+                fused=use_fused,
             )
         except RuntimeError:
             optimizer = torch.optim.Adam(
