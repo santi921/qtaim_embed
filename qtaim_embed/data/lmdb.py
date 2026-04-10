@@ -49,7 +49,7 @@ def serialize_graph(graph, ret=True):
 def load_graph_from_serialized(serialized_graph):
     """Load a PyG HeteroData graph from serialized bytes."""
     buf = io.BytesIO(serialized_graph)
-    graph = torch.load(buf, weights_only=False)
+    graph = torch.load(buf, weights_only=False, map_location='cpu')
     return graph
 
 
