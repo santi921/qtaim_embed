@@ -469,8 +469,14 @@ def split_lmdb_file(
         raise ValueError(f"val_prop + test_prop must be < 1.0, got {val_prop + test_prop}")
 
     src_env = open_lmdb_readonly(src_path)
+    stat = src_env.stat()
+    approx_total = stat["entries"]
     with src_env.begin() as txn:
-        all_keys = [k for k, _ in txn.cursor() if k not in _LMDB_METADATA_KEYS]
+        all_keys = [
+            k
+            for k, _ in tqdm(txn.cursor(), desc="scanning source", total=approx_total)
+            if k not in _LMDB_METADATA_KEYS
+        ]
     n = len(all_keys)
 
     rng = _random.Random(seed)
@@ -479,6 +485,8 @@ def split_lmdb_file(
     n_test = int(n * test_prop)
     n_val = int(n * val_prop)
     n_train = n - n_val - n_test
+
+    logger.info(f"Total molecules: {n}  ->  train={n_train}, val={n_val}, test={n_test}")
 
     splits = {
         "train": all_keys[:n_train],
