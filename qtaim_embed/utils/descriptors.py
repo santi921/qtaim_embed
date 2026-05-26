@@ -64,22 +64,28 @@ def get_bond_features(
     else:
         bonds = row[bond_key]
 
+    # Check if any keys need the map_key lookup (i.e. non-computed keys)
+    needs_map = any(
+        key != "bond_length" and "boo_" not in key and "rbf_" not in key
+        for key in keys
+    )
+
     for bond in bonds:
         if (bond[0], bond[1]) not in bond_features.keys():
             bond_features[(bond[0], bond[1])] = {}
 
-        try:
-            bond_index_map = row[map_key][0].index(tuple(bond))
-        except:
-            # print("Error in bond index map")
-            bond_index_map = row[map_key].index(tuple(bond))
+        if needs_map:
+            try:
+                bond_index_map = row[map_key][0].index(tuple(bond))
+            except:
+                bond_index_map = row[map_key].index(tuple(bond))
 
-        for key in keys:
-            if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
-                if isinstance(row[key][0], list):
-                    bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
-                else:
-                    bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
+            for key in keys:
+                if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
+                    if isinstance(row[key][0], list):
+                        bond_features[(bond[0], bond[1])][key] = row[key][0][bond_index_map]
+                    else:
+                        bond_features[(bond[0], bond[1])][key] = row[key][bond_index_map]
     #print("bond_features: ", bond_features.keys())
     return bond_features
 

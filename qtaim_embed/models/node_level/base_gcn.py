@@ -693,7 +693,6 @@ class GCNNodePred(pl.LightningModule):
                 mode="min",
                 factor=self.hparams.lr_scale_factor,
                 patience=self.hparams.lr_plateau_patience,
-                verbose=True,
             )
 
         elif scheduler_name == "none":

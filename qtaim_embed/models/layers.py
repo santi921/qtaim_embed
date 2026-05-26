@@ -208,9 +208,6 @@ class ResidualBlock(nn.Module):
             return x_dict
 
 
-# class AttentionBlock(nn.Module):
-# TODO
-
 
 class Set2Set(nn.Module):
     r"""

@@ -101,6 +101,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         output_dims=2,
         pooling_ntypes=["atom", "bond"],
         pooling_ntypes_direct=["global"],
+        class_weights=None,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -166,6 +167,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "residual": residual_gat,
             "hidden_size": hidden_size,
             "ntasks": len(target_dict["global"]),
+            "class_weights": class_weights,
         }
 
         self.hparams.update(params)
@@ -447,14 +449,17 @@ class GCNGraphPredClassifier(pl.LightningModule):
             else:
                 feats = conv(feats, edge_index_dict)
             if self.hparams.conv_fn == "GATConv":
-                if ind < self.hparams.n_conv_layers - 1:
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(
+                reshaped_feats = {}
+                for k, v in feats.items():
+                    if ind < self.hparams.n_conv_layers - 1:
+                        reshaped_feats[k] = v.reshape(
                             -1, self.hparams.num_heads * self.hparams.hidden_size
                         )
-                else:
-                    for k, v in feats.items():
-                        feats[k] = v.reshape(-1, self.hparams.input_size[k])
+                    else:
+                        reshaped_feats[k] = v.reshape(
+                            -1, self.conv_out_size[k]
+                        )
+                feats = reshaped_feats
 
         # Build batch_dict for pooling
         batch_dict = {
@@ -472,17 +477,18 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         Initialize loss function
         """
+        # Support class weights for imbalanced datasets
+        weights = None
+        if hasattr(self.hparams, "class_weights") and self.hparams.class_weights is not None:
+            weights = torch.tensor(self.hparams.class_weights, dtype=torch.float32)
+
         if self.hparams.loss_fn == "cross_entropy":
             if self.hparams.ntasks > 1:
-                # loss_fn = MultioutputWrapper(
-                #    nn.CrossEntropyLoss(), num_outputs=self.hparams.ntasks
-                # )
-                # create module list
                 loss_fn = nn.ModuleList()
                 for i in range(self.hparams.ntasks):
-                    loss_fn.append(nn.CrossEntropyLoss(reduction="mean"))
+                    loss_fn.append(nn.CrossEntropyLoss(weight=weights, reduction="mean"))
             else:
-                loss_fn = nn.CrossEntropyLoss(reduction="mean")
+                loss_fn = nn.CrossEntropyLoss(weight=weights, reduction="mean")
         return loss_fn
 
     def compute_loss(self, target, pred):
@@ -659,12 +665,14 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
     def configure_optimizers(self):
         params = list(filter(lambda p: p.requires_grad, self.parameters()))
+        # fused Adam is incompatible with gradient clipping under mixed precision
+        use_fused = self.trainer.gradient_clip_val in (None, 0, 0.0)
         try:
             optimizer = torch.optim.Adam(
                 params,
                 lr=self.hparams.lr,
                 weight_decay=self.hparams.weight_decay,
-                fused=True,
+                fused=use_fused,
             )
         except RuntimeError:
             optimizer = torch.optim.Adam(
@@ -688,7 +696,6 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 mode="min",
                 factor=self.hparams.lr_scale_factor,
                 patience=self.hparams.lr_plateau_patience,
-                verbose=True,
             )
 
         elif scheduler_name == "none":

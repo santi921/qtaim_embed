@@ -6,6 +6,15 @@ QTAIM-Embed is a Graph Neural Network (GNN) package for molecular property predi
 
 **Citation**: Digital Discovery (2024) by Vargas, Gee, and Alexandrova.
 
+## Shared Skills
+
+For available skills and tool guidance, read the relevant files in `/home/santiagovargas/dev/claude-skills/` as needed:
+- **Scientific** (PyG, PyTorch Lightning, RDKit, pymatgen, matplotlib, scikit-learn): `scientific/`
+- **Code review & planning** (multi-agent reviews, brainstorm/plan/work workflows): `compound/`
+- **Document processing** (PDF, XLSX): `documents/`
+
+Read the specific skill file when you need detailed API patterns or usage guidance for a task.
+
 ## Quick Reference
 
 ```bash
@@ -301,3 +310,11 @@ trainer = pl.Trainer(logger=logger)
 Sweep configs are in `scripts/train/sweep_config*.json`.
 
 
+## Important Notes
+- Research the codebase before editing. Never change code you haven't read. Also don't make changes to code without asking first.
+- Don't use emojis and emdashes anywhere
+- User instructions always override this file.
+- Do not re-read files already read unless file may have changed.
+- Be concise in output but thorough in reasoning.
+- No inline prose. Use comments sparingly - only where logic is unclear.
+- 

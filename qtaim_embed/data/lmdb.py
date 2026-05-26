@@ -49,7 +49,7 @@ def serialize_graph(graph, ret=True):
 def load_graph_from_serialized(serialized_graph):
     """Load a PyG HeteroData graph from serialized bytes."""
     buf = io.BytesIO(serialized_graph)
-    graph = torch.load(buf, weights_only=False)
+    graph = torch.load(buf, weights_only=False, map_location='cpu')
     return graph
 
 
@@ -374,3 +374,137 @@ def combined_mean_std(mean_list, std_list, count_list):
     combined_std = combined_variance**0.5
 
     return combined_mean, combined_std
+
+
+# ---------------------------------------------------------------------------
+# LMDB splitting utilities
+# ---------------------------------------------------------------------------
+
+import random as _random
+
+
+def open_lmdb_readonly(path: str):
+    """Open an LMDB file for reading."""
+    return lmdb.open(
+        path,
+        readonly=True,
+        lock=False,
+        readahead=False,
+        meminit=False,
+        subdir=False,
+    )
+
+
+def write_lmdb_split(src_env, keys: list, out_path: str) -> None:
+    """
+    Write one split (train/val/test) from a source LMDB.
+
+    Handles two source formats:
+      - qtaim_generator format: string mol-ID keys, value = pickle.dumps(graph_bytes)
+      - qtaim_embed format: integer keys, value = pickle.dumps({"molecule_graph": graph_bytes})
+
+    Output is always qtaim_embed-compatible: integer keys, {"molecule_graph": bytes} wrapper,
+    and a "length" metadata key.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    db = lmdb.open(
+        out_path,
+        map_size=_safe_map_size(out_path),
+        subdir=False,
+        meminit=False,
+        map_async=True,
+    )
+
+    split_name = os.path.basename(os.path.dirname(out_path)) or os.path.basename(out_path)
+    WRITE_BATCH_SIZE = 1000
+    with src_env.begin() as src_txn:
+        # detect format once on the first key
+        raw0 = src_txn.get(keys[0]) if keys else None
+        is_embed_fmt = raw0 is not None and isinstance(pickle.loads(raw0), dict)
+
+        txn = db.begin(write=True)
+        batch_count = 0
+        for new_idx, src_key in enumerate(tqdm(keys, desc=f"writing {split_name}")):
+            raw = src_txn.get(src_key)
+            if is_embed_fmt:
+                entry = raw
+            else:
+                entry = pickle.dumps({"molecule_graph": pickle.loads(raw)}, protocol=-1)
+            txn.put(f"{new_idx}".encode("ascii"), entry)
+            batch_count += 1
+            if batch_count >= WRITE_BATCH_SIZE:
+                txn.commit()
+                txn = db.begin(write=True)
+                batch_count = 0
+        txn.commit()
+
+    txn = db.begin(write=True)
+    txn.put("length".encode("ascii"), pickle.dumps(len(keys), protocol=-1))
+    txn.commit()
+    db.sync()
+    db.close()
+
+
+_LMDB_METADATA_KEYS = {b"length", b"feature_size", b"feature_names", b"element_set",
+                        b"allowed_ring_size", b"allowed_charges", b"allowed_spins",
+                        b"target_dict", b"extra_dataset_info", b"log_scale_features",
+                        b"length_chunk"}
+
+
+def split_lmdb_file(
+    src_path: str,
+    out_dir: str,
+    val_prop: float = 0.1,
+    test_prop: float = 0.1,
+    seed: int = 42,
+    lmdb_name: str = "data.lmdb",
+) -> dict:
+    """
+    Split a single LMDB into train/val/test LMDBs.
+
+    Returns a dict with keys "train", "val", "test" mapping to output paths
+    and "sizes" mapping to {"train": int, "val": int, "test": int}.
+    """
+    if val_prop + test_prop >= 1.0:
+        raise ValueError(f"val_prop + test_prop must be < 1.0, got {val_prop + test_prop}")
+
+    src_env = open_lmdb_readonly(src_path)
+    stat = src_env.stat()
+    approx_total = stat["entries"]
+    with src_env.begin() as txn:
+        all_keys = [
+            k
+            for k, _ in tqdm(txn.cursor(), desc="scanning source", total=approx_total)
+            if k not in _LMDB_METADATA_KEYS
+        ]
+    n = len(all_keys)
+
+    rng = _random.Random(seed)
+    rng.shuffle(all_keys)
+
+    n_test = int(n * test_prop)
+    n_val = int(n * val_prop)
+    n_train = n - n_val - n_test
+
+    logger.info(f"Total molecules: {n}  ->  train={n_train}, val={n_val}, test={n_test}")
+
+    splits = {
+        "train": all_keys[:n_train],
+        "val": all_keys[n_train : n_train + n_val],
+        "test": all_keys[n_train + n_val :],
+    }
+
+    out_paths = {}
+    for split_name, keys in splits.items():
+        out_path = os.path.join(out_dir, split_name, lmdb_name)
+        write_lmdb_split(src_env, keys, out_path)
+        out_paths[split_name] = out_path
+
+    src_env.close()
+
+    return {
+        "train": out_paths["train"],
+        "val": out_paths["val"],
+        "test": out_paths["test"],
+        "sizes": {k: len(v) for k, v in splits.items()},
+    }
