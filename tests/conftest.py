@@ -146,3 +146,23 @@ def single_gpu_config():
         'accelerator': 'auto',
         'devices': 1,
     }
+
+
+@pytest.fixture(autouse=True)
+def _reset_lmdb_env_cache():
+    # LMDBBaseDataset shares a process-global env cache. Without resetting it,
+    # a test that opens for read prevents a later test from opening the same
+    # path for write -- newer `lmdb` refuses same-process duplicate opens.
+    from qtaim_embed.core.dataset import LMDBBaseDataset
+
+    def _flush():
+        for env in LMDBBaseDataset._env_cache.values():
+            try:
+                env.close()
+            except Exception:
+                pass
+        LMDBBaseDataset._env_cache.clear()
+
+    _flush()
+    yield
+    _flush()

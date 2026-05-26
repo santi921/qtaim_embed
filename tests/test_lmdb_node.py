@@ -112,7 +112,7 @@ def test_model_lmdb():
         enable_progress_bar=True,
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
-        precision=16,
+        precision="16-mixed",
         log_every_n_steps=1,
     )
 

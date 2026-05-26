@@ -25,6 +25,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+from pytorch_lightning.strategies import DDPStrategy
 
 from qtaim_embed.core.datamodule import LMDBDataModule
 from qtaim_embed.data.lmdb import TransformMol
@@ -54,7 +55,9 @@ def main(argv=None):
     with open(args.config) as f:
         config = json.load(f)
 
-    if config["optim"]["precision"] == "16" or config["optim"]["precision"] == "32":
+    if config["optim"]["precision"] == "16":
+        config["optim"]["precision"] = "16-mixed"
+    elif config["optim"]["precision"] == "32":
         config["optim"]["precision"] = int(config["optim"]["precision"])
 
     # Set LMDB paths
@@ -136,7 +139,11 @@ def main(argv=None):
                 checkpoint_callback,
             ],
             enable_checkpointing=True,
-            strategy=config["optim"]["strategy"],
+            strategy=(
+                DDPStrategy(find_unused_parameters=True)
+                if config["optim"]["strategy"] == "ddp"
+                else config["optim"]["strategy"]
+            ),
             default_root_dir=args.log_save_dir,
             logger=[logger_tb, logger_wb],
             precision=config["optim"]["precision"],

@@ -1,4 +1,5 @@
 import logging
+import os
 import torch
 from torch_geometric.data import HeteroData
 from tqdm import tqdm
@@ -1275,6 +1276,12 @@ class HeteroGraphGraphLabelClassifierDataset(torch.utils.data.Dataset):
 
 
 class LMDBBaseDataset(Dataset):
+    # Process-local cache of open LMDB envs keyed by absolute path. Newer
+    # `lmdb` refuses to open the same path twice in one process; sharing one
+    # env across LMDBMoleculeDataset instances avoids both that and redundant
+    # mmap pressure. Cleared in child after fork (see _reset_env_cache_at_fork).
+    _env_cache: Dict[str, "lmdb.Environment"] = {}
+
     def __init__(self, config: Dict[str, Any], transform: Optional[Any] = None):
         super(LMDBBaseDataset, self).__init__()
 
@@ -1353,11 +1360,6 @@ class LMDBBaseDataset(Dataset):
             idx = self.available_indices[idx]
 
         if not self.path.is_file():
-            # Lazy per-worker init: each DataLoader worker opens its own env
-            # after fork, avoiding shared-handle conflicts with max_readers > 1.
-            if self._worker_envs is None:
-                self._worker_envs = [self.connect_db(p) for p in self._db_paths]
-
             # Figure out which db this should be indexed from.
             db_idx = bisect.bisect(self._keylen_cumulative, idx)
             # Extract index of element within that db.
@@ -1368,18 +1370,14 @@ class LMDBBaseDataset(Dataset):
 
             # Return features.
             datapoint_pickled = (
-                self._worker_envs[db_idx]
+                self.connect_db(self._db_paths[db_idx])
                 .begin()
                 .get(f"{self._keys[db_idx][el_idx]}".encode("ascii"))
             )
             data_object = pickle.loads(datapoint_pickled)
 
         else:
-            # Lazy per-worker init: each DataLoader worker opens its own env.
-            if self._worker_env is None:
-                self._worker_env = self.connect_db(self.path)
-
-            datapoint_pickled = self._worker_env.begin().get(
+            datapoint_pickled = self.connect_db(self.path).begin().get(
                 f"{self._keys[idx]}".encode("ascii")
             )
 
@@ -1391,6 +1389,13 @@ class LMDBBaseDataset(Dataset):
         return data_object
 
     def connect_db(self, lmdb_path: Optional[str] = None) -> lmdb.Environment:
+        # Newer `lmdb` refuses to open the same path twice in one process,
+        # so cache env handles by absolute path. The cache is reset in
+        # DataLoader workers via the os.register_at_fork hook below.
+        key = str(Path(lmdb_path).resolve())
+        cached = LMDBBaseDataset._env_cache.get(key)
+        if cached is not None:
+            return cached
         env = lmdb.open(
             str(lmdb_path),
             subdir=False,
@@ -1400,6 +1405,7 @@ class LMDBBaseDataset(Dataset):
             meminit=False,
             max_readers=126,
         )
+        LMDBBaseDataset._env_cache[key] = env
         return env
 
     def close_db(self) -> None:
@@ -1424,6 +1430,22 @@ class LMDBBaseDataset(Dataset):
 
     def get_metadata(self, num_samples: int = 100) -> None:
         pass
+
+
+def _reset_env_cache_at_fork() -> None:
+    # Close inherited handles and clear the cache so DataLoader workers can
+    # reopen envs cleanly. Inherited handles must not be used after fork
+    # per LMDB docs, and merely existing prevents a fresh open.
+    for env in LMDBBaseDataset._env_cache.values():
+        try:
+            env.close()
+        except Exception:
+            pass
+    LMDBBaseDataset._env_cache.clear()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_env_cache_at_fork)
 
 
 class LMDBMoleculeDataset(LMDBBaseDataset):

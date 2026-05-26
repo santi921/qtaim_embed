@@ -231,7 +231,9 @@ def main():
     }
 
     test_path = "/home/santiagovargas/dev/qtaim_embed/data/green_splits/ccsdtf_121423_qtaim_learning_test.json"
-    if config["model"]["precision"] == "16" or config["model"]["precision"] == "32":
+    if config["model"]["precision"] == "16":
+        config["model"]["precision"] = "16-mixed"
+    elif config["model"]["precision"] == "32":
         config["model"]["precision"] = int(config["model"]["precision"])
 
     config["dataset"]["data_dir"] = test_path

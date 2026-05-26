@@ -13,6 +13,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
+from pytorch_lightning.strategies import DDPStrategy
 from qtaim_embed.core.datamodule import QTAIMGraphTaskClassifyDataModule, LMDBDataModule
 from qtaim_embed.models.utils import LogParameters, load_graph_level_model_from_config
 from qtaim_embed.utils.data import get_default_graph_level_config_classif
@@ -56,7 +57,9 @@ def main(argv=None):
         with open(config, "r") as f:
             config = json.load(f)
 
-    if config["optim"]["precision"] == "16" or config["optim"]["precision"] == "32":
+    if config["optim"]["precision"] == "16":
+        config["optim"]["precision"] = "16-mixed"
+    elif config["optim"]["precision"] == "32":
         config["optim"]["precision"] = int(config["optim"]["precision"])
 
     # set log save dir
@@ -146,7 +149,11 @@ def main(argv=None):
                 checkpoint_callback,
             ],
             enable_checkpointing=True,
-            strategy=config["optim"]["strategy"],
+            strategy=(
+                DDPStrategy(find_unused_parameters=True)
+                if config["optim"]["strategy"] == "ddp"
+                else config["optim"]["strategy"]
+            ),
             default_root_dir=config["dataset"]["log_save_dir"],
             logger=[logger_tb, logger_wb],
             precision=config["optim"]["precision"],

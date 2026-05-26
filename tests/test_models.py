@@ -61,7 +61,7 @@ def test_save_load():
         enable_progress_bar=True,
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
-        precision=16,
+        precision="16-mixed",
         log_every_n_steps=1,
     )
 
@@ -333,7 +333,7 @@ def test_multi_task():
         enable_progress_bar=True,
         enable_checkpointing=True,
         default_root_dir="./test_save_load/",
-        precision=16,
+        precision="16-mixed",
         log_every_n_steps=1,
     )
 

@@ -57,7 +57,7 @@ class TestGrapher:
         ]
         col_test = pd.DataFrame(self.df_test["extra_feat_atom_esp_total"])
 
-        test_vals = [col_test.iloc[ind][0][0] for ind in range(len(col_test))]
+        test_vals = [col_test.iloc[ind, 0][0] for ind in range(len(col_test))]
         # print(test_vals)
         mol_wrappers, element_set = mol_wrappers_from_df(
             self.df_test,
