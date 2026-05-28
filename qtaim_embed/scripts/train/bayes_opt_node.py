@@ -15,6 +15,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
+from pytorch_lightning.strategies import DDPStrategy
 from qtaim_embed.core.datamodule import QTAIMNodeTaskDataModule, LMDBDataModule
 from qtaim_embed.models.utils import load_node_level_model_from_config
 
@@ -210,8 +211,8 @@ class TrainingObject:
                     "lr_scale_factor": init_config["lr_scale_factor"],
                     "loss_fn": init_config["loss_fn"],
                     "embedding_size": init_config["embedding_size"],
-                    "lstm_iters": init_config["lstm_iters"],
-                    "lstm_layers": init_config["lstm_layers"],
+                    "lstm_iters": init_config.get("lstm_iters", 3),
+                    "lstm_layers": init_config.get("lstm_layers", 1),
                     # "output_dims": init_config["output_dims"],  # check
                     "num_heads_gat": init_config["num_heads_gat"],
                     "dropout_feat_gat": init_config["dropout_feat_gat"],
@@ -220,6 +221,7 @@ class TrainingObject:
                     "residual_gat": init_config["residual_gat"],
                     "restore": init_config["restore"],
                     "max_epochs": init_config["max_epochs"],
+                    "compiled": init_config["compiled"],
                 },
                 "dataset": {},
                 "optim": {
@@ -312,14 +314,18 @@ class TrainingObject:
                     checkpoint_callback,
                 ],
                 enable_checkpointing=True,
-                strategy=config["optim"]["strategy"],
+                strategy=(
+                    DDPStrategy(find_unused_parameters=True)
+                    if config["optim"]["strategy"] == "ddp"
+                    else config["optim"]["strategy"]
+                ),
                 default_root_dir=self.log_save_dir,
                 logger=[logger_wb],
                 precision=config["optim"]["precision"],
             )
 
             trainer.fit(model, self.dm)
-            if use_lmdb:
+            if self.lmdbs:
                 if "test_lmdb" in config["dataset"]:
                     trainer.test(model, self.dm)
             else:
@@ -341,6 +347,7 @@ def main(argv=None):
     parser.add_argument("-project_name", type=str, default="qtaim_embed_lightning")
     parser.add_argument("-sweep_config", type=str, default="./sweep_config.json")
     parser.add_argument("-wandb_entity", type=str, default="santi")
+    parser.add_argument("-count", type=int, default=3000)
 
     args = parser.parse_args()
     method = str(args.method)
@@ -352,6 +359,7 @@ def main(argv=None):
     sweep_config_loc = args.sweep_config
     use_lmdb = args.use_lmdb
     wandb_entity = args.wandb_entity
+    count = args.count
     sweep_config = {}
     with open(sweep_config_loc, "r") as f:
         sweep_params = json.load(f)
@@ -384,4 +392,4 @@ def main(argv=None):
     logger.info("wandb_project_name: %s", wandb_project_name)
     logger.info("sweep_config_loc: %s", sweep_config_loc)
     logger.info("use_lmdb: %s", use_lmdb)
-    wandb.agent(sweep_id, function=training_obj.train, count=3000, entity="santi")
+    wandb.agent(sweep_id, function=training_obj.train, count=count, entity=wandb_entity)

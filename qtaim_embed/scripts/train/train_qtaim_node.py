@@ -198,8 +198,8 @@ def main(argv=None):
         )
 
         # log dataset and optim settings from config
-        run.config.update(config["dataset"])
-        run.config.update(config["optim"])
+        run.config.update(config["dataset"], allow_val_change=True)
+        run.config.update(config["optim"], allow_val_change=True)
 
         logger.info("Dataset and optim settings logged")
         logger.info("Fitting model")

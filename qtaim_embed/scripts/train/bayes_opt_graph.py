@@ -15,6 +15,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
+from pytorch_lightning.strategies import DDPStrategy
 from qtaim_embed.core.datamodule import QTAIMGraphTaskDataModule, LMDBDataModule
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 
@@ -305,7 +306,11 @@ class TrainingObject:
                     checkpoint_callback,
                 ],
                 enable_checkpointing=True,
-                strategy=config["optim"]["strategy"],
+                strategy=(
+                    DDPStrategy(find_unused_parameters=True)
+                    if config["optim"]["strategy"] == "ddp"
+                    else config["optim"]["strategy"]
+                ),
                 default_root_dir=self.log_save_dir,
                 logger=[logger_wb],
                 precision=config["optim"]["precision"],
