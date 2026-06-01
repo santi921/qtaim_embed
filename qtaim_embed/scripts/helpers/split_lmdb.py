@@ -27,6 +27,15 @@ def main():
     parser.add_argument("--test_prop", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--lmdb_name", type=str, default="data.lmdb")
+    parser.add_argument(
+        "--method",
+        type=str,
+        default="random",
+        choices=["random", "composition"],
+        help="random: uniform shuffle by key. composition: group by molecular "
+        "formula so same-formula molecules share a split (prevents leakage "
+        "between near-identical structures such as trajectory steps).",
+    )
     args = parser.parse_args()
 
     result = split_lmdb_file(
@@ -36,6 +45,7 @@ def main():
         test_prop=args.test_prop,
         seed=args.seed,
         lmdb_name=args.lmdb_name,
+        method=args.method,
     )
 
     sizes = result["sizes"]
