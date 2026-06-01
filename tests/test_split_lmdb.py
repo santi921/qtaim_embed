@@ -9,6 +9,7 @@ import torch
 from torch_geometric.data import HeteroData
 
 from qtaim_embed.data.lmdb import (
+    _LMDB_METADATA_KEYS,
     load_graph_from_serialized,
     open_lmdb_readonly,
     split_lmdb_file,
@@ -123,10 +124,10 @@ class TestSplitLmdbFile:
 
         env = open_lmdb_readonly(result["train"])
         with env.begin() as txn:
-            keys = [k.decode("ascii") for k, _ in txn.cursor()]
+            keys = [k for k, _ in txn.cursor()]
         env.close()
 
-        non_meta = [k for k in keys if k != "length"]
+        non_meta = [k.decode("ascii") for k in keys if k not in _LMDB_METADATA_KEYS]
         assert all(k.isdigit() for k in non_meta)
         assert sorted(int(k) for k in non_meta) == list(range(len(non_meta)))
 
@@ -240,6 +241,43 @@ class TestSplitLmdbEdgeCases:
         captured = capsys.readouterr()
         assert "train" in captured.err or "val" in captured.err or "test" in captured.err
 
+    def test_metadata_propagated_to_splits(self, tmp_path):
+        """Metadata keys written to source LMDB are copied to every split."""
+        src = str(tmp_path / "src.lmdb")
+        n = 30
+        feature_names = {"atom": ["feat_a"], "bond": ["feat_b"], "global": []}
+        feature_size = {"atom": 1, "bond": 1, "global": 0}
+        target_dict = {"atom": ["label_x"], "bond": [], "global": []}
+        element_set = {"C", "H", "O"}
+
+        db = lmdb.open(src, map_size=10 ** 8, subdir=False, meminit=False, map_async=True)
+        for i in range(n):
+            graph_bytes = _serialize(_make_graph())
+            val = pickle.dumps({"molecule_graph": graph_bytes}, protocol=-1)
+            txn = db.begin(write=True)
+            txn.put(f"{i}".encode("ascii"), val)
+            txn.commit()
+        txn = db.begin(write=True)
+        txn.put(b"length", pickle.dumps(n, protocol=-1))
+        txn.put(b"feature_names", pickle.dumps(feature_names, protocol=-1))
+        txn.put(b"feature_size", pickle.dumps(feature_size, protocol=-1))
+        txn.put(b"target_dict", pickle.dumps(target_dict, protocol=-1))
+        txn.put(b"element_set", pickle.dumps(element_set, protocol=-1))
+        txn.commit()
+        db.sync()
+        db.close()
+
+        result = split_lmdb_file(src, str(tmp_path / "out"), val_prop=0.2, test_prop=0.1, seed=0)
+
+        for split_path in (result["train"], result["val"], result["test"]):
+            env = open_lmdb_readonly(split_path)
+            with env.begin() as txn:
+                assert pickle.loads(txn.get(b"feature_names")) == feature_names
+                assert pickle.loads(txn.get(b"feature_size")) == feature_size
+                assert pickle.loads(txn.get(b"target_dict")) == target_dict
+                assert pickle.loads(txn.get(b"element_set")) == element_set
+            env.close()
+
 
 class TestWriteLmdbSplitEmbedFormat:
     def test_embed_format_passthrough(self, tmp_path):
@@ -262,3 +300,149 @@ class TestWriteLmdbSplitEmbedFormat:
         assert "molecule_graph" in obj
         graph = load_graph_from_serialized(obj["molecule_graph"])
         assert hasattr(graph["atom"], "feat")
+
+
+# ---------------------------------------------------------------------------
+# Tests: composition-based splitting
+# ---------------------------------------------------------------------------
+
+def _make_composition_graph(counts: dict, elem_order: list) -> HeteroData:
+    """Build a graph whose atom.feat element one-hots encode `counts`."""
+    n_elem = len(elem_order)
+    rows = []
+    for sym, c in counts.items():
+        onehot = [1.0 if e == sym else 0.0 for e in elem_order]
+        rows.extend([[0.0, 0.0] + onehot for _ in range(c)])
+    feat = torch.tensor(rows, dtype=torch.float32)
+    n_atoms = feat.shape[0]
+    g = HeteroData()
+    g["atom"].feat = feat
+    g["atom"].num_nodes = n_atoms
+    g["bond"].feat = torch.zeros(max(n_atoms - 1, 1), 3)
+    g["bond"].num_nodes = max(n_atoms - 1, 1)
+    g["global"].feat = torch.zeros(1, 2)
+    g["global"].num_nodes = 1
+    return g
+
+
+def _make_composition_lmdb(path: str, formulas: list, elem_order: list) -> None:
+    """Embed-format LMDB with element one-hot atom feats + feature_names metadata.
+
+    `formulas` is one dict of element counts per molecule.
+    """
+    atom_feature_names = ["total_degree", "total_H"] + [
+        f"chemical_symbol_{e}" for e in elem_order
+    ]
+    feature_names = {"atom": atom_feature_names, "bond": ["b0", "b1", "b2"], "global": ["g0", "g1"]}
+
+    db = lmdb.open(path, map_size=10 ** 8, subdir=False, meminit=False, map_async=True)
+    for i, counts in enumerate(formulas):
+        graph_bytes = _serialize(_make_composition_graph(counts, elem_order))
+        val = pickle.dumps({"molecule_graph": graph_bytes}, protocol=-1)
+        txn = db.begin(write=True)
+        txn.put(f"{i}".encode("ascii"), val)
+        txn.commit()
+    txn = db.begin(write=True)
+    txn.put(b"length", pickle.dumps(len(formulas), protocol=-1))
+    txn.put(b"feature_names", pickle.dumps(feature_names, protocol=-1))
+    txn.commit()
+    db.sync()
+    db.close()
+
+
+class TestCompositionSplit:
+    ELEMS = ["C", "H", "O", "N"]
+    # five distinct formulas, several molecules each
+    FORMULAS = (
+        [{"C": 1, "H": 4}] * 6
+        + [{"C": 2, "H": 6}] * 6
+        + [{"C": 1, "H": 2, "O": 1}] * 6
+        + [{"N": 2}] * 6
+        + [{"O": 2, "H": 2}] * 6
+    )
+
+    def _split_membership(self, result):
+        """Return {key: split_name} across all three split LMDBs."""
+        membership = {}
+        for split_name in ("train", "val", "test"):
+            env = open_lmdb_readonly(result[split_name])
+            with env.begin() as txn:
+                for k, v in txn.cursor():
+                    if k in _LMDB_METADATA_KEYS:
+                        continue
+                    g = load_graph_from_serialized(pickle.loads(v)["molecule_graph"])
+                    # recover formula signature from element one-hot sums
+                    feat = g["atom"].feat
+                    sig = tuple(int(feat[:, 2 + j].sum().item()) for j in range(len(self.ELEMS)))
+                    membership[(split_name, k)] = sig
+            env.close()
+        return membership
+
+    def test_same_formula_lands_in_one_split(self, tmp_path):
+        src = str(tmp_path / "src.lmdb")
+        _make_composition_lmdb(src, self.FORMULAS, self.ELEMS)
+        result = split_lmdb_file(
+            src, str(tmp_path / "out"), val_prop=0.2, test_prop=0.2,
+            seed=7, method="composition",
+        )
+        # map each formula signature -> set of splits it appears in
+        sig_to_splits = {}
+        for (split_name, _key), sig in self._split_membership(result).items():
+            sig_to_splits.setdefault(sig, set()).add(split_name)
+        # every formula must appear in exactly one split
+        for sig, splits in sig_to_splits.items():
+            assert len(splits) == 1, f"formula {sig} leaked across splits {splits}"
+
+    def test_composition_deterministic(self, tmp_path):
+        src = str(tmp_path / "src.lmdb")
+        _make_composition_lmdb(src, self.FORMULAS, self.ELEMS)
+        r1 = split_lmdb_file(src, str(tmp_path / "o1"), val_prop=0.2, test_prop=0.2,
+                             seed=7, method="composition")
+        r2 = split_lmdb_file(src, str(tmp_path / "o2"), val_prop=0.2, test_prop=0.2,
+                             seed=7, method="composition")
+        assert r1["sizes"] == r2["sizes"]
+
+    def test_total_preserved(self, tmp_path):
+        src = str(tmp_path / "src.lmdb")
+        _make_composition_lmdb(src, self.FORMULAS, self.ELEMS)
+        result = split_lmdb_file(src, str(tmp_path / "out"), val_prop=0.2, test_prop=0.2,
+                                 seed=7, method="composition")
+        sizes = result["sizes"]
+        assert sizes["train"] + sizes["val"] + sizes["test"] == len(self.FORMULAS)
+
+    def test_requires_feature_names(self, tmp_path):
+        src = str(tmp_path / "src.lmdb")
+        _make_embed_format_lmdb(src, n=10)  # no feature_names metadata
+        with pytest.raises(ValueError, match="feature_names"):
+            split_lmdb_file(src, str(tmp_path / "out"), method="composition")
+
+    def test_hash_assignment_pinned(self):
+        """Pin the exact split assignment so it can't silently drift from the
+        converter path. Reference values generated from
+        qtaim_gen.source.utils.splits.assign_formula_to_split(formula, (0.6,0.2,0.2), 42).
+        """
+        from qtaim_embed.data.lmdb import _assign_formula_to_split
+        ratios = (0.6, 0.2, 0.2)
+        names = ("train", "val", "test")
+        expected = {
+            "H4C1": "train", "H6C2": "train", "H2C1O1": "train", "N2": "val",
+            "H2O2": "train", "Fe1O3": "train", "Ag1": "train",
+        }
+        for formula, exp in expected.items():
+            got = names[_assign_formula_to_split(formula, ratios, seed=42)]
+            assert got == exp, f"{formula}: got={got} expected={exp}"
+
+        # If qtaim_gen is importable (combined env), cross-check directly.
+        try:
+            from qtaim_gen.source.utils.splits import assign_formula_to_split
+        except Exception:
+            return
+        for formula in expected:
+            assert names[_assign_formula_to_split(formula, ratios, 42)] == \
+                assign_formula_to_split(formula, ratios, 42)
+
+    def test_invalid_method_raises(self, tmp_path):
+        src = str(tmp_path / "src.lmdb")
+        _make_embed_format_lmdb(src, n=5)
+        with pytest.raises(ValueError, match="method must be"):
+            split_lmdb_file(src, str(tmp_path / "out"), method="bogus")

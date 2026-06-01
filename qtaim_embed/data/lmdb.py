@@ -2,6 +2,7 @@ import logging
 import os
 import io
 import shutil
+import hashlib
 import lmdb
 import pickle
 import torch
@@ -440,6 +441,15 @@ def write_lmdb_split(src_env, keys: list, out_path: str) -> None:
 
     txn = db.begin(write=True)
     txn.put("length".encode("ascii"), pickle.dumps(len(keys), protocol=-1))
+    # Copy dataset metadata so LMDBMoleculeDataset.feature_names/feature_size/target_dict work
+    _COPY_META = {b"feature_size", b"feature_names", b"element_set", b"allowed_ring_size",
+                  b"allowed_charges", b"allowed_spins", b"target_dict",
+                  b"extra_dataset_info", b"log_scale_features"}
+    with src_env.begin() as src_txn:
+        for meta_key in _COPY_META:
+            val = src_txn.get(meta_key)
+            if val is not None:
+                txn.put(meta_key, val)
     txn.commit()
     db.sync()
     db.close()
@@ -448,7 +458,64 @@ def write_lmdb_split(src_env, keys: list, out_path: str) -> None:
 _LMDB_METADATA_KEYS = {b"length", b"feature_size", b"feature_names", b"element_set",
                         b"allowed_ring_size", b"allowed_charges", b"allowed_spins",
                         b"target_dict", b"extra_dataset_info", b"log_scale_features",
-                        b"length_chunk"}
+                        b"length_chunk", b"scaled", b"processed_source_keys",
+                        b"scaler_finalized"}
+
+
+def _assign_formula_to_split(formula: str, ratios, seed: int) -> int:
+    """Deterministically map a formula string to a split index (0/1/2).
+
+    Mirrors qtaim_gen.source.utils.splits.assign_formula_to_split exactly
+    (SHA-256 of "{formula}_{seed}" -> [0, 1) -> cumulative-ratio bucket) so
+    composition splits produced here match the converter --split path.
+    Reimplemented rather than imported because qtaim_gen depends on
+    qtaim_embed; importing it here would be a circular dependency.
+    """
+    hash_input = f"{formula}_{seed}"
+    hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest(), 16) % 10000 / 10000.0
+    cumulative = 0.0
+    for i, ratio in enumerate(ratios):
+        cumulative += ratio
+        if hash_val < cumulative:
+            return i
+    return len(ratios) - 1
+
+
+def _element_columns_from_feature_names(feature_names) -> list:
+    """Return [(col_index, element_symbol), ...] for chemical_symbol_* atom feats."""
+    atom_names = feature_names.get("atom", []) if isinstance(feature_names, dict) else []
+    prefix = "chemical_symbol_"
+    return [
+        (i, name[len(prefix):])
+        for i, name in enumerate(atom_names)
+        if isinstance(name, str) and name.startswith(prefix)
+    ]
+
+
+def _formula_from_graph(graph, elem_cols) -> str:
+    """Reconstruct a pymatgen formula string from atom element one-hot columns.
+
+    Sums each chemical_symbol_* one-hot column across atoms to recover element
+    counts, then formats via pymatgen Composition so the string matches
+    build_formula_map_from_structure_lmdb's convention.
+    """
+    from pymatgen.core import Composition
+
+    feat = graph["atom"].feat
+    width = feat.shape[1]
+    counts = {}
+    for idx, sym in elem_cols:
+        if idx >= width:
+            raise ValueError(
+                f"element column index {idx} ({sym}) exceeds atom.feat width {width}; "
+                "feature_names does not align with stored graphs"
+            )
+        c = int(round(float(feat[:, idx].sum().item())))
+        if c > 0:
+            counts[sym] = c
+    if not counts:
+        return ""
+    return Composition(counts).formula.replace(" ", "")
 
 
 def split_lmdb_file(
@@ -458,15 +525,28 @@ def split_lmdb_file(
     test_prop: float = 0.1,
     seed: int = 42,
     lmdb_name: str = "data.lmdb",
+    method: str = "random",
 ) -> dict:
     """
     Split a single LMDB into train/val/test LMDBs.
+
+    method:
+      "random"      -- uniform shuffle by key (default; backward compatible).
+      "composition" -- group by molecular formula (derived from each graph's
+                       chemical_symbol_* one-hot columns) and assign whole
+                       formula groups to a split via a deterministic hash.
+                       All molecules sharing a formula land in the same split,
+                       which prevents leakage between near-identical structures
+                       (e.g. trajectory steps of one system). Requires
+                       'feature_names' metadata in the source LMDB.
 
     Returns a dict with keys "train", "val", "test" mapping to output paths
     and "sizes" mapping to {"train": int, "val": int, "test": int}.
     """
     if val_prop + test_prop >= 1.0:
         raise ValueError(f"val_prop + test_prop must be < 1.0, got {val_prop + test_prop}")
+    if method not in ("random", "composition"):
+        raise ValueError(f"method must be 'random' or 'composition', got {method!r}")
 
     src_env = open_lmdb_readonly(src_path)
     stat = src_env.stat()
@@ -479,20 +559,54 @@ def split_lmdb_file(
         ]
     n = len(all_keys)
 
-    rng = _random.Random(seed)
-    rng.shuffle(all_keys)
+    if method == "random":
+        rng = _random.Random(seed)
+        rng.shuffle(all_keys)
+        n_test = int(n * test_prop)
+        n_val = int(n * val_prop)
+        n_train = n - n_val - n_test
+        splits = {
+            "train": all_keys[:n_train],
+            "val": all_keys[n_train : n_train + n_val],
+            "test": all_keys[n_train + n_val :],
+        }
+    else:  # composition
+        with src_env.begin() as txn:
+            fn_raw = txn.get(b"feature_names")
+        if fn_raw is None:
+            raise ValueError(
+                "composition split requires 'feature_names' metadata in the source LMDB"
+            )
+        elem_cols = _element_columns_from_feature_names(pickle.loads(fn_raw))
+        if not elem_cols:
+            raise ValueError(
+                "no 'chemical_symbol_*' columns found in atom feature_names; "
+                "cannot derive formulas for composition split"
+            )
+        ratios = (1.0 - val_prop - test_prop, val_prop, test_prop)
+        split_names = ("train", "val", "test")
+        by_formula = {}
+        with src_env.begin() as txn:
+            for k in tqdm(all_keys, desc="deriving formulas"):
+                obj = pickle.loads(txn.get(k))
+                graph_bytes = obj["molecule_graph"] if isinstance(obj, dict) else obj
+                graph = (
+                    load_graph_from_serialized(graph_bytes)
+                    if isinstance(graph_bytes, (bytes, bytearray))
+                    else graph_bytes
+                )
+                by_formula.setdefault(_formula_from_graph(graph, elem_cols), []).append(k)
+        splits = {name: [] for name in split_names}
+        for formula, group in by_formula.items():
+            splits[split_names[_assign_formula_to_split(formula, ratios, seed)]].extend(group)
+        logger.info(
+            f"composition split: {n} molecules across {len(by_formula)} unique formulas"
+        )
 
-    n_test = int(n * test_prop)
-    n_val = int(n * val_prop)
-    n_train = n - n_val - n_test
-
+    n_train = len(splits["train"])
+    n_val = len(splits["val"])
+    n_test = len(splits["test"])
     logger.info(f"Total molecules: {n}  ->  train={n_train}, val={n_val}, test={n_test}")
-
-    splits = {
-        "train": all_keys[:n_train],
-        "val": all_keys[n_train : n_train + n_val],
-        "test": all_keys[n_train + n_val :],
-    }
 
     out_paths = {}
     for split_name, keys in splits.items():
