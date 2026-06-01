@@ -393,6 +393,13 @@ class TestCompositionSplit:
         for sig, splits in sig_to_splits.items():
             assert len(splits) == 1, f"formula {sig} leaked across splits {splits}"
 
+    def _split_sig_multisets(self, result):
+        """Return {split_name: sorted([formula_sig, ...])} for membership compare."""
+        out = {"train": [], "val": [], "test": []}
+        for (split_name, _key), sig in self._split_membership(result).items():
+            out[split_name].append(sig)
+        return {s: sorted(v) for s, v in out.items()}
+
     def test_composition_deterministic(self, tmp_path):
         src = str(tmp_path / "src.lmdb")
         _make_composition_lmdb(src, self.FORMULAS, self.ELEMS)
@@ -400,7 +407,8 @@ class TestCompositionSplit:
                              seed=7, method="composition")
         r2 = split_lmdb_file(src, str(tmp_path / "o2"), val_prop=0.2, test_prop=0.2,
                              seed=7, method="composition")
-        assert r1["sizes"] == r2["sizes"]
+        # per-molecule membership (by formula), not just sizes
+        assert self._split_sig_multisets(r1) == self._split_sig_multisets(r2)
 
     def test_total_preserved(self, tmp_path):
         src = str(tmp_path / "src.lmdb")
@@ -432,14 +440,42 @@ class TestCompositionSplit:
             got = names[_assign_formula_to_split(formula, ratios, seed=42)]
             assert got == exp, f"{formula}: got={got} expected={exp}"
 
-        # If qtaim_gen is importable (combined env), cross-check directly.
-        try:
-            from qtaim_gen.source.utils.splits import assign_formula_to_split
-        except Exception:
-            return
-        for formula in expected:
+    def test_hash_parity_with_qtaim_gen(self):
+        """Cross-check the local hash against qtaim_gen's directly. Skips
+        visibly when qtaim_gen is not importable (it isn't, inside the
+        qtaim_embed-only env), so this never silently passes."""
+        qg_splits = pytest.importorskip("qtaim_gen.source.utils.splits")
+        from qtaim_embed.data.lmdb import _assign_formula_to_split
+        ratios = (0.6, 0.2, 0.2)
+        names = ("train", "val", "test")
+        for formula in ["H4C1", "H6C2", "H2C1O1", "N2", "H2O2", "Fe1O3", "Ag1"]:
             assert names[_assign_formula_to_split(formula, ratios, 42)] == \
-                assign_formula_to_split(formula, ratios, 42)
+                qg_splits.assign_formula_to_split(formula, ratios, 42)
+
+    def test_empty_formula_routes_to_train(self, tmp_path):
+        """Graphs with no element columns set (formula derives to '') must all
+        go to train, matching the converter's missing-formula convention."""
+        src = str(tmp_path / "src.lmdb")
+        # "X" is absent from ELEMS, so its one-hot rows are all zeros ->
+        # element-column sums are 0 -> formula derives to "" for every molecule
+        _make_composition_lmdb(src, [{"X": 2}] * 20, self.ELEMS)
+        result = split_lmdb_file(src, str(tmp_path / "out"), val_prop=0.2, test_prop=0.2,
+                                 seed=7, method="composition")
+        assert result["sizes"] == {"train": 20, "val": 0, "test": 0}
+
+    def test_rejects_scaled_source(self, tmp_path):
+        """Composition split must refuse a scaled LMDB (element one-hots would
+        no longer be 0/1, silently corrupting formulas)."""
+        src = str(tmp_path / "src.lmdb")
+        _make_composition_lmdb(src, self.FORMULAS, self.ELEMS)
+        db = lmdb.open(src, map_size=10 ** 8, subdir=False, meminit=False, map_async=True)
+        txn = db.begin(write=True)
+        txn.put(b"scaled", pickle.dumps(True, protocol=-1))
+        txn.commit()
+        db.sync()
+        db.close()
+        with pytest.raises(ValueError, match="scaled"):
+            split_lmdb_file(src, str(tmp_path / "out"), method="composition")
 
     def test_invalid_method_raises(self, tmp_path):
         src = str(tmp_path / "src.lmdb")

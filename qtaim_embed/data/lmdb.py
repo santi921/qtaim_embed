@@ -396,6 +396,19 @@ def open_lmdb_readonly(path: str):
     )
 
 
+_LMDB_METADATA_KEYS = {b"length", b"feature_size", b"feature_names", b"element_set",
+                        b"allowed_ring_size", b"allowed_charges", b"allowed_spins",
+                        b"target_dict", b"extra_dataset_info", b"log_scale_features",
+                        b"length_chunk", b"scaled", b"processed_source_keys",
+                        b"scaler_finalized"}
+
+# Metadata copied verbatim into each split LMDB so the dataloader works.
+# Derived from _LMDB_METADATA_KEYS minus per-split bookkeeping ("length" is
+# rewritten per split) and scaling state (a fresh split is unscaled).
+_COPY_META = _LMDB_METADATA_KEYS - {b"length", b"length_chunk", b"scaled",
+                                    b"processed_source_keys", b"scaler_finalized"}
+
+
 def write_lmdb_split(src_env, keys: list, out_path: str) -> None:
     """
     Write one split (train/val/test) from a source LMDB.
@@ -442,9 +455,6 @@ def write_lmdb_split(src_env, keys: list, out_path: str) -> None:
     txn = db.begin(write=True)
     txn.put("length".encode("ascii"), pickle.dumps(len(keys), protocol=-1))
     # Copy dataset metadata so LMDBMoleculeDataset.feature_names/feature_size/target_dict work
-    _COPY_META = {b"feature_size", b"feature_names", b"element_set", b"allowed_ring_size",
-                  b"allowed_charges", b"allowed_spins", b"target_dict",
-                  b"extra_dataset_info", b"log_scale_features"}
     with src_env.begin() as src_txn:
         for meta_key in _COPY_META:
             val = src_txn.get(meta_key)
@@ -453,13 +463,6 @@ def write_lmdb_split(src_env, keys: list, out_path: str) -> None:
     txn.commit()
     db.sync()
     db.close()
-
-
-_LMDB_METADATA_KEYS = {b"length", b"feature_size", b"feature_names", b"element_set",
-                        b"allowed_ring_size", b"allowed_charges", b"allowed_spins",
-                        b"target_dict", b"extra_dataset_info", b"log_scale_features",
-                        b"length_chunk", b"scaled", b"processed_source_keys",
-                        b"scaler_finalized"}
 
 
 def _assign_formula_to_split(formula: str, ratios, seed: int) -> int:
@@ -573,6 +576,15 @@ def split_lmdb_file(
     else:  # composition
         with src_env.begin() as txn:
             fn_raw = txn.get(b"feature_names")
+            scaled_raw = txn.get(b"scaled")
+        # composition needs raw 0/1 one-hot element columns; scaled features
+        # turn them into standardized floats and silently corrupt formulas.
+        if scaled_raw is not None and pickle.loads(scaled_raw):
+            raise ValueError(
+                "composition split requires unscaled features (chemical_symbol_* columns "
+                "must be 0/1 one-hots), but the source LMDB is marked scaled. "
+                "Run the composition split before scaling."
+            )
         if fn_raw is None:
             raise ValueError(
                 "composition split requires 'feature_names' metadata in the source LMDB"
@@ -586,19 +598,44 @@ def split_lmdb_file(
         ratios = (1.0 - val_prop - test_prop, val_prop, test_prop)
         split_names = ("train", "val", "test")
         by_formula = {}
+        n_failed = 0
+        n_empty = 0
         with src_env.begin() as txn:
             for k in tqdm(all_keys, desc="deriving formulas"):
-                obj = pickle.loads(txn.get(k))
-                graph_bytes = obj["molecule_graph"] if isinstance(obj, dict) else obj
-                graph = (
-                    load_graph_from_serialized(graph_bytes)
-                    if isinstance(graph_bytes, (bytes, bytearray))
-                    else graph_bytes
-                )
-                by_formula.setdefault(_formula_from_graph(graph, elem_cols), []).append(k)
+                try:
+                    obj = pickle.loads(txn.get(k))
+                    graph_bytes = obj["molecule_graph"] if isinstance(obj, dict) else obj
+                    graph = (
+                        load_graph_from_serialized(graph_bytes)
+                        if isinstance(graph_bytes, (bytes, bytearray))
+                        else graph_bytes
+                    )
+                    formula = _formula_from_graph(graph, elem_cols)
+                except Exception as e:
+                    # a single bad record must not abort the whole split; route to train
+                    logger.warning(
+                        f"composition split: formula derivation failed for key {k!r}: {e}; "
+                        "routing to train"
+                    )
+                    formula = ""
+                    n_failed += 1
+                else:
+                    if formula == "":
+                        n_empty += 1
+                by_formula.setdefault(formula, []).append(k)
         splits = {name: [] for name in split_names}
         for formula, group in by_formula.items():
-            splits[split_names[_assign_formula_to_split(formula, ratios, seed)]].extend(group)
+            # empty/failed formulas go to train, matching the converter --split path
+            # (qtaim_gen.partition_keys_by_composition routes missing formulas to train).
+            if formula == "":
+                splits["train"].extend(group)
+            else:
+                splits[split_names[_assign_formula_to_split(formula, ratios, seed)]].extend(group)
+        if n_failed or n_empty:
+            logger.info(
+                f"composition split: routed {n_failed} failed + {n_empty} empty-formula "
+                "molecules to train"
+            )
         logger.info(
             f"composition split: {n} molecules across {len(by_formula)} unique formulas"
         )
