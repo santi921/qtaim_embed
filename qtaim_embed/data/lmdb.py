@@ -384,13 +384,18 @@ def combined_mean_std(mean_list, std_list, count_list):
 import random as _random
 
 
-def open_lmdb_readonly(path: str):
-    """Open an LMDB file for reading."""
+def open_lmdb_readonly(path: str, readahead: bool = False):
+    """Open an LMDB file for reading.
+
+    readahead defaults to False (best for the random-access dataloader). Pass
+    readahead=True for sequential full-file scans (e.g. the split passes),
+    where OS prefetch is a large win on networked filesystems like Lustre.
+    """
     return lmdb.open(
         path,
         readonly=True,
         lock=False,
-        readahead=False,
+        readahead=readahead,
         meminit=False,
         subdir=False,
     )
@@ -495,12 +500,16 @@ def _element_columns_from_feature_names(feature_names) -> list:
     ]
 
 
-def _formula_from_graph(graph, elem_cols) -> str:
+def _formula_from_graph(graph, elem_cols, formula_cache: dict = None) -> str:
     """Reconstruct a pymatgen formula string from atom element one-hot columns.
 
     Sums each chemical_symbol_* one-hot column across atoms to recover element
     counts, then formats via pymatgen Composition so the string matches
     build_formula_map_from_structure_lmdb's convention.
+
+    formula_cache (optional) memoizes the count-tuple -> formula mapping; a
+    dataset has far fewer distinct compositions than graphs, so this avoids
+    rebuilding pymatgen Composition for every record.
     """
     from pymatgen.core import Composition
 
@@ -518,7 +527,13 @@ def _formula_from_graph(graph, elem_cols) -> str:
             counts[sym] = c
     if not counts:
         return ""
-    return Composition(counts).formula.replace(" ", "")
+    cache_key = tuple(sorted(counts.items()))
+    if formula_cache is not None and cache_key in formula_cache:
+        return formula_cache[cache_key]
+    formula = Composition(counts).formula.replace(" ", "")
+    if formula_cache is not None:
+        formula_cache[cache_key] = formula
+    return formula
 
 
 def split_lmdb_file(
@@ -551,18 +566,21 @@ def split_lmdb_file(
     if method not in ("random", "composition"):
         raise ValueError(f"method must be 'random' or 'composition', got {method!r}")
 
+    # readahead=False env for the random-access write pass; a separate
+    # readahead=True env for the sequential scan/derive passes, where OS
+    # prefetch is a large win on networked filesystems (Lustre).
     src_env = open_lmdb_readonly(src_path)
-    stat = src_env.stat()
-    approx_total = stat["entries"]
-    with src_env.begin() as txn:
-        all_keys = [
-            k
-            for k, _ in tqdm(txn.cursor(), desc="scanning source", total=approx_total)
-            if k not in _LMDB_METADATA_KEYS
-        ]
-    n = len(all_keys)
+    scan_env = open_lmdb_readonly(src_path, readahead=True)
+    approx_total = scan_env.stat()["entries"]
 
     if method == "random":
+        with scan_env.begin() as txn:
+            all_keys = [
+                k
+                for k, _ in tqdm(txn.cursor(), desc="scanning source", total=approx_total)
+                if k not in _LMDB_METADATA_KEYS
+            ]
+        n = len(all_keys)
         rng = _random.Random(seed)
         rng.shuffle(all_keys)
         n_test = int(n * test_prop)
@@ -574,7 +592,7 @@ def split_lmdb_file(
             "test": all_keys[n_train + n_val :],
         }
     else:  # composition
-        with src_env.begin() as txn:
+        with scan_env.begin() as txn:
             fn_raw = txn.get(b"feature_names")
             scaled_raw = txn.get(b"scaled")
         # composition needs raw 0/1 one-hot element columns; scaled features
@@ -600,17 +618,22 @@ def split_lmdb_file(
         by_formula = {}
         n_failed = 0
         n_empty = 0
-        with src_env.begin() as txn:
-            for k in tqdm(all_keys, desc="deriving formulas"):
+        formula_cache = {}
+        # single sequential pass collects keys and derives formulas together
+        # (avoids a separate full key-scan over the source).
+        with scan_env.begin() as txn:
+            for k, v in tqdm(txn.cursor(), desc="deriving formulas", total=approx_total):
+                if k in _LMDB_METADATA_KEYS:
+                    continue
                 try:
-                    obj = pickle.loads(txn.get(k))
+                    obj = pickle.loads(v)
                     graph_bytes = obj["molecule_graph"] if isinstance(obj, dict) else obj
                     graph = (
                         load_graph_from_serialized(graph_bytes)
                         if isinstance(graph_bytes, (bytes, bytearray))
                         else graph_bytes
                     )
-                    formula = _formula_from_graph(graph, elem_cols)
+                    formula = _formula_from_graph(graph, elem_cols, formula_cache)
                 except Exception as e:
                     # a single bad record must not abort the whole split; route to train
                     logger.warning(
@@ -631,6 +654,7 @@ def split_lmdb_file(
                 splits["train"].extend(group)
             else:
                 splits[split_names[_assign_formula_to_split(formula, ratios, seed)]].extend(group)
+        n = sum(len(g) for g in splits.values())
         if n_failed or n_empty:
             logger.info(
                 f"composition split: routed {n_failed} failed + {n_empty} empty-formula "
@@ -639,6 +663,8 @@ def split_lmdb_file(
         logger.info(
             f"composition split: {n} molecules across {len(by_formula)} unique formulas"
         )
+
+    scan_env.close()
 
     n_train = len(splits["train"])
     n_val = len(splits["val"])

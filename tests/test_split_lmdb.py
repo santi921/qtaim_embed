@@ -482,3 +482,15 @@ class TestCompositionSplit:
         _make_embed_format_lmdb(src, n=5)
         with pytest.raises(ValueError, match="method must be"):
             split_lmdb_file(src, str(tmp_path / "out"), method="bogus")
+
+    def test_formula_cache_matches_uncached(self):
+        """Memoized formula derivation must equal the uncached result."""
+        from qtaim_embed.data.lmdb import _formula_from_graph
+        elem_cols = [(2, "C"), (3, "H"), (4, "O"), (5, "N")]
+        g = _make_composition_graph({"C": 2, "H": 6}, self.ELEMS)
+        cache = {}
+        uncached = _formula_from_graph(g, elem_cols)
+        first = _formula_from_graph(g, elem_cols, cache)
+        second = _formula_from_graph(g, elem_cols, cache)  # cache hit
+        assert uncached == first == second
+        assert len(cache) == 1
