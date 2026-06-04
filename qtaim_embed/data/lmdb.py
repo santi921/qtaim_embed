@@ -566,15 +566,15 @@ def split_lmdb_file(
     if method not in ("random", "composition"):
         raise ValueError(f"method must be 'random' or 'composition', got {method!r}")
 
-    # readahead=False env for the random-access write pass; a separate
-    # readahead=True env for the sequential scan/derive passes, where OS
-    # prefetch is a large win on networked filesystems (Lustre).
-    src_env = open_lmdb_readonly(src_path)
-    scan_env = open_lmdb_readonly(src_path, readahead=True)
-    approx_total = scan_env.stat()["entries"]
+    # One readahead=True env. Every pass reads sequentially: the derive scan
+    # uses a cursor, and the write pass sorts each split's keys into storage
+    # order (below) so its reads sweep the file forward too. Sequential reads
+    # with OS prefetch are the difference between minutes and hours on Lustre.
+    src_env = open_lmdb_readonly(src_path, readahead=True)
+    approx_total = src_env.stat()["entries"]
 
     if method == "random":
-        with scan_env.begin() as txn:
+        with src_env.begin() as txn:
             all_keys = [
                 k
                 for k, _ in tqdm(txn.cursor(), desc="scanning source", total=approx_total)
@@ -592,7 +592,7 @@ def split_lmdb_file(
             "test": all_keys[n_train + n_val :],
         }
     else:  # composition
-        with scan_env.begin() as txn:
+        with src_env.begin() as txn:
             fn_raw = txn.get(b"feature_names")
             scaled_raw = txn.get(b"scaled")
         # composition needs raw 0/1 one-hot element columns; scaled features
@@ -621,7 +621,7 @@ def split_lmdb_file(
         formula_cache = {}
         # single sequential pass collects keys and derives formulas together
         # (avoids a separate full key-scan over the source).
-        with scan_env.begin() as txn:
+        with src_env.begin() as txn:
             for k, v in tqdm(txn.cursor(), desc="deriving formulas", total=approx_total):
                 if k in _LMDB_METADATA_KEYS:
                     continue
@@ -664,8 +664,6 @@ def split_lmdb_file(
             f"composition split: {n} molecules across {len(by_formula)} unique formulas"
         )
 
-    scan_env.close()
-
     n_train = len(splits["train"])
     n_val = len(splits["val"])
     n_test = len(splits["test"])
@@ -674,7 +672,10 @@ def split_lmdb_file(
     out_paths = {}
     for split_name, keys in splits.items():
         out_path = os.path.join(out_dir, split_name, lmdb_name)
-        write_lmdb_split(src_env, keys, out_path)
+        # sort into LMDB storage order so write-pass reads sweep the source
+        # sequentially (random per-key reads crawl on Lustre); membership is
+        # unchanged, only the 0..n re-indexing order.
+        write_lmdb_split(src_env, sorted(keys), out_path)
         out_paths[split_name] = out_path
 
     src_env.close()
