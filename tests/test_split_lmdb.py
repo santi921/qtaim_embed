@@ -195,14 +195,21 @@ class TestSplitLmdbFile:
         r1 = split_lmdb_file(src, str(tmp_path / "out1"), seed=1)
         r2 = split_lmdb_file(src, str(tmp_path / "out2"), seed=2)
 
-        def first_feat(lmdb_path):
+        def train_fingerprints(lmdb_path):
+            # set of per-graph fingerprints in train (write order is now
+            # storage-sorted, so compare membership, not a single entry)
             env = open_lmdb_readonly(lmdb_path)
+            fps = set()
             with env.begin() as txn:
-                raw = txn.get(b"0")
+                for k, v in txn.cursor():
+                    if k in _LMDB_METADATA_KEYS:
+                        continue
+                    g = load_graph_from_serialized(pickle.loads(v)["molecule_graph"])
+                    fps.add(round(float(g["atom"].feat.sum().item()), 6))
             env.close()
-            return load_graph_from_serialized(pickle.loads(raw)["molecule_graph"])["atom"].feat
+            return fps
 
-        assert not torch.allclose(first_feat(r1["train"]), first_feat(r2["train"]))
+        assert train_fingerprints(r1["train"]) != train_fingerprints(r2["train"])
 
     def test_readable_by_lmdb_molecule_dataset(self, tmp_path):
         src = str(tmp_path / "src.lmdb")
@@ -482,3 +489,15 @@ class TestCompositionSplit:
         _make_embed_format_lmdb(src, n=5)
         with pytest.raises(ValueError, match="method must be"):
             split_lmdb_file(src, str(tmp_path / "out"), method="bogus")
+
+    def test_formula_cache_matches_uncached(self):
+        """Memoized formula derivation must equal the uncached result."""
+        from qtaim_embed.data.lmdb import _formula_from_graph
+        elem_cols = [(2, "C"), (3, "H"), (4, "O"), (5, "N")]
+        g = _make_composition_graph({"C": 2, "H": 6}, self.ELEMS)
+        cache = {}
+        uncached = _formula_from_graph(g, elem_cols)
+        first = _formula_from_graph(g, elem_cols, cache)
+        second = _formula_from_graph(g, elem_cols, cache)  # cache hit
+        assert uncached == first == second
+        assert len(cache) == 1
