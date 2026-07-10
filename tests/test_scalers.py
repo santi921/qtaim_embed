@@ -591,3 +591,77 @@ def test_iterative_standard_scaler_merge():
         ), "feature std not equal"
 
 
+def test_merge_unfinalized_scalers_finite(tmp_path):
+    """merge_scalers must handle UNFINALIZED shard scalers (std still zero).
+
+    Regression for the sharded-scaler bug: shards saved unfinalized scalers
+    (save_unfinalized_scaler=True), whose ._std is all zeros because std is
+    only computed in finalize(). Merging must pool sum_x2, not ._std, or the
+    merged std is zero and applying divides by zero -> Inf/NaN everywhere.
+    """
+    ds = get_dataset(
+        log_scale_features=False,
+        log_scale_targets=False,
+        standard_scale_features=False,
+        standard_scale_targets=False,
+    )
+    graphs = ds.graphs
+    half = len(graphs) // 2
+
+    s1 = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
+    s2 = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
+    s1.update(graphs[:half])
+    s2.update(graphs[half:])
+    # unfinalized -> std is all zeros, exactly the on-disk shard state
+    for s in (s1, s2):
+        for std in s._std.values():
+            assert int(torch.count_nonzero(std)) == 0
+
+    # round-trip through disk like save_unfinalized_scaler + load_scaler
+    p1, p2 = str(tmp_path / "s1.pt"), str(tmp_path / "s2.pt")
+    s1.save_scaler(p1)
+    s2.save_scaler(p2)
+    l1 = HeteroGraphStandardScalerIterative(features_tf=True, load=True, load_path=p1)
+    l2 = HeteroGraphStandardScalerIterative(features_tf=True, load=True, load_path=p2)
+
+    merged = merge_scalers([l1, l2], features_tf=True, finalize_merged=True)
+
+    # merged std must be finite and strictly positive
+    for std in merged._std.values():
+        assert torch.isfinite(std).all()
+        assert bool((std > 0).all())
+
+    # and match a single-pass finalized scaler over all graphs
+    ref = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
+    ref.update(graphs)
+    ref.finalize()
+    for nt in merged._std.keys():
+        assert torch.allclose(merged._mean[nt], ref._mean[nt], atol=1e-6)
+        assert torch.allclose(merged._std[nt], ref._std[nt], atol=1e-6)
+
+    # applying the merged scaler yields finite features (no Inf/NaN)
+    out = merged([deepcopy(graphs[0])])[0]
+    for nt in out.node_types:
+        assert torch.isfinite(out[nt].feat).all()
+
+
+def test_merge_constant_feature_epsilon_guard():
+    """A zero-variance (constant) feature must get std=epsilon, never 0."""
+    from qtaim_embed.utils.tests import make_hetero_graph
+
+    # identical graphs -> zero variance for every feature
+    graphs = [make_hetero_graph()[0] for _ in range(4)]
+    s = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
+    s.update(graphs)  # unfinalized
+
+    merged = merge_scalers([s], features_tf=True, finalize_merged=True, epsilon=1e-6)
+    for std in merged._std.values():
+        assert torch.isfinite(std).all()
+        assert bool((std >= 1e-6 - 1e-9).all())  # constant -> epsilon, not 0
+
+    # scaling a constant feature gives finite (zero), not Inf
+    out = merged([make_hetero_graph()[0]])[0]
+    for nt in out.node_types:
+        assert torch.isfinite(out[nt].feat).all()
+
+

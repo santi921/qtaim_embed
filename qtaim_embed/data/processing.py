@@ -709,49 +709,63 @@ def merge_scalers(
     list_scalers: List[HeteroGraphStandardScalerIterative],
     features_tf: bool = True,
     finalize_merged: bool = False,
+    epsilon: float = 1e-6,
 ):
     """
     Merge a list of scalers into one scaler.
+
+    Pools the sufficient statistics -- per-node-type sum of x (via mean * n),
+    sum of x^2, and count -- across scalers, then derives the merged mean/std
+    exactly: var = E[x^2] - E[x]^2. This is robust to *unfinalized* input
+    scalers (whose ._std is still zero because std is only computed in
+    finalize()) and correctly accounts for between-scaler mean differences,
+    unlike pooling ._std directly. The std==0 -> epsilon guard is applied so
+    constant features never yield a divide-by-zero at apply time.
+
     Takes:
-        list_scalers: list of scalers
+        list_scalers: list of scalers (finalized or not)
     Returns:
         merged_scaler: merged scaler
     """
 
     dict_node_sizes_merged = {}
-    mean_merged = {}
-    std_merged = {}
-    # x2_merged = {}
+    sum_x_merged = {}    # Sigma x   (= Sigma mean_i * n_i)
+    sum_x2_merged = {}   # Sigma x^2 (= Sigma sum_x2_i)
     finalized_list = []
 
     for scaler in list_scalers:
         finalized_list.append(scaler.finalized)
 
         for nt in scaler._mean.keys():
-            if nt not in mean_merged:
-                mean_merged[nt] = torch.zeros_like(scaler._mean[nt])
-                std_merged[nt] = torch.zeros_like(scaler._std[nt])
+            n_i = scaler.dict_node_sizes[nt]
+            if nt not in sum_x_merged:
+                sum_x_merged[nt] = torch.zeros_like(scaler._mean[nt])
+                sum_x2_merged[nt] = torch.zeros_like(scaler._sum_x2[nt])
                 dict_node_sizes_merged[nt] = 0
 
-            # update the mean and std
-            mean_merged[nt] += scaler._mean[nt] * scaler.dict_node_sizes[nt]
-            std_merged[nt] += scaler._std[nt] ** 2 * scaler.dict_node_sizes[nt]
-            dict_node_sizes_merged[nt] += scaler.dict_node_sizes[nt]
+            sum_x_merged[nt] += scaler._mean[nt] * n_i
+            sum_x2_merged[nt] += scaler._sum_x2[nt]
+            dict_node_sizes_merged[nt] += n_i
 
-    # finalize the mean and std
-    for nt in mean_merged.keys():
-        if dict_node_sizes_merged[nt] > 0:
-            mean_merged[nt] = mean_merged[nt] / dict_node_sizes_merged[nt]
-            std_merged[nt] = torch.sqrt(std_merged[nt] / dict_node_sizes_merged[nt])
-    finalized = False
+    mean_merged = {}
+    std_merged = {}
+    for nt in sum_x_merged.keys():
+        n = dict_node_sizes_merged[nt]
+        if n > 0:
+            mean = sum_x_merged[nt] / n
+            var = sum_x2_merged[nt] / n - mean ** 2
+            # clamp tiny negatives from floating-point cancellation
+            std = torch.sqrt(torch.clamp(var, min=0.0))
+            std[std == 0] = epsilon
+            mean_merged[nt] = mean
+            std_merged[nt] = std
+        else:
+            mean_merged[nt] = sum_x_merged[nt]
+            std_merged[nt] = torch.zeros_like(sum_x_merged[nt])
 
-    if finalize_merged:
-        finalized = True
-
-    if all(finalized_list):
-        finalized = True
-
-    # print(std_merged)
+    finalized = bool(finalize_merged) or (
+        len(finalized_list) > 0 and all(finalized_list)
+    )
 
     merged_scaler = HeteroGraphStandardScalerIterative(
         features_tf=features_tf,
@@ -759,7 +773,10 @@ def merge_scalers(
         std=std_merged,
         dict_node_sizes=dict_node_sizes_merged,
         finalized=finalized,
+        epsilon=epsilon,
     )
+    # Preserve pooled second moments so a merge of merged scalers stays exact.
+    merged_scaler._sum_x2 = sum_x2_merged
 
     return merged_scaler
 
