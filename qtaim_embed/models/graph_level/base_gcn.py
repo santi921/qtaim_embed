@@ -687,7 +687,7 @@ class GCNGraphPred(pl.LightningModule):
         Compute metrics using torchmetrics interfaces
         """
 
-        _nan = torch.tensor([float("nan")])
+        _nan = torch.full((self.hparams.ntasks,), float("nan"))
 
         if mode == "train":
             try:
