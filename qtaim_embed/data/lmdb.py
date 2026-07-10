@@ -29,14 +29,60 @@ def _safe_map_size(lmdb_path: str, desired: int = _DEFAULT_MAP_SIZE) -> int:
 
 
 
-def TransformMol(data_object):
+_FLOAT_DTYPES = {
+    "float16": torch.float16,
+    "float32": torch.float32,
+    "float64": torch.float64,
+    "bfloat16": torch.bfloat16,
+}
+
+
+def _resolve_dtype(dtype):
+    """Accept a torch.dtype or a string name; return a torch.dtype (or None)."""
+    if dtype is None or isinstance(dtype, torch.dtype):
+        return dtype
+    try:
+        return _FLOAT_DTYPES[dtype]
+    except KeyError:
+        raise ValueError(
+            f"Unknown float dtype {dtype!r}; expected one of "
+            f"{sorted(_FLOAT_DTYPES)} or a torch.dtype."
+        )
+
+
+def _cast_graph_floats(graph, dtype):
+    """Cast the input feature tensor (`feat`) on every store to dtype.
+
+    Only `feat` is touched -- the tensor the model embedding consumes
+    (base_gcn reads ``batch_graph[ntype].feat``). Labels, positions, and
+    edge_index are left alone: matmul is the only op that hard-errors on a
+    dtype mismatch, while the loss subtracts elementwise and promotes dtypes,
+    so labels need not match. A dtype of None disables casting.
+
+    The scaler stores mean/std as float64, so scaled graphs carry a float64
+    `feat`; without this cast it collides with float32/bf16 weights at the
+    first linear.
+    """
+    if dtype is None:
+        return graph
+    for store in (*graph.node_stores, *graph.edge_stores):
+        if "feat" in store:
+            feat = store["feat"]
+            if torch.is_tensor(feat) and feat.is_floating_point():
+                store["feat"] = feat.to(dtype)
+    return graph
+
+
+def TransformMol(data_object, dtype=torch.float32):
     serialized_graph = data_object["molecule_graph"]
+    dtype = _resolve_dtype(dtype)
     # check if serialized_graph is already a PyG HeteroData or if it is bytes
     if isinstance(serialized_graph, HeteroData):
+        _cast_graph_floats(serialized_graph, dtype)
         return data_object
 
     graph = load_graph_from_serialized(serialized_graph)
-    return graph
+    return _cast_graph_floats(graph, dtype)
 
 
 def serialize_graph(graph, ret=True):

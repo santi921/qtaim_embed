@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import partial
 import pytorch_lightning as pl
 from qtaim_embed.data.dataloader import (
     DataLoaderMoleculeNodeTask,
@@ -689,6 +690,11 @@ class LMDBDataModule(pl.LightningDataModule):
             else:
                 self.transforms = None
 
+        # Graph feature dtype at load. Scaled LMDBs carry float64 features
+        # (scaler mean/std are float64); default float32 keeps them compatible
+        # with float32/bf16 weights. Set config["dataset"]["dtype"] to override.
+        self._feature_dtype = self.config["dataset"].get("dtype", "float32")
+
         self._setup_done = False
 
     def prepare_data(self, stage=None):
@@ -700,21 +706,23 @@ class LMDBDataModule(pl.LightningDataModule):
         if self._setup_done:
             return
 
+        transform = partial(TransformMol, dtype=self._feature_dtype)
+
         if "test_lmdb" in self.config["dataset"]:
             self.test_dataset = LMDBMoleculeDataset(
                 config={"src": _resolve_lmdb_path(self.test_lmdb_loc)},
-                transform=TransformMol,
+                transform=transform,
             )
 
         if "val_lmdb" in self.config["dataset"]:
             self.val_dataset = LMDBMoleculeDataset(
                 config={"src": _resolve_lmdb_path(self.val_lmdb_loc)},
-                transform=TransformMol,
+                transform=transform,
             )
 
         self.train_dataset = LMDBMoleculeDataset(
             config={"src": _resolve_lmdb_path(self.train_lmdb_loc)},
-            transform=TransformMol,
+            transform=transform,
         )
 
         self._setup_done = True
@@ -774,6 +782,9 @@ class LMDBLinkDataModule(pl.LightningDataModule):
             else:
                 self.transforms = None
 
+        # See LMDBDataModule: default float32, override via config dtype.
+        self._feature_dtype = self.config["dataset"].get("dtype", "float32")
+
         self._setup_done = False
         self.node_len = None
 
@@ -786,21 +797,23 @@ class LMDBLinkDataModule(pl.LightningDataModule):
         if self._setup_done:
             return
 
+        transform = partial(TransformMol, dtype=self._feature_dtype)
+
         if "test_lmdb" in self.config["dataset"]:
             self.test_dataset = LMDBMoleculeDataset(
                 config={"src": _resolve_lmdb_path(self.test_lmdb_loc)},
-                transform=TransformMol,
+                transform=transform,
             )
 
         if "val_lmdb" in self.config["dataset"]:
             self.val_dataset = LMDBMoleculeDataset(
                 config={"src": _resolve_lmdb_path(self.val_lmdb_loc)},
-                transform=TransformMol,
+                transform=transform,
             )
 
         self.train_dataset = LMDBMoleculeDataset(
             config={"src": _resolve_lmdb_path(self.train_lmdb_loc)},
-            transform=TransformMol,
+            transform=transform,
         )
 
         self._setup_done = True
