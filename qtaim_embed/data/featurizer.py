@@ -117,10 +117,6 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         features = mol.bond_features
         xyz_coordinates = mol.coords
 
-        # count number of keys in features
-        num_feats = len(self.selected_keys)
-        num_feats += 7
-
         bool_boo = False
         for key in self.selected_keys:
             if "boo_" in key:
@@ -141,13 +137,21 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                 rbf_key_name = key
                 break  # only one RBF key supported
 
-        # Fix num_feats for zero-bond fallback: BOO and RBF keys expand
-        # into multiple features, but count as 1 key each above.
-        # NOTE: when adding new featurizer params that expand keys, update here.
+        # Row width for the zero-bond fallback. Must mirror the per-bond
+        # construction below exactly, or zero-bond molecules get a different
+        # feat width than the rest of the dataset and the scaler dies.
+        num_feats = len([
+            k for k in self.selected_keys
+            if k != "bond_length" and "boo_" not in k and "rbf_" not in k
+        ])
+        if self.allowed_ring_size != []:
+            num_feats += 2 + len(self.allowed_ring_size)
+        if "bond_length" in self.selected_keys:
+            num_feats += 1
         if bool_boo:
-            num_feats += (l_order + 1) ** 2 - 1
+            num_feats += (l_order + 1) ** 2
         if bool_rbf:
-            num_feats += rbf_n_basis - 1
+            num_feats += rbf_n_basis
 
         if num_bonds == 0:
             ft = [0.0 for _ in range(num_feats)]

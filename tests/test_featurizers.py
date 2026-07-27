@@ -546,3 +546,38 @@ class TestRBFFeaturizerIntegration:
             f"Expected shape (1, {expected_width}), got {bond_feat_tensor.shape}"
         )
         assert not torch.any(torch.isnan(bond_feat_tensor))
+
+
+class TestZeroBondFallbackWidth:
+    """Zero-bond molecules must get the same bond-feat width as bonded ones.
+
+    The fallback row width is computed independently of the per-bond path;
+    a mismatch (e.g. the old hardcoded ring-block size) poisons a dataset
+    with rows the scaler cannot broadcast against.
+    """
+
+    def _featurize(self, bonds):
+        from qtaim_embed.core.molwrapper import (
+            create_wrapper_mol_from_atoms_and_bonds,
+        )
+        from qtaim_embed.data.featurizer import BondAsNodeGraphFeaturizerGeneral
+
+        mol = create_wrapper_mol_from_atoms_and_bonds(
+            species=["O", "H"],
+            coords=[[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]],
+            bonds=bonds,
+            bond_features={b: {} for b in bonds},
+        )
+        featurizer = BondAsNodeGraphFeaturizerGeneral(
+            selected_keys=["rbf_gaussian_50", "boo_1"],
+            allowed_ring_size=[3, 4, 5, 6, 7, 8],
+        )
+        feat_dict, names = featurizer(mol)
+        return feat_dict["feat"], names
+
+    def test_zero_bond_width_matches_bonded(self):
+        feats_bonded, names = self._featurize([(0, 1)])
+        feats_empty, names_empty = self._featurize([])
+        assert feats_bonded.shape[1] == len(names)
+        assert feats_empty.shape[1] == feats_bonded.shape[1]
+        assert names_empty == names
