@@ -108,6 +108,10 @@ class HeteroCompleteGraphFromMolWrapper:
 
         data = build_hetero_graph_skeleton(num_atoms, bonds, self_loop=self.self_loop)
         data.mol_name = mol.id
+        data["atom"].pos = torch.tensor(mol.coords, dtype=torch.float32)
+        data["atom"].z = torch.tensor(
+            mol.pymatgen_mol.atomic_numbers, dtype=torch.long
+        )
 
         return data
 

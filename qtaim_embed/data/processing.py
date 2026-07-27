@@ -281,6 +281,10 @@ class HeteroGraphStandardScalerIterative:
             graph_key = "labels"
 
         node_types = list(_get_ndata(g, graph_key).keys())
+        # graphs with no entries for this track (e.g. no labels when
+        # keys_target is empty) have nothing to update
+        if not node_types:
+            return
         # obtain feats from ALL graphs
 
         for g in graphs:
