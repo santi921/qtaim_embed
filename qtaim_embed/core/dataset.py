@@ -1453,10 +1453,51 @@ class LMDBMoleculeDataset(LMDBBaseDataset):
         super(LMDBMoleculeDataset, self).__init__(config=config, transform=transform)
         if not self.path.is_file():
             self.single_file = False
+            self._check_pos_schema_homogeneity()
 
         elif self.path.is_file():
             # self.env = self.env
             self.single_file = True
+
+    def _first_graph_has_pos(self, env) -> Optional[bool]:
+        """Whether a shard's first graph carries atom.pos. None if the shard
+        has no graph at key 0."""
+        raw = env.begin().get(b"0")
+        if raw is None:
+            return None
+        # Local import: data.lmdb imports Subset from this module at top level.
+        from qtaim_embed.data.lmdb import load_graph_from_serialized
+
+        obj = pickle.loads(raw)
+        graph = obj["molecule_graph"] if isinstance(obj, dict) else obj
+        if isinstance(graph, (bytes, bytearray)):
+            graph = load_graph_from_serialized(graph)
+        return "pos" in graph["atom"]
+
+    def _check_pos_schema_homogeneity(self) -> None:
+        """Fail fast on mixed pre/post-pos graph schemas in one directory.
+
+        Graphs built before atom.pos/atom.z existed cannot be batched with
+        graphs built after: Batch.from_data_list raises KeyError when a new
+        graph leads the batch and silently drops pos/z when an old graph
+        does. One graph per shard is enough because each shard is written by
+        a single converter run with a single schema.
+        """
+        with_pos, without_pos = [], []
+        for db_path, env in zip(self._db_paths, self.envs):
+            has = self._first_graph_has_pos(env)
+            if has is None:
+                continue
+            (with_pos if has else without_pos).append(str(db_path))
+        if with_pos and without_pos:
+            raise RuntimeError(
+                f"Mixed graph schemas in '{self.path}': {len(with_pos)} "
+                f"shard(s) carry atom.pos/atom.z and {len(without_pos)} do "
+                f"not (with: {with_pos[0]}; without: {without_pos[0]}). "
+                "These cannot be batched together. Rebuild the older shards "
+                "or patch them with qtaim_generator's add_pos_z_to_graphs "
+                "helper."
+            )
 
     @property
     def allowed_charges(self) -> Any:
