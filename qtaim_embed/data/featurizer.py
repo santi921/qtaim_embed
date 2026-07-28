@@ -137,13 +137,18 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                 rbf_key_name = key
                 break  # only one RBF key supported
 
+        # Scalar keys: everything that is not an expanding key (bond_length,
+        # boo_*, rbf_*). Shared by the fallback width, the per-bond append,
+        # and the feature-name loop so the three cannot drift apart.
+        scalar_keys = [
+            k for k in self.selected_keys
+            if k != "bond_length" and "boo_" not in k and "rbf_" not in k
+        ]
+
         # Row width for the zero-bond fallback. Must mirror the per-bond
         # construction below exactly, or zero-bond molecules get a different
         # feat width than the rest of the dataset and the scaler dies.
-        num_feats = len([
-            k for k in self.selected_keys
-            if k != "bond_length" and "boo_" not in k and "rbf_" not in k
-        ])
+        num_feats = len(scalar_keys)
         if self.allowed_ring_size != []:
             num_feats += 2 + len(self.allowed_ring_size)
         if "bond_length" in self.selected_keys:
@@ -221,10 +226,8 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
                         )
                     ft += expansion.squeeze(0).tolist()
 
-                if self.selected_keys != None:
-                    for key in self.selected_keys:
-                        if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
-                            ft.append(features[bond][key])
+                for key in scalar_keys:
+                    ft.append(features[bond][key])
 
                 feats.append(ft)
 
@@ -248,12 +251,9 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
             for i in range(rbf_n_basis):
                 self._feature_name += ["{}_{}".format(rbf_key_name, i)]
 
-        if self.selected_keys != []:
-            for key in self.selected_keys:
-                if key != "bond_length" and "boo_" not in key and "rbf_" not in key:
-                    self._feature_name.append(key)
+        for key in scalar_keys:
+            self._feature_name.append(key)
 
-            # self._feature_name += self.selected_keys
         self._feature_size = len(self._feature_name)
         return {"feat": feats}, self._feature_name
 

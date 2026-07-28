@@ -1,4 +1,6 @@
 import pandas as pd
+import torch
+
 from qtaim_embed.utils.grapher import get_grapher
 from qtaim_embed.data.molwrapper import mol_wrappers_from_df
 from qtaim_embed.utils.tests import get_data, get_data_spin_charge
@@ -556,7 +558,9 @@ class TestZeroBondFallbackWidth:
     with rows the scaler cannot broadcast against.
     """
 
-    def _featurize(self, bonds):
+    def _featurize(
+        self, bonds: list[tuple[int, int]]
+    ) -> tuple[torch.Tensor, list[str]]:
         from qtaim_embed.core.molwrapper import (
             create_wrapper_mol_from_atoms_and_bonds,
         )
