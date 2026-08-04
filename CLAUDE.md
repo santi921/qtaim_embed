@@ -53,6 +53,7 @@ qtaim_embed/
 │   ├── models/            # Neural network architectures
 │   │   ├── layers.py      # Custom GNN layers (UnifySize, ResidualBlock, pooling)
 │   │   ├── layers_homo.py # Homogeneous graph layers
+│   │   ├── encoders/      # 3D geometric atom encoders (SchNet/DimeNet++/MACE-style) + neighbor module
 │   │   ├── graph_level/   # Graph-level models (regression, classification)
 │   │   ├── node_level/    # Node-level prediction models
 │   │   ├── link_pred/     # Link prediction models
@@ -95,8 +96,35 @@ Molecules are represented as heterogeneous graphs with three node types:
 ### Model Components
 
 - **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`
+- **3D geometric encoders** (`encoder_fn`): `SchNetEncoder`, `DimeNetPPEncoder`, `EquivariantEncoder` (see below)
 - **Global pooling**: `SumPoolingThenCat`, `MeanPoolingThenCat`, `WeightAndSumThenCat`, `WeightAndMeanThenCat`, `GlobalAttentionPoolingThenCat`, `Set2SetThenCat`
 - **Scalers**: `HeteroGraphStandardScaler`, `HeteroGraphLogMagnitudeScaler`
+
+### 3D Geometric Encoders
+
+Optional per-atom encoders in `models/encoders/` that consume only `atom.pos`
+(float32 [N,3], Angstrom) and `atom.z` (int64 [N]) from the heterograph and
+return per-atom embeddings of width `encoder_hidden`. The output is
+concatenated with `atom.feat` before `UnifySize`; the hetero conv stack, heads,
+and existing feature pathway are unchanged. Graphs built by grapher commit
+`9084345` (2026-07-27) or later carry `pos`/`z`; older LMDBs do not and will
+fail with a schema error.
+
+- `encoder_fn: "schnet"` - invariant continuous-filter convolution, adapter
+  around PyG's reference blocks (weight-copy parity tested against
+  `torch_geometric.nn.models.SchNet`).
+- `encoder_fn: "dimenetpp"` - directional/angular message passing via a
+  torch-only triplet builder (no torch-sparse); memory scales with
+  sum(deg^2), capped by `encoder_max_neighbors`.
+- `encoder_fn: "equivariant"` - MACE-style e3nn message passing with
+  l = 0..`encoder_lmax` irreps and invariant scalar (l=0) readout.
+- `encoder_fn: "none"` (default) - current behaviour, no encoder.
+
+Supported by `GCNNodePred`, `GCNGraphPred`, and `GCNGraphPredClassifier` (not
+the link model). Neighbor lists are built inside the encoder forward with a
+chunked, batch-aware cdist (`models/encoders/neighbors.py` - torch_cluster and
+torch_sparse are deliberately NOT dependencies), which is incompatible with
+`torch.compile`: `compiled: true` with an encoder raises at construction.
 
 ## Configuration System
 
@@ -126,6 +154,15 @@ config = {
         "activation": "ReLU",
         "lr": 1e-3,
         "loss_fn": "mse",  # or "mae"
+        # optional 3D encoder (needs atom.pos/atom.z on the graphs)
+        "encoder_fn": "none",  # or "schnet", "dimenetpp", "equivariant"
+        "encoder_hidden": 64,          # output width, concatenated onto atom.feat
+        "encoder_cutoff": 5.0,         # radius-graph cutoff, Angstrom
+        "encoder_n_interactions": 3,
+        "encoder_num_gaussians": 50,   # schnet RBF size
+        "encoder_num_radial": 6,       # dimenetpp/equivariant radial basis size
+        "encoder_lmax": 1,             # equivariant only
+        "encoder_max_neighbors": 32,   # dimenetpp only, caps triplet blowup
     },
     "optim": {
         "precision": 16,  # or "bf16", 32
@@ -176,6 +213,9 @@ pytest tests/ --cov=qtaim_embed
 - `test_featurizers.py`: Molecular featurization (~260 cases)
 - `test_layers.py`: Custom GNN layers
 - `test_core.py`: Dataset functionality
+- `test_neighbors.py`: Radius/candidate/triplet construction vs brute force
+- `test_encoder_parity.py`: 3D encoders vs PyG reference blocks (weight-copy parity)
+- `test_equivariance.py`: Rotation invariance/equivariance of the 3D encoders
 
 ### Adding New Features
 

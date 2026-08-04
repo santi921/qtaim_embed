@@ -32,6 +32,7 @@ from qtaim_embed.models.layers import (
     WeightAndMeanThenCat,
     EDGE_TYPE_MAP,
 )
+from qtaim_embed.models.encoders import ENCODER_FNS, build_encoder, encode_atom_inputs
 
 from typing import List, Tuple, Dict, Optional
 
@@ -63,6 +64,17 @@ class GCNGraphPred(pl.LightningModule):
         embedding_size: int, size of embedding layer
         global_pooling: str, type of global pooling
         compiled: bool, whether the model is compiled
+        encoder_fn: str, optional 3D encoder ("none", "schnet", "dimenetpp",
+            "equivariant"); requires atom.pos/atom.z on the graphs and
+            compiled=False. Output is concatenated onto atom features ahead
+            of UnifySize.
+        encoder_hidden: int, encoder output width added to the atom input dim
+        encoder_cutoff: float, radius-graph cutoff in Angstrom
+        encoder_n_interactions: int, number of encoder interaction blocks
+        encoder_num_gaussians: int, schnet RBF size
+        encoder_num_radial: int, dimenetpp/equivariant radial basis size
+        encoder_lmax: int, max spherical harmonic l (equivariant only)
+        encoder_max_neighbors: int, nearest-neighbor cap (dimenetpp only)
     """
 
     def __init__(
@@ -101,6 +113,14 @@ class GCNGraphPred(pl.LightningModule):
         pooling_ntypes: List[str] = ["atom", "bond"],
         pooling_ntypes_direct: List[str] = ["global"],
         compiled: bool = False,
+        encoder_fn: str = "none",
+        encoder_hidden: int = 64,
+        encoder_cutoff: float = 5.0,
+        encoder_n_interactions: int = 3,
+        encoder_num_gaussians: int = 50,
+        encoder_num_radial: int = 6,
+        encoder_lmax: int = 1,
+        encoder_max_neighbors: int = 32,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -123,6 +143,14 @@ class GCNGraphPred(pl.LightningModule):
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
             )
+
+        assert encoder_fn in ENCODER_FNS, (
+            f"encoder_fn must be one of {ENCODER_FNS} but got {encoder_fn}"
+        )
+        assert not (compiled and encoder_fn != "none"), (
+            "compiled=True is unsupported with a 3D encoder: in-forward neighbor "
+            "construction is data-dependent and graph-breaks torch.compile"
+        )
 
         assert global_pooling in [
             "WeightAndSumThenCat",
@@ -174,6 +202,14 @@ class GCNGraphPred(pl.LightningModule):
             "hidden_size": hidden_size,
             "ntasks": len(target_dict["global"]),
             "compiled": compiled,
+            "encoder_fn": encoder_fn,
+            "encoder_hidden": encoder_hidden,
+            "encoder_cutoff": encoder_cutoff,
+            "encoder_n_interactions": encoder_n_interactions,
+            "encoder_num_gaussians": encoder_num_gaussians,
+            "encoder_num_radial": encoder_num_radial,
+            "encoder_lmax": encoder_lmax,
+            "encoder_max_neighbors": encoder_max_neighbors,
         }
 
         self.hparams.update(params)
@@ -185,8 +221,11 @@ class GCNGraphPred(pl.LightningModule):
         else:
             self.activation = None
 
+        self.encoder = build_encoder(self.hparams)
+
         input_size = {
-            "atom": self.hparams.atom_input_size,
+            "atom": self.hparams.atom_input_size
+            + (self.hparams.encoder_hidden if self.encoder is not None else 0),
             "bond": self.hparams.bond_input_size,
             "global": self.hparams.global_input_size,
         }
@@ -419,6 +458,7 @@ class GCNGraphPred(pl.LightningModule):
                 and batch vectors for each node type.
             feat: dict mapping node type names to feature tensors.
         """
+        feat = encode_atom_inputs(self.encoder, graph, feat)
         feats = self.embedding(feat)
 
         # Build edge_index_dict with triplet keys from the PyG HeteroData batch
@@ -530,6 +570,7 @@ class GCNGraphPred(pl.LightningModule):
         layer_idx = 0
         atom_feats, bond_feats, global_feats = {}, {}, {}
 
+        feats = encode_atom_inputs(self.encoder, graph, feats)
         feats = self.embedding(feats)
         bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
         atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")

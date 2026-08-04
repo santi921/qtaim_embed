@@ -34,6 +34,7 @@ from qtaim_embed.models.layers import (
     MultitaskLinearSoftmax,
     EDGE_TYPE_MAP,
 )
+from qtaim_embed.models.encoders import ENCODER_FNS, build_encoder, encode_atom_inputs
 
 
 class GCNGraphPredClassifier(pl.LightningModule):
@@ -62,6 +63,16 @@ class GCNGraphPredClassifier(pl.LightningModule):
         scalers: list, list of scalers applied to each node type
         embedding_size: int, size of embedding layer
         global_pooling: str, type of global pooling
+        encoder_fn: str, optional 3D encoder ("none", "schnet", "dimenetpp",
+            "equivariant"); requires atom.pos/atom.z on the graphs. Output is
+            concatenated onto atom features ahead of UnifySize.
+        encoder_hidden: int, encoder output width added to the atom input dim
+        encoder_cutoff: float, radius-graph cutoff in Angstrom
+        encoder_n_interactions: int, number of encoder interaction blocks
+        encoder_num_gaussians: int, schnet RBF size
+        encoder_num_radial: int, dimenetpp/equivariant radial basis size
+        encoder_lmax: int, max spherical harmonic l (equivariant only)
+        encoder_max_neighbors: int, nearest-neighbor cap (dimenetpp only)
 
     """
 
@@ -102,6 +113,14 @@ class GCNGraphPredClassifier(pl.LightningModule):
         pooling_ntypes=["atom", "bond"],
         pooling_ntypes_direct=["global"],
         class_weights=None,
+        encoder_fn="none",
+        encoder_hidden=64,
+        encoder_cutoff=5.0,
+        encoder_n_interactions=3,
+        encoder_num_gaussians=50,
+        encoder_num_radial=6,
+        encoder_lmax=1,
+        encoder_max_neighbors=32,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -128,6 +147,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
             )
+
+        assert encoder_fn in ENCODER_FNS, (
+            f"encoder_fn must be one of {ENCODER_FNS} but got {encoder_fn}"
+        )
 
         params = {
             "atom_input_size": atom_input_size,
@@ -168,6 +191,14 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "hidden_size": hidden_size,
             "ntasks": len(target_dict["global"]),
             "class_weights": class_weights,
+            "encoder_fn": encoder_fn,
+            "encoder_hidden": encoder_hidden,
+            "encoder_cutoff": encoder_cutoff,
+            "encoder_n_interactions": encoder_n_interactions,
+            "encoder_num_gaussians": encoder_num_gaussians,
+            "encoder_num_radial": encoder_num_radial,
+            "encoder_lmax": encoder_lmax,
+            "encoder_max_neighbors": encoder_max_neighbors,
         }
 
         self.hparams.update(params)
@@ -179,8 +210,11 @@ class GCNGraphPredClassifier(pl.LightningModule):
         else:
             self.activation = None
 
+        self.encoder = build_encoder(self.hparams)
+
         input_size = {
-            "atom": self.hparams.atom_input_size,
+            "atom": self.hparams.atom_input_size
+            + (self.hparams.encoder_hidden if self.encoder is not None else 0),
             "bond": self.hparams.bond_input_size,
             "global": self.hparams.global_input_size,
         }
@@ -435,6 +469,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         Forward pass
         """
 
+        inputs = encode_atom_inputs(self.encoder, graph, inputs)
         feats = self.embedding(inputs)
 
         # Extract edge_index_dict from PyG HeteroData
@@ -516,6 +551,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         layer_idx = 0
         atom_feats, bond_feats, global_feats = {}, {}, {}
 
+        feats = encode_atom_inputs(self.encoder, graph, feats)
         feats = self.embedding(feats)
         bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
         atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")

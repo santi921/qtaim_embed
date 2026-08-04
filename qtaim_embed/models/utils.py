@@ -112,6 +112,14 @@ def load_graph_level_model_from_config(config):
             hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
             class_weights=config.get("class_weights", None),
+            encoder_fn=config.get("encoder_fn", "none"),
+            encoder_hidden=config.get("encoder_hidden", 64),
+            encoder_cutoff=config.get("encoder_cutoff", 5.0),
+            encoder_n_interactions=config.get("encoder_n_interactions", 3),
+            encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
+            encoder_num_radial=config.get("encoder_num_radial", 6),
+            encoder_lmax=config.get("encoder_lmax", 1),
+            encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
         )
     else:
         logger.info("REGRESSION MODEL")
@@ -151,6 +159,14 @@ def load_graph_level_model_from_config(config):
             hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
             compiled=config["compiled"],
+            encoder_fn=config.get("encoder_fn", "none"),
+            encoder_hidden=config.get("encoder_hidden", 64),
+            encoder_cutoff=config.get("encoder_cutoff", 5.0),
+            encoder_n_interactions=config.get("encoder_n_interactions", 3),
+            encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
+            encoder_num_radial=config.get("encoder_num_radial", 6),
+            encoder_lmax=config.get("encoder_lmax", 1),
+            encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
         )
     # model.to(device)
 
@@ -236,6 +252,14 @@ def load_node_level_model_from_config(config):
         hidden_size=config["hidden_size"],
         residual_gat=config["residual_gat"],
         compiled=config["compiled"],
+        encoder_fn=config.get("encoder_fn", "none"),
+        encoder_hidden=config.get("encoder_hidden", 64),
+        encoder_cutoff=config.get("encoder_cutoff", 5.0),
+        encoder_n_interactions=config.get("encoder_n_interactions", 3),
+        encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
+        encoder_num_radial=config.get("encoder_num_radial", 6),
+        encoder_lmax=config.get("encoder_lmax", 1),
+        encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
     )
     # model.to(device)
 
