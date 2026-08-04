@@ -57,9 +57,9 @@ def _transform(
             )
 
     rst = scaler.transform(X)
-    # make all values < eta in std to be eta
-    std[std < eta] = eta
-    # manually scale the data
-    # rst = (rst - mean) / std
+    # sklearn's transform divides constant columns by 1.0 internally
+    # (_handle_zeros_in_scale); the returned std must match what was actually
+    # used or later apply/inverse calls disagree with the fitted transform
+    std[std == 0] = 1.0
 
     return rst, mean, std

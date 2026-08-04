@@ -160,6 +160,15 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
         if num_bonds == 0:
             ft = [0.0 for _ in range(num_feats)]
+            if bool_boo:
+                # |Y00| is identically 1.0 for every real bond, so a 0 here is
+                # off-distribution in a column the scaler sees as constant
+                boo_start = 0
+                if self.allowed_ring_size != []:
+                    boo_start += 2 + len(self.allowed_ring_size)
+                if "bond_length" in self.selected_keys:
+                    boo_start += 1
+                ft[boo_start] = 1.0
             feats = [ft]
 
         else:

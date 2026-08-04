@@ -352,8 +352,10 @@ class HeteroGraphStandardScalerIterative:
                 self._std[nt] = torch.sqrt(
                     self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2
                 )
-                # update with epsilon to avoid division by zero
-                self._std[nt][self._std[nt] == 0] = self.epsilon
+                # sklearn convention: zero-variance (constant) columns get
+                # scale 1.0, so any off-distribution value maps to a small
+                # deviation instead of (x - mean)/eps blowing up to ~1e6
+                self._std[nt][self._std[nt] == 0] = 1.0
             else:
                 self._std[nt] = torch.zeros_like(self._mean[nt])
         self.finalized = True
@@ -760,7 +762,8 @@ def merge_scalers(
             var = sum_x2_merged[nt] / n - mean ** 2
             # clamp tiny negatives from floating-point cancellation
             std = torch.sqrt(torch.clamp(var, min=0.0))
-            std[std == 0] = epsilon
+            # sklearn convention: constant columns get scale 1.0 (see finalize)
+            std[std == 0] = 1.0
             mean_merged[nt] = mean
             std_merged[nt] = std
         else:

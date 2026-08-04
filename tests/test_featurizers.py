@@ -585,3 +585,14 @@ class TestZeroBondFallbackWidth:
         assert feats_bonded.shape[1] == len(names)
         assert feats_empty.shape[1] == feats_bonded.shape[1]
         assert names_empty == names
+
+    def test_zero_bond_fallback_boo_l0_matches_real_bonds(self):
+        """boo_1_0 (|Y00|) is identically 1.0 for every real bond, so the
+        fallback row must carry 1.0 there too - a 0 in a column the scaler
+        sees as constant scaled to (0-1)/eps = -1e6 and poisoned predictions
+        for any batch containing a zero-bond molecule."""
+        feats_bonded, names = self._featurize([(0, 1)])
+        feats_empty, _ = self._featurize([])
+        col = names.index("boo_1_0")
+        assert feats_bonded[0, col] == 1.0
+        assert feats_empty[0, col] == 1.0

@@ -645,23 +645,52 @@ def test_merge_unfinalized_scalers_finite(tmp_path):
         assert torch.isfinite(out[nt].feat).all()
 
 
-def test_merge_constant_feature_epsilon_guard():
-    """A zero-variance (constant) feature must get std=epsilon, never 0."""
+def test_merge_constant_feature_unit_std_guard():
+    """A zero-variance (constant) feature must get std=1.0 (sklearn convention).
+
+    With std=epsilon (the old guard), any off-distribution value in a constant
+    column - e.g. a zero-bond fallback row where boo_1_0 is 0 instead of the
+    constant 1.0 - scaled to (0 - 1)/1e-6 = -1e6 and poisoned every prediction
+    in the batch.
+    """
     from qtaim_embed.utils.tests import make_hetero_graph
 
-    # identical graphs -> zero variance for every feature
     graphs = [make_hetero_graph()[0] for _ in range(4)]
+    for g in graphs:
+        g["atom"].feat[:, 0] = 7.0  # constant column, like boo_1_0 = |Y00|
     s = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
     s.update(graphs)  # unfinalized
 
-    merged = merge_scalers([s], features_tf=True, finalize_merged=True, epsilon=1e-6)
-    for std in merged._std.values():
-        assert torch.isfinite(std).all()
-        assert bool((std >= 1e-6 - 1e-9).all())  # constant -> epsilon, not 0
+    merged = merge_scalers([s], features_tf=True, finalize_merged=True)
+    assert torch.isfinite(merged._std["atom"]).all()
+    assert merged._std["atom"][0] == 1.0  # constant -> scale 1.0, not epsilon
 
-    # scaling a constant feature gives finite (zero), not Inf
-    out = merged([make_hetero_graph()[0]])[0]
-    for nt in out.node_types:
-        assert torch.isfinite(out[nt].feat).all()
+    # an off-distribution value in the constant column stays O(1) after scaling
+    g = make_hetero_graph()[0]
+    g["atom"].feat[:, 0] = 7.0
+    g["atom"].feat[0, 0] = 0.0  # e.g. a zero-bond fallback row
+    out = merged([g])[0]
+    assert torch.isfinite(out["atom"].feat).all()
+    assert out["atom"].feat[:, 0].abs().max() <= 10.0
+
+
+def test_finalize_constant_feature_unit_std_guard():
+    """finalize() must also give constant columns std=1.0."""
+    from qtaim_embed.utils.tests import make_hetero_graph
+
+    graphs = [make_hetero_graph()[0] for _ in range(4)]
+    for g in graphs:
+        g["atom"].feat[:, 0] = 7.0  # constant column, like boo_1_0 = |Y00|
+    s = HeteroGraphStandardScalerIterative(features_tf=True, mean={}, std={})
+    s.update(graphs)
+    s.finalize()
+    assert s._std["atom"][0] == 1.0
+
+    # an off-distribution value in the constant column stays O(1) after scaling
+    g = make_hetero_graph()[0]
+    g["atom"].feat[:, 0] = 7.0
+    g["atom"].feat[0, 0] = 0.0
+    out = s([g])[0]
+    assert out["atom"].feat[:, 0].abs().max() <= 10.0
 
 
