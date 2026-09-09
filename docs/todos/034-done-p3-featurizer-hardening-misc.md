@@ -1,5 +1,5 @@
 ---
-status: pending
+status: done
 priority: p3
 issue_id: 034
 tags: [code-review, quality, featurizer]
@@ -47,13 +47,12 @@ again.
 
 ## Recommended Action
 
-Items 2-5 done 2026-09-09 (see work log). Item 1 stays open as a config
-decision before the 4M rebuild. Item 6 taken only as far as the unconditional
+Items 2-5 done 2026-09-09 (see work log). Item 1 decided 2026-09-09: keep int64. Item 6 taken only as far as the unconditional
 `_feature_name` reset.
 
 ## Acceptance Criteria
 
-- [ ] z dtype decision recorded before 4M build
+- [x] z dtype decision recorded before 4M build
 - [x] width test covers all five width terms
 
 ## Work Log
@@ -74,3 +73,12 @@ decision before the 4M rebuild. Item 6 taken only as far as the unconditional
   Item 5 is superseded by todo 033 (update() no longer reads graphs[0]).
   Width test now covers ring block, bond_length, boo, rbf and two scalars, one
   named `odd_boo_name` to pin the prefix rule. Item 1 (z dtype) still open.
+- 2026-09-09: item 1 decided, `atom.z` stays int64. Measured on
+  `tests/data/lmdb_link/train` (75 graphs, 16.1 atoms/graph): z costs ~364
+  B/graph serialized, ~270 B of which is torch.save per-tensor framing, not
+  payload. int32 saves 64 B/graph (0.6%), uint8 saves 95 B/graph (1.0%);
+  at 4M graphs that is under 0.4 GB of ~39.7 GB. Both narrower dtypes also
+  need a `.long()` cast in TransformMol and break `F.one_hot` (int32) or
+  `nn.Embedding`/indexing (uint8) wherever a reader skips that cast. Not
+  worth a rebuild coupling. If disk ever matters the lever is the per-graph
+  torch.save format, not the integer width. Todo closed.
