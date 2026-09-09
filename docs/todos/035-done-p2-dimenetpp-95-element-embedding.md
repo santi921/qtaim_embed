@@ -1,10 +1,9 @@
 ---
-status: pending
+status: done
 priority: p2
 issue_id: "035"
 tags: [code-review, encoders, correctness]
 dependencies: []
-owner: perf window (owns models/encoders/dimenetpp_encoder.py as of 2026-09-09)
 ---
 
 # 035 - DimeNet++ encoder fails for Z >= 95
@@ -25,9 +24,17 @@ Add a forward test with `z = torch.tensor([96, 1, 8])` to `tests/test_encoder_pa
 
 ## Acceptance Criteria
 
-- [ ] `DimeNetPPEncoder` forward succeeds for Z up to 118
-- [ ] Parity test against PyG blocks still passes for Z < 95
+- [x] `DimeNetPPEncoder` forward succeeds for Z up to 118
+- [x] Parity test against PyG blocks still passes for Z < 95
 
 ## Work Log
 
 - 2026-09-08: found by code review (angles A and C); deferred because the file is being edited in the performance window.
+- 2026-09-09: done. `DimeNetPPEncoder(max_z=119)` replaces `self.emb.emb`
+  after constructing PyG's EmbeddingBlock and re-applies its
+  uniform(-sqrt(3), sqrt(3)) init. Test
+  `tests/test_encoder_parity.py::TestDimeNetPP::test_heavy_elements_embed`
+  (Z = 96, 118 forward + gradient on row 96). `max_z` is not yet exposed in
+  `build_encoder` (encoders/__init__.py is being edited by the perf window);
+  the default covers the periodic table. DimeNet++ checkpoints saved before
+  this change carry a (95, H) embedding and need a non-strict load.

@@ -82,6 +82,20 @@ class TestDimeNetPP:
         grads = [p.grad for p in enc.parameters() if p.grad is not None]
         assert len(grads) > 0
 
+    def test_heavy_elements_embed(self):
+        # PyG's EmbeddingBlock stops at Z=94; actinides past Pu must not raise
+        torch.manual_seed(0)
+        enc = DimeNetPPEncoder(hidden_channels=16, num_interactions=1)
+        assert enc.emb.emb.num_embeddings == 119
+        assert enc.emb.emb.weight.abs().max() <= math.sqrt(3)
+        pos = torch.tensor([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [0.0, 1.6, 0.0], [1.4, 1.5, 0.3]])
+        z = torch.tensor([96, 1, 8, 118])
+        out = enc(pos, z, torch.zeros(4, dtype=torch.long))
+        assert out.shape == (4, 16) and torch.isfinite(out).all()
+        out.sum().backward()
+        assert enc.emb.emb.weight.grad[96].abs().sum() > 0
+        assert enc.emb.emb.weight.grad[50].abs().sum() == 0
+
     def test_water_interior_angle_via_triplets(self):
         # the triplet indices must recover the known 104.5 degree HOH angle
         pos = torch.tensor(

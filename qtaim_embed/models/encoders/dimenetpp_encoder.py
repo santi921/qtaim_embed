@@ -8,11 +8,21 @@ else - including the exact angle formula - mirrors
 torch_geometric.nn.models.DimeNetPlusPlus.forward. Output is the per-atom
 OutputPPBlock sum rather than a pooled molecule scalar.
 
-Note PyG's EmbeddingBlock hard-codes Embedding(95, H), so z must be < 95.
+PyG's EmbeddingBlock hard-codes Embedding(95, H); the block's embedding is
+swapped for Embedding(max_z, H) with the same uniform(-sqrt(3), sqrt(3)) init
+so actinides past Pu (Z >= 95) do not raise at the first batch.
 
 Cost warning: triplet count grows as sum over j of deg_j^2, which is the
-memory hot spot on dense systems - hence the max_num_neighbors cap.
+memory hot spot on dense systems - hence the max_num_neighbors cap. Measured
+on tm_react (60-atom molecules, hidden 128, bf16-mixed, one A5000, E2 in
+docs/research/2026-09-track-a-measurements.md): cutoff 5 / cap 32 needs
+9.4 GB at batch 128 and OOMs at 512; cutoff 4 / cap 16 needs 3.6 GB at 128
+and 13.6 GB at 512 at 1.8x the throughput. The default cap is therefore 16;
+cutoff 4.0 is the recommended dimenetpp setting until an accuracy sweep
+says otherwise.
 """
+
+from math import sqrt
 
 import torch
 import torch.nn as nn
@@ -53,6 +63,7 @@ class DimeNetPPEncoder(nn.Module):
         int_emb_size: int = 32,
         basis_emb_size: int = 8,
         num_output_layers: int = 2,
+        max_z: int = 119,
     ):
         super().__init__()
         self.cutoff = cutoff
@@ -62,6 +73,9 @@ class DimeNetPPEncoder(nn.Module):
         self.rbf = BesselBasisLayer(num_radial, cutoff)
         self.sbf = SphericalBasisLayer(num_spherical, num_radial, cutoff)
         self.emb = EmbeddingBlock(num_radial, hidden_channels, act)
+        # PyG hard-codes 95 rows; resize with PyG's own init range
+        self.emb.emb = nn.Embedding(max_z, hidden_channels)
+        self.emb.emb.weight.data.uniform_(-sqrt(3), sqrt(3))
 
         self.interaction_blocks = nn.ModuleList(
             [
