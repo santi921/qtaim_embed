@@ -1,6 +1,8 @@
 import logging
 import math
 import torch
+
+from qtaim_embed.models.encoders import ENCODER_DEFAULTS, encoder_kwargs_from_config
 import numpy as np
 import pytorch_lightning as pl
 import pandas as pd
@@ -113,15 +115,7 @@ def load_graph_level_model_from_config(config):
             hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
             class_weights=config.get("class_weights", None),
-            encoder_fn=config.get("encoder_fn", "none"),
-            encoder_hidden=config.get("encoder_hidden", 64),
-            encoder_cutoff=config.get("encoder_cutoff", 5.0),
-            encoder_n_interactions=config.get("encoder_n_interactions", 3),
-            encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
-            encoder_num_radial=config.get("encoder_num_radial", 6),
-            encoder_lmax=config.get("encoder_lmax", 1),
-            encoder_max_neighbors=config.get("encoder_max_neighbors", 16),
-            encoder_tp=config.get("encoder_tp", "channelwise"),
+            **encoder_kwargs_from_config(config),
             dense_grid=config.get("dense_grid", 16),
             bn_before_activation=config.get("bn_before_activation", True),
             global_aggr=config.get("global_aggr", "sum"),
@@ -164,15 +158,7 @@ def load_graph_level_model_from_config(config):
             hidden_size=config["hidden_size"],
             residual_gat=config["residual_gat"],
             compiled=config["compiled"],
-            encoder_fn=config.get("encoder_fn", "none"),
-            encoder_hidden=config.get("encoder_hidden", 64),
-            encoder_cutoff=config.get("encoder_cutoff", 5.0),
-            encoder_n_interactions=config.get("encoder_n_interactions", 3),
-            encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
-            encoder_num_radial=config.get("encoder_num_radial", 6),
-            encoder_lmax=config.get("encoder_lmax", 1),
-            encoder_max_neighbors=config.get("encoder_max_neighbors", 16),
-            encoder_tp=config.get("encoder_tp", "channelwise"),
+            **encoder_kwargs_from_config(config),
             dense_grid=config.get("dense_grid", 16),
             bn_before_activation=config.get("bn_before_activation", True),
             global_aggr=config.get("global_aggr", "sum"),
@@ -261,15 +247,7 @@ def load_node_level_model_from_config(config):
         hidden_size=config["hidden_size"],
         residual_gat=config["residual_gat"],
         compiled=config["compiled"],
-        encoder_fn=config.get("encoder_fn", "none"),
-        encoder_hidden=config.get("encoder_hidden", 64),
-        encoder_cutoff=config.get("encoder_cutoff", 5.0),
-        encoder_n_interactions=config.get("encoder_n_interactions", 3),
-        encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
-        encoder_num_radial=config.get("encoder_num_radial", 6),
-        encoder_lmax=config.get("encoder_lmax", 1),
-        encoder_max_neighbors=config.get("encoder_max_neighbors", 16),
-        encoder_tp=config.get("encoder_tp", "channelwise"),
+        **encoder_kwargs_from_config(config),
         dense_grid=config.get("dense_grid", 16),
         bn_before_activation=config.get("bn_before_activation", True),
         global_aggr=config.get("global_aggr", "sum"),
@@ -392,9 +370,7 @@ def load_bond_model_from_config(config):
             logger.warning(f"Checkpoint load failed: {e}; building a fresh model")
 
     keys = [
-        "encoder_fn", "encoder_hidden", "encoder_cutoff", "encoder_n_interactions",
-        "encoder_num_gaussians", "encoder_num_radial", "encoder_lmax", "encoder_max_neighbors",
-        "encoder_tp",
+        *ENCODER_DEFAULTS,
         "use_atom_feat", "atom_input_size", "embedding_size", "pool_multiplier",
         "pair_rbf", "pair_rbf_n", "pair_rbf_cutoff", "pair_hidden", "pair_dropout",
         "activation", "lr", "weight_decay", "scheduler_name", "lr_plateau_patience",

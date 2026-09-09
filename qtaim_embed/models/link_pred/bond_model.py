@@ -23,7 +23,7 @@ from torchmetrics import Metric
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 
 from qtaim_embed.data.bonds import bond_pairs_from_heterograph, candidate_labels
-from qtaim_embed.models.encoders import ENCODER_FNS, build_encoder
+from qtaim_embed.models.encoders import attach_encoder, check_encoder_hparams
 from qtaim_embed.models.encoders.neighbors import RCOV, candidate_pairs
 from qtaim_embed.models.link_pred.baselines import scores_from_counts
 from qtaim_embed.models.optim import build_adam
@@ -105,6 +105,8 @@ class GCNBondPred(pl.LightningModule):
         encoder_num_radial: int = 6,
         encoder_lmax: int = 1,
         encoder_max_neighbors: int = 32,
+        encoder_tp: str = "channelwise",
+        encoder_max_z: int = 119,
         use_atom_feat: bool = False,
         atom_input_size: int = 0,
         embedding_size: int = 64,
@@ -125,7 +127,7 @@ class GCNBondPred(pl.LightningModule):
         n_threshold_bins: int = 101,
     ):
         super().__init__()
-        assert encoder_fn in ENCODER_FNS, f"encoder_fn must be one of {ENCODER_FNS}, got {encoder_fn}"
+        check_encoder_hparams(encoder_fn)
         if use_atom_feat:
             assert atom_input_size > 0, "atom_input_size is required when use_atom_feat=True"
         self.save_hyperparameters()
@@ -134,11 +136,9 @@ class GCNBondPred(pl.LightningModule):
             pair_rbf_cutoff = float(pool_multiplier * 2.0 * RCOV.max())
             self.hparams.pair_rbf_cutoff = pair_rbf_cutoff
 
-        self.encoder = build_encoder(self.hparams)
+        self.encoder, encoder_width = attach_encoder(self.hparams)
         self.z_embedding = nn.Embedding(max_z, embedding_size)
-        in_dim = embedding_size
-        if self.encoder is not None:
-            in_dim += encoder_hidden
+        in_dim = embedding_size + encoder_width
         if use_atom_feat:
             in_dim += atom_input_size
         act = getattr(nn, activation)

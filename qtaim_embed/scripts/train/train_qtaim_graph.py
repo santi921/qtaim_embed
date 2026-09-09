@@ -5,7 +5,6 @@ import wandb, argparse, torch, json
 from copy import deepcopy
 import pandas as pd
 
-import pytorch_lightning as pl
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -15,9 +14,9 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from pytorch_lightning.strategies import DDPStrategy
+from qtaim_embed.utils.training import build_trainer
 from qtaim_embed.core.datamodule import QTAIMGraphTaskDataModule, LMDBDataModule
-from qtaim_embed.models.utils import LinearWarmup, LogParameters, load_graph_level_model_from_config
+from qtaim_embed.models.utils import LogParameters, load_graph_level_model_from_config
 from qtaim_embed.utils.data import get_default_graph_level_config
 
 
@@ -151,37 +150,12 @@ def main(argv=None):
         # with fork-based DDP but not spawn-based ddp_spawn (LMDB environments
         # are not picklable). For PCIe GPUs without NVLink (e.g. A5000), set
         # NCCL_P2P_DISABLE=1 before launching.
-        trainer = pl.Trainer(
-            max_epochs=config["model"]["max_epochs"],
+        trainer = build_trainer(
+            config,
+            loggers=[logger_tb, logger_wb],
+            callbacks=[early_stopping_callback, lr_monitor, log_parameters, checkpoint_callback],
             accelerator="gpu",
-            devices=config["optim"]["num_devices"],
-            num_nodes=config["optim"]["num_nodes"],
-            gradient_clip_val=config["optim"]["gradient_clip_val"],
-            accumulate_grad_batches=config["optim"]["accumulate_grad_batches"],
-            enable_progress_bar=True,
-            callbacks=[
-                early_stopping_callback,
-                lr_monitor,
-                log_parameters,
-                checkpoint_callback,
-            ]
-            + (
-                [LinearWarmup(config["optim"]["warmup_epochs"])]
-                if config["optim"].get("warmup_epochs", 0) > 0
-                else []
-            ),
-            enable_checkpointing=True,
-            strategy=(
-                DDPStrategy(find_unused_parameters=True)
-                if config["optim"]["strategy"] == "ddp"
-                else config["optim"]["strategy"]
-            ),
             default_root_dir=config["dataset"]["log_save_dir"],
-            # BucketBatchSampler shards itself by rank; Lightning must not wrap it
-            use_distributed_sampler=not config["dataset"].get("bucketing", False),
-            logger=[logger_tb, logger_wb],
-            precision=config["optim"]["precision"],
-            num_sanity_val_steps=config["optim"].get("num_sanity_val_steps", 2),
         )
 
         # log dataset and optim settings from config

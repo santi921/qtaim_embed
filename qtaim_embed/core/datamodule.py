@@ -10,7 +10,6 @@ from qtaim_embed.data.dataloader import (
     DataLoaderMoleculeGraphTask,
     DataLoaderLMDB,
     DataLoaderLinkLMDB,
-    DataLoaderBondLMDB,
 )
 
 from qtaim_embed.utils.data import (
@@ -864,9 +863,10 @@ class LMDBBondDataModule(LMDBDataModule):
     def _loader(self, dataset, shuffle):
         optim = self.config["optim"]
         num_workers = optim.get("num_workers", 0)
-        return DataLoaderBondLMDB(
+        return DataLoaderLMDB(
             dataset=dataset,
             transforms=self.transforms,
+            with_labels=False,
             batch_size=optim["train_batch_size"],
             shuffle=shuffle,
             num_workers=num_workers,

@@ -125,6 +125,12 @@ fail with a schema error.
   (16,384 weights per edge, OOMs at batch 128) kept only for old checkpoints.
 - `encoder_fn: "none"` (default) - current behaviour, no encoder.
 
+All `encoder_*` knobs and their defaults live in `ENCODER_DEFAULTS`
+(`models/encoders/__init__.py`); loaders use `encoder_kwargs_from_config`, default
+configs splat the dict, models call `attach_encoder` / `check_encoder_hparams`.
+A new knob goes there, into `build_encoder`, and as one keyword line in each of
+the four model constructors; `tests/test_encoder_defaults.py` enforces that.
+
 Supported by `GCNNodePred`, `GCNGraphPred`, and `GCNGraphPredClassifier` (not
 the link model). Neighbor lists are built inside the encoder forward
 (`models/encoders/neighbors.py` - torch_cluster and torch_sparse are
@@ -182,12 +188,13 @@ config = {
         "encoder_lmax": 1,             # equivariant only
         "encoder_max_neighbors": 16,   # dimenetpp only, caps triplet blowup
         "encoder_tp": "channelwise",   # equivariant only
+        "encoder_max_z": 119,          # embedding rows for atomic numbers (all encoders)
     },
     "optim": {
         "precision": "bf16-mixed",  # default; "16-mixed" or 32 also work, never bare 16
         "max_epochs": 100,
         "gradient_clip_val": 1.0,
-        "train_batch_size": 128,
+        "train_batch_size": 128,    # node default is 1024 with lr 8e-3 and warmup_epochs 1 (E1 gate on 119K graphs); use 128 / 1e-3 on small datasets
         "num_workers": 8,           # LMDB path needs >= 8 at batch >= 512 (data-bound otherwise)
         "pin_memory": True,
         "warmup_epochs": 0,         # > 0 adds LinearWarmup (linear LR ramp, then ReduceLROnPlateau)

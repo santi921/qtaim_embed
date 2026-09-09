@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 priority: p3
 issue_id: "037"
 tags: [code-review, simplification, datamodule, training-scripts]
@@ -30,9 +30,9 @@ it does not collide with either.
 
 ## Acceptance Criteria
 
-- [ ] One LMDB datamodule base, two thin subclasses
-- [ ] `num_sanity_val_steps` honoured by every entry point
-- [ ] Full test suite green
+- [x] One LMDB datamodule base, two thin subclasses
+- [x] `num_sanity_val_steps` honoured by every entry point
+- [x] Full test suite green
 
 ## Work Log
 
@@ -53,3 +53,11 @@ it does not collide with either.
   (3 epochs, test metrics reported). Still open: `train_qtaim_graph.py`,
   `train_qtaim_graph_classifier.py`, `train_qtaim_node.py` (perf window edits
   them for LinearWarmup) and the `DataLoaderBondLMDB` fold-in.
+- 2026-09-09 (final): performance branch finished, so the last three scripts
+  (`train_qtaim_graph.py`, `train_qtaim_graph_classifier.py`,
+  `train_qtaim_node.py`) now call `build_trainer`, which gained
+  `use_distributed_sampler=not dataset.bucketing` (BucketBatchSampler shards
+  by rank itself) and owns the LinearWarmup wiring. `DataLoaderBondLMDB` is
+  gone: `DataLoaderLMDB(with_labels=False)` returns the batched HeteroData
+  from `collate_hetero_direct`; `LMDBBondDataModule._loader` uses it. All ten
+  Trainer constructions go through one function.

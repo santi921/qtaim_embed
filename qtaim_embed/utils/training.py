@@ -23,8 +23,9 @@ def build_trainer(
 
     Honours optim.num_devices, num_nodes, gradient_clip_val,
     accumulate_grad_batches, strategy ("ddp" -> DDPStrategy with unused-parameter
-    detection), precision, num_sanity_val_steps (default 2) and warmup_epochs
-    (adds LinearWarmup when > 0 and the callback exists).
+    detection), precision, num_sanity_val_steps (default 2), warmup_epochs
+    (adds LinearWarmup when > 0) and dataset.bucketing (disables Lightning's
+    distributed sampler, BucketBatchSampler shards by rank itself).
     """
     optim = config["optim"]
     callbacks = list(callbacks)
@@ -48,6 +49,8 @@ def build_trainer(
             else optim.get("strategy", "auto")
         ),
         default_root_dir=default_root_dir or config["dataset"].get("log_save_dir"),
+        # BucketBatchSampler shards itself by rank; Lightning must not wrap it
+        use_distributed_sampler=not config["dataset"].get("bucketing", False),
         logger=loggers,
         precision=optim.get("precision", 32),
         num_sanity_val_steps=optim.get("num_sanity_val_steps", 2),

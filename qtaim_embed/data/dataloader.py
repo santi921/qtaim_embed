@@ -121,13 +121,17 @@ class DataLoaderLMDB(DataLoader):
     This assumes a heterograph dataset.
     """
 
-    def __init__(self, dataset, transforms=None, dense_shape_of=None, **kwargs):
+    def __init__(self, dataset, transforms=None, dense_shape_of=None, with_labels=True, **kwargs):
         """dense_shape_of: optional callable (atom_counts, bond_counts) -> (N_b, B_b)
         stamped on each batch as `dense_shape` (BucketBatchSampler.batch_shape),
-        so ResidualBlockDense pads every batch of a shape class identically."""
+        so ResidualBlockDense pads every batch of a shape class identically.
+        with_labels=False yields the batched HeteroData alone (bond classifier:
+        candidates and labels are built in the model step from atom.pos / atom.z
+        and the a2b connectivity)."""
         kwargs.pop("collate_fn", None)
         self.transforms = transforms
         self.dense_shape_of = dense_shape_of
+        self.with_labels = with_labels
 
         def collate(samples):
             graphs = samples
@@ -140,30 +144,12 @@ class DataLoaderLMDB(DataLoader):
                     [int(g["atom"].num_nodes) for g in graphs],
                     [int(g["bond"].num_nodes) for g in graphs],
                 )
+            if not self.with_labels:
+                return batched_graphs
             batched_labels = _get_ndata(batched_graphs, "labels")
             return batched_graphs, batched_labels
 
         super(DataLoaderLMDB, self).__init__(dataset, collate_fn=collate, **kwargs)
-
-
-class DataLoaderBondLMDB(DataLoader):
-    """
-    Dataloader for the bond classifier (GCNBondPred) from LMDB-backed heterographs.
-    Returns the batched HeteroData only; candidates and labels are built in the
-    model step from atom.pos / atom.z and the a2b connectivity.
-    """
-
-    def __init__(self, dataset, transforms=None, **kwargs):
-        kwargs.pop("collate_fn", None)
-        self.transforms = transforms
-
-        def collate(samples):
-            graphs = samples
-            if self.transforms is not None:
-                graphs = [self.transforms(graph) for graph in graphs]
-            return Batch.from_data_list(graphs)
-
-        super(DataLoaderBondLMDB, self).__init__(dataset, collate_fn=collate, **kwargs)
 
 
 class DataLoaderLinkLMDB(DataLoader):

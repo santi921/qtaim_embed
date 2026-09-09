@@ -1,4 +1,6 @@
 from pathlib import Path
+
+from qtaim_embed.models.encoders import ENCODER_DEFAULTS
 import numpy as np
 from qtaim_embed.core.dataset import Subset
 from typing import Optional, Any
@@ -120,14 +122,7 @@ def get_default_bond_level_config():
             "log_save_dir": "./test_logs/",
         },
         "model": {
-            "encoder_fn": "schnet",
-            "encoder_hidden": 64,
-            "encoder_cutoff": 5.0,
-            "encoder_n_interactions": 3,
-            "encoder_num_gaussians": 50,
-            "encoder_num_radial": 6,
-            "encoder_lmax": 1,
-            "encoder_max_neighbors": 16,
+            **{**ENCODER_DEFAULTS, "encoder_fn": "schnet"},
             "use_atom_feat": False,
             "atom_input_size": 0,
             "embedding_size": 64,
@@ -236,7 +231,7 @@ def get_default_node_level_config():
             "bias": True,
             "norm": "both",
             "aggregate": "sum",
-            "lr": 0.01,
+            "lr": 0.008,  # E1 gate 2026-09-09: batch 1024 with linear LR scaling from 128 / 1e-3
             "scheduler_name": "reduce_on_plateau",
             "weight_decay": 0.00001,
             "lr_plateau_patience": 25,
@@ -262,14 +257,7 @@ def get_default_node_level_config():
             "restore": False,
             "max_epochs": 1000,
             "initializer": "kaiming",
-            "encoder_fn": "none",
-            "encoder_hidden": 64,
-            "encoder_cutoff": 5.0,
-            "encoder_n_interactions": 3,
-            "encoder_num_gaussians": 50,
-            "encoder_num_radial": 6,
-            "encoder_lmax": 1,
-            "encoder_max_neighbors": 16,
+            **ENCODER_DEFAULTS,
         },
         "optim": {
             "num_devices": 1,
@@ -282,8 +270,8 @@ def get_default_node_level_config():
             "pin_memory": True,
             "persistent_workers": False,
             "num_sanity_val_steps": 2,
-            "warmup_epochs": 0,
-            "train_batch_size": 3,
+            "warmup_epochs": 1,
+            "train_batch_size": 1024,  # E1 gate 2026-09-09 (tm_react, 119K graphs); use 128 / lr 1e-3 / no warmup on small datasets
         },
     }
 
@@ -372,14 +360,7 @@ def get_default_graph_level_config():
             "restore": False,
             "max_epochs": 1000,
             "initializer": "kaiming",
-            "encoder_fn": "none",
-            "encoder_hidden": 64,
-            "encoder_cutoff": 5.0,
-            "encoder_n_interactions": 3,
-            "encoder_num_gaussians": 50,
-            "encoder_num_radial": 6,
-            "encoder_lmax": 1,
-            "encoder_max_neighbors": 16,
+            **ENCODER_DEFAULTS,
         },
         "optim": {
             "num_devices": 1,
@@ -516,14 +497,7 @@ def get_default_graph_level_config_classif():
             "pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
-            "encoder_fn": "none",
-            "encoder_hidden": 64,
-            "encoder_cutoff": 5.0,
-            "encoder_n_interactions": 3,
-            "encoder_num_gaussians": 50,
-            "encoder_num_radial": 6,
-            "encoder_lmax": 1,
-            "encoder_max_neighbors": 16,
+            **ENCODER_DEFAULTS,
         },
         "optim": {
             "num_devices": 1,

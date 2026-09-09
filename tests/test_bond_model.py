@@ -150,7 +150,11 @@ def test_datamodule_batches_and_eval_script(tmp_path):
     dm = LMDBBondDataModule(cfg)
     dm.setup("fit")
     batch = next(iter(dm.train_dataloader()))
+    # DataLoaderLMDB(with_labels=False): the batched HeteroData alone, direct collate
+    assert not isinstance(batch, tuple)
     assert "pos" in batch["atom"] and "z" in batch["atom"]
+    assert int(batch.num_graphs) == cfg["optim"]["train_batch_size"]
+    assert batch["atom"].batch.max().item() == batch.num_graphs - 1
     from qtaim_embed.scripts.eval.eval_bond_baselines import main as eval_main
 
     eval_main(["--lmdb", str(DATA_DIR / "train"), "--out_dir", str(tmp_path / "bl"), "--pool_multipliers", "2.0", "3.0", "--k_step", "0.05"])

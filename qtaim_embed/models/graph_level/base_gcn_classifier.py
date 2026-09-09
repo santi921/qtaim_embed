@@ -34,7 +34,7 @@ from qtaim_embed.models.layers import (
     MultitaskLinearSoftmax,
     EDGE_TYPE_MAP,
 )
-from qtaim_embed.models.encoders import ENCODER_FNS, build_encoder, encode_atom_inputs
+from qtaim_embed.models.encoders import attach_encoder, check_encoder_hparams, encode_atom_inputs
 from qtaim_embed.models.layers_dense import DenseHeteroBatch, DenseResidualBlock, to_dense_hetero
 from qtaim_embed.models.optim import build_adam
 
@@ -76,6 +76,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         encoder_lmax: int, max spherical harmonic l (equivariant only)
         encoder_max_neighbors: int, nearest-neighbor cap (dimenetpp only)
         encoder_tp: str, equivariant tensor product, "channelwise" (default) or "fully_connected"
+        encoder_max_z: int, atomic-number embedding rows in the encoder (119 covers the table)
         dense_grid: int, ResidualBlockDense pads molecules to multiples of this many atoms/bonds
         bn_before_activation: bool, conv -> BN -> activation -> dropout instead of BN last (see docs/research/2026-09-tm-react-eval-divergence.md)
         global_aggr: str, "sum" (GraphConv add) or "mean" for the a2g / b2g relations into the global node
@@ -128,6 +129,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         encoder_lmax=1,
         encoder_max_neighbors=16,
         encoder_tp: str = "channelwise",
+        encoder_max_z: int = 119,
         dense_grid: int = 16,
         bn_before_activation: bool = False,
         global_aggr: str = "sum",
@@ -158,9 +160,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 + f"but got {resid_n_graph_convs}"
             )
 
-        assert encoder_fn in ENCODER_FNS, (
-            f"encoder_fn must be one of {ENCODER_FNS} but got {encoder_fn}"
-        )
+        check_encoder_hparams(encoder_fn)
 
         params = {
             "atom_input_size": atom_input_size,
@@ -210,6 +210,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "encoder_lmax": encoder_lmax,
             "encoder_max_neighbors": encoder_max_neighbors,
             "encoder_tp": encoder_tp,
+            "encoder_max_z": encoder_max_z,
             "dense_grid": dense_grid,
             "bn_before_activation": bn_before_activation,
             "global_aggr": global_aggr,
@@ -224,11 +225,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
         else:
             self.activation = None
 
-        self.encoder = build_encoder(self.hparams)
+        self.encoder, encoder_width = attach_encoder(self.hparams)
 
         input_size = {
-            "atom": self.hparams.atom_input_size
-            + (self.hparams.encoder_hidden if self.encoder is not None else 0),
+            "atom": self.hparams.atom_input_size + encoder_width,
             "bond": self.hparams.bond_input_size,
             "global": self.hparams.global_input_size,
         }
