@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 import torch
 
 from qtaim_embed.utils.grapher import get_grapher
@@ -570,10 +571,12 @@ class TestZeroBondFallbackWidth:
             species=["O", "H"],
             coords=[[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]],
             bonds=bonds,
-            bond_features={b: {} for b in bonds},
+            bond_features={b: {"rho": 0.3, "odd_boo_name": 1.5} for b in bonds},
         )
+        # all five width terms: ring block, bond_length, boo, rbf, scalars
+        # (one scalar deliberately contains "boo_" without the prefix)
         featurizer = BondAsNodeGraphFeaturizerGeneral(
-            selected_keys=["rbf_gaussian_50", "boo_1"],
+            selected_keys=["rbf_gaussian_50", "boo_1", "bond_length", "rho", "odd_boo_name"],
             allowed_ring_size=[3, 4, 5, 6, 7, 8],
         )
         feat_dict, names = featurizer(mol)
@@ -596,3 +599,25 @@ class TestZeroBondFallbackWidth:
         col = names.index("boo_1_0")
         assert feats_bonded[0, col] == 1.0
         assert feats_empty[0, col] == 1.0
+
+    def test_substring_keys_stay_scalar_and_names_do_not_accumulate(self):
+        feats, names = self._featurize([(0, 1)])
+        assert names[-2:] == ["rho", "odd_boo_name"]
+        assert feats[0, names.index("bond_length")] == pytest.approx(5.0)
+        assert feats[0, names.index("odd_boo_name")] == pytest.approx(1.5)
+        from qtaim_embed.data.featurizer import BondAsNodeGraphFeaturizerGeneral
+
+        f = BondAsNodeGraphFeaturizerGeneral(selected_keys=None, allowed_ring_size=[])
+        assert f.selected_keys == []
+
+    def test_duplicate_expanding_keys_raise(self):
+        from qtaim_embed.core.molwrapper import create_wrapper_mol_from_atoms_and_bonds
+        from qtaim_embed.data.featurizer import BondAsNodeGraphFeaturizerGeneral
+
+        mol = create_wrapper_mol_from_atoms_and_bonds(
+            species=["O", "H"], coords=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+            bonds=[(0, 1)], bond_features={(0, 1): {}},
+        )
+        for keys in (["boo_1", "boo_2"], ["rbf_bessel_10", "rbf_gaussian_10"], ["rbf_cutoff"]):
+            with pytest.raises(ValueError):
+                BondAsNodeGraphFeaturizerGeneral(selected_keys=keys, allowed_ring_size=[])(mol)
