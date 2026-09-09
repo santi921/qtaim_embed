@@ -174,6 +174,7 @@ def main(argv=None):
             default_root_dir=config["dataset"]["log_save_dir"],
             logger=[logger_tb, logger_wb],
             precision=config["optim"]["precision"],
+            num_sanity_val_steps=config["optim"].get("num_sanity_val_steps", 2),
         )
 
         # log dataset and optim settings from config
