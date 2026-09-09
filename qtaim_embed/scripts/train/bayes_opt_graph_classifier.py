@@ -5,7 +5,6 @@ import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
 
-import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
@@ -15,7 +14,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from pytorch_lightning.strategies import DDPStrategy
+from qtaim_embed.utils.training import build_trainer
 from qtaim_embed.core.datamodule import QTAIMGraphTaskClassifyDataModule
 from qtaim_embed.models.utils import load_graph_level_model_from_config
 
@@ -216,28 +215,12 @@ class TrainingObject:
             lr_monitor = LearningRateMonitor(logging_interval="step")
             logger_wb = WandbLogger(name="test_logs")
 
-            trainer = pl.Trainer(
-                max_epochs=config["model"]["max_epochs"],
+            trainer = build_trainer(
+                config,
+                loggers=[logger_wb],
+                callbacks=[early_stopping_callback, lr_monitor, checkpoint_callback],
                 accelerator="gpu",
-                devices=config["optim"]["num_devices"],
-                num_nodes=config["optim"]["num_nodes"],
-                gradient_clip_val=config["optim"]["gradient_clip_val"],
-                accumulate_grad_batches=config["optim"]["accumulate_grad_batches"],
-                enable_progress_bar=True,
-                callbacks=[
-                    early_stopping_callback,
-                    lr_monitor,
-                    checkpoint_callback,
-                ],
-                enable_checkpointing=True,
-                strategy=(
-                    DDPStrategy(find_unused_parameters=True)
-                    if config["optim"]["strategy"] == "ddp"
-                    else config["optim"]["strategy"]
-                ),
                 default_root_dir=self.log_save_dir,
-                logger=[logger_wb],
-                precision=config["optim"]["precision"],
             )
 
             trainer.fit(model, self.dm)

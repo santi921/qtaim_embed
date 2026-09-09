@@ -43,3 +43,13 @@ it does not collide with either.
   in the other nine scripts (perf window is editing them for LinearWarmup) and folding
   `DataLoaderBondLMDB` into `DataLoaderLMDB` (perf window rewrote its collate to
   `collate_hetero_direct`). Do both after that branch lands.
+- 2026-09-09 (later): `build_trainer` adopted in the six scripts the perf window
+  has not touched: `train_lmdb_classifier.py`, `train_qtaim_link.py`,
+  `bayes_opt_graph.py`, `bayes_opt_graph_classifier.py`, `bayes_opt_link.py`,
+  `bayes_opt_node.py`. Accelerator and default_root_dir are passed explicitly so
+  behaviour is unchanged apart from `num_sanity_val_steps` and `warmup_epochs`
+  now being honoured. Verified: `tests/test_cli_entry_points.py` (19) and an
+  end-to-end `qtaim-embed-train-link --use_lmdb` run on the lmdb_link fixture
+  (3 epochs, test metrics reported). Still open: `train_qtaim_graph.py`,
+  `train_qtaim_graph_classifier.py`, `train_qtaim_node.py` (perf window edits
+  them for LinearWarmup) and the `DataLoaderBondLMDB` fold-in.
