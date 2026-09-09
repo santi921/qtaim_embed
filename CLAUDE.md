@@ -92,10 +92,11 @@ Molecules are represented as heterogeneous graphs with three node types:
 2. **Graph-level classification**: Classify molecules
 3. **Node-level prediction**: Predict per-atom/bond properties
 4. **Link prediction**: Predict edges/bonds
+5. **Bond classification (T3)**: `GCNBondPred` in `models/link_pred/bond_model.py` scores geometric candidate pairs (`candidate_pairs` at 2x covalent radii) for QTAIM bond-path existence. Atom embeddings come from `encoder_fn` over `atom.pos`/`atom.z` (plus `atom.feat` only if `use_atom_feat` is set, which leaks labels when atom features derive from the bond list); labels are read from `a2b` inside the step; no message passing over bond nodes (they are the labels). Always report next to the distance-rule baseline (`models/link_pred/baselines.py`, `qtaim-embed-eval-bond-baselines`). Plan: `docs/plans/2026-09-08-feat-t3-bond-classifier-plan.md`.
 
 ### Model Components
 
-- **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`
+- **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`, and `ResidualBlockDense` (same math as `ResidualBlock` on a padded per-molecule layout, `models/layers_dense.py`: a2b/b2a are `bmm` against an incidence matrix, global edges are masked sums/broadcasts, no gather/scatter; pair with `dataset.bucketing: true` so shapes are static and `compiled: true` captures the conv stack as CUDA graphs. 1.4-2.2x over `ResidualBlock` at bf16 on 60-350 atom molecules in the conv stack alone, 1.3-1.5x in the full training step (5,038 to 7,755 samples/s at hidden 128, batch 1024, where the data path then caps it). `convert_model_to_dense` in `models/utils.py` maps trained `ResidualBlock` weights onto it.)
 - **3D geometric encoders** (`encoder_fn`): `SchNetEncoder`, `DimeNetPPEncoder`, `EquivariantEncoder` (see below)
 - **Global pooling**: `SumPoolingThenCat`, `MeanPoolingThenCat`, `WeightAndSumThenCat`, `WeightAndMeanThenCat`, `GlobalAttentionPoolingThenCat`, `Set2SetThenCat`
 - **Scalers**: `HeteroGraphStandardScaler`, `HeteroGraphLogMagnitudeScaler`
@@ -118,13 +119,23 @@ fail with a schema error.
   sum(deg^2), capped by `encoder_max_neighbors`.
 - `encoder_fn: "equivariant"` - MACE-style e3nn message passing with
   l = 0..`encoder_lmax` irreps and invariant scalar (l=0) readout.
+  `encoder_tp: "channelwise"` (default) uses depthwise `uvu` tensor products
+  plus an `o3.Linear` mix (256 weights per edge at lmax 1, hidden 64);
+  `"fully_connected"` is the original per-edge FullyConnectedTensorProduct
+  (16,384 weights per edge, OOMs at batch 128) kept only for old checkpoints.
 - `encoder_fn: "none"` (default) - current behaviour, no encoder.
 
 Supported by `GCNNodePred`, `GCNGraphPred`, and `GCNGraphPredClassifier` (not
-the link model). Neighbor lists are built inside the encoder forward with a
-chunked, batch-aware cdist (`models/encoders/neighbors.py` - torch_cluster and
-torch_sparse are deliberately NOT dependencies), which is incompatible with
-`torch.compile`: `compiled: true` with an encoder raises at construction.
+the link model). Neighbor lists are built inside the encoder forward
+(`models/encoders/neighbors.py` - torch_cluster and torch_sparse are
+deliberately NOT dependencies): batched inputs use one per-molecule dense
+distance block over `to_dense_batch` positions (one kernel, one sync; 65x
+faster than the old batch-wide chunked cdist at batch 512), single molecules
+and oversized blocks fall back to the row-chunked cdist. The build is
+data-dependent, so it is incompatible with `torch.compile`: `compiled: true`
+with an encoder raises at construction. `encoder_max_neighbors` defaults to
+16 (dimenetpp triplet memory is sum(deg^2); cutoff 5 / cap 32 needs 9.4 GB at
+batch 128 on 60-atom molecules).
 
 ## Configuration System
 
@@ -142,15 +153,18 @@ config = {
         "val_prop": 0.15,
         "test_prop": 0.1,
         "extra_keys": {"atom": [], "bond": [], "global": []},
+        "bucketing": False,   # True: BucketBatchSampler groups graphs by padded (atoms, bonds) shape (LMDB path)
+        "bucket_grid": 16,
     },
     "model": {
         "n_conv_layers": 8,
-        "conv_fn": "ResidualBlock",  # or "GraphConvDropoutBatch", "GATConv"
+        "conv_fn": "ResidualBlock",  # or "ResidualBlockDense" (padded, needs dataset.bucketing), "GraphConvDropoutBatch", "GATConv"
+        "dense_grid": 16,            # ResidualBlockDense: pad atoms/bonds to multiples of this
         "global_pooling_fn": "SumPoolingThenCat",
         "hidden_size": 128,
         "embedding_size": 128,
         "dropout": 0.2,
-        "batch_norm": True,
+        "batch_norm": True,   # REQUIRED for ResidualBlock on 40+ atom molecules (see Important Notes)
         "activation": "ReLU",
         "lr": 1e-3,
         "loss_fn": "mse",  # or "mae"
@@ -162,12 +176,17 @@ config = {
         "encoder_num_gaussians": 50,   # schnet RBF size
         "encoder_num_radial": 6,       # dimenetpp/equivariant radial basis size
         "encoder_lmax": 1,             # equivariant only
-        "encoder_max_neighbors": 32,   # dimenetpp only, caps triplet blowup
+        "encoder_max_neighbors": 16,   # dimenetpp only, caps triplet blowup
+        "encoder_tp": "channelwise",   # equivariant only
     },
     "optim": {
-        "precision": 16,  # or "bf16", 32
+        "precision": "bf16-mixed",  # default; "16-mixed" or 32 also work, never bare 16
         "max_epochs": 100,
         "gradient_clip_val": 1.0,
+        "train_batch_size": 128,
+        "num_workers": 8,           # LMDB path needs >= 8 at batch >= 512 (data-bound otherwise)
+        "pin_memory": True,
+        "warmup_epochs": 0,         # > 0 adds LinearWarmup (linear LR ramp, then ReduceLROnPlateau)
     }
 }
 ```
@@ -215,7 +234,12 @@ pytest tests/ --cov=qtaim_embed
 - `test_core.py`: Dataset functionality
 - `test_neighbors.py`: Radius/candidate/triplet construction vs brute force
 - `test_encoder_parity.py`: 3D encoders vs PyG reference blocks (weight-copy parity)
-- `test_equivariance.py`: Rotation invariance/equivariance of the 3D encoders
+- `test_equivariance.py`: Rotation invariance/equivariance of the 3D encoders (both `encoder_tp` modes)
+- `test_collate.py`: direct LMDB collate vs `Batch.from_data_list`
+- `test_warmup.py`: `LinearWarmup` callback
+- `test_layers_dense.py`, `test_models_dense.py`: `ResidualBlockDense` and dense models vs their `ResidualBlock` twins (exact parity, masked batch norm)
+- `test_bucketing.py`: `BucketBatchSampler` and the `LMDBDataModule` bucketing hook
+- `test_bond_pairs.py`, `test_bond_model.py`: bond-pair labels, candidate recall, pair head symmetry, `GCNBondPred` vs distance rule
 
 ### Adding New Features
 
@@ -299,12 +323,15 @@ qtaim-embed-bayes-opt-graph \
 | `qtaim-embed-train-graph` | Train graph-level regression |
 | `qtaim-embed-train-graph-classifier` | Train graph-level classification |
 | `qtaim-embed-train-node` | Train node-level prediction |
+| `qtaim-embed-train-bond` | Train the T3 bond classifier (`GCNBondPred`, LMDB only) |
+| `qtaim-embed-eval-bond-baselines` | Candidate recall and distance-rule reference table for T3 |
 | `qtaim-embed-bayes-opt-graph` | Bayesian optimization for graph models |
 | `qtaim-embed-bayes-opt-node` | Bayesian optimization for node models |
 | `qtaim-embed-bayes-opt-graph-classifier` | Bayesian optimization for classifiers |
 | `qtaim-embed-mol2lmdb` | Convert molecule data to LMDB |
 | `qtaim-embed-mol2lmdb-node` | Convert node-labeled data to LMDB |
 | `qtaim-embed-data-summary` | Summarize dataset statistics |
+| `qtaim-embed-bench` | Training-throughput harness (raw or Lightning mode, GPU util, kernels/step, data wait); configs in `profiling/bench_configs/`, results in `profiling/bench_results/` |
 
 ## Important Files to Know
 
@@ -325,7 +352,7 @@ qtaim-embed-bayes-opt-graph \
 3. **Featurization**: Generate atom, bond, and global features
 4. **Graph Construction**: Build heterogeneous PyG graphs
 5. **Scaling**: Normalize features (standard/log scales)
-6. **Batching**: Collate multiple graphs into batched PyG graphs
+6. **Batching**: Collate multiple graphs into batched PyG graphs (the LMDB loader uses `collate_hetero_direct`, 4x faster than `Batch.from_data_list`; output is a `HeteroData` with `batch`/`ptr`/`num_graphs`, not a `Batch`, so `to_data_list` is unavailable)
 7. **Model Prediction**: Pass through GNN layers with message passing
 8. **Pooling**: Aggregate node features to graph-level predictions
 9. **Loss & Optimization**: Compute loss, backpropagate, update weights
@@ -337,6 +364,7 @@ qtaim-embed-bayes-opt-graph \
 - Verify scaler serialization with `test_scalers.py` patterns
 - For LMDB issues, ensure proper closing of database connections
 - Use `torch.set_float32_matmul_precision("high")` for performance
+- Throughput questions: run `qtaim-embed-bench` first; measurements and gate decisions live in `docs/research/2026-09-track-a-measurements.md`
 
 ## W&B Integration
 
@@ -351,6 +379,8 @@ Sweep configs are in `scripts/train/sweep_config*.json`.
 
 
 ## Important Notes
+- `batch_norm` must stay True for the hetero conv stack: PyG's `GraphConv` has no degree normalization (the `norm` key is inert since the DGL migration), so on 40+ atom molecules activations grow 60-100x per block and a `batch_norm: False` model collapses to predicting the label mean. Measured 2026-09-09, `docs/research/2026-09-track-a-measurements.md`.
+- OPEN: even with batch norm on, the tm_react 40-epoch reference run (batch 128, lr 1e-3) diverges in eval mode from epoch 3 while train MSE stalls at 0.64; the global node's BN running variance is 10x the others (unnormalized a2g/b2g sums). Fix path (degree normalization, clipping, or mean aggregation for global edges) is undecided; do not change the conv math without asking. Details in the measurements doc, correctness section.
 - Research the codebase before editing. Never change code you haven't read. Also don't make changes to code without asking first.
 - Don't use emojis and emdashes anywhere
 - User instructions always override this file.

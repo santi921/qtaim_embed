@@ -39,6 +39,9 @@ qtaim-embed-data-summary = "qtaim_embed.scripts.vis.data_summary:main"
 qtaim-embed-mol2lmdb = "qtaim_embed.scripts.helpers.mol2lmdb:main"
 qtaim-embed-mol2lmdb-node = "qtaim_embed.scripts.helpers.mol2lmdb_node:main"
 qtaim-embed-train-link = "qtaim_embed.scripts.train.train_qtaim_link:main"
+qtaim-embed-bench = "qtaim_embed.scripts.bench.bench_train:main"
+qtaim-embed-train-bond = "qtaim_embed.scripts.train.train_qtaim_bond:main"
+qtaim-embed-eval-bond-baselines = "qtaim_embed.scripts.eval.eval_bond_baselines:main"
 
 # Optional: add project URLs
 [project.urls]

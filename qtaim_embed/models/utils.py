@@ -120,6 +120,8 @@ def load_graph_level_model_from_config(config):
             encoder_num_radial=config.get("encoder_num_radial", 6),
             encoder_lmax=config.get("encoder_lmax", 1),
             encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
+            encoder_tp=config.get("encoder_tp", "channelwise"),
+            dense_grid=config.get("dense_grid", 16),
         )
     else:
         logger.info("REGRESSION MODEL")
@@ -167,6 +169,8 @@ def load_graph_level_model_from_config(config):
             encoder_num_radial=config.get("encoder_num_radial", 6),
             encoder_lmax=config.get("encoder_lmax", 1),
             encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
+            encoder_tp=config.get("encoder_tp", "channelwise"),
+            dense_grid=config.get("dense_grid", 16),
         )
     # model.to(device)
 
@@ -260,6 +264,8 @@ def load_node_level_model_from_config(config):
         encoder_num_radial=config.get("encoder_num_radial", 6),
         encoder_lmax=config.get("encoder_lmax", 1),
         encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
+            encoder_tp=config.get("encoder_tp", "channelwise"),
+            dense_grid=config.get("dense_grid", 16),
     )
     # model.to(device)
 
@@ -363,6 +369,117 @@ def load_link_model_from_config(config):
         logger.debug("No initializer used")
 
     return model
+
+
+def load_bond_model_from_config(config):
+    """Build (or restore) a GCNBondPred from the model section of a config dict."""
+    from qtaim_embed.models.link_pred.bond_model import GCNBondPred
+
+    if config.get("restore", False):
+        path = config.get("restore_path") or (config.get("restore_dir", "./") + "/last.ckpt")
+        try:
+            model = GCNBondPred.load_from_checkpoint(checkpoint_path=path)
+            logger.info("BOND MODEL LOADED FROM %s", path)
+            return model
+        except Exception as e:
+            logger.warning(f"Checkpoint load failed: {e}; building a fresh model")
+
+    keys = [
+        "encoder_fn", "encoder_hidden", "encoder_cutoff", "encoder_n_interactions",
+        "encoder_num_gaussians", "encoder_num_radial", "encoder_lmax", "encoder_max_neighbors",
+        "encoder_tp",
+        "use_atom_feat", "atom_input_size", "embedding_size", "pool_multiplier",
+        "pair_rbf", "pair_rbf_n", "pair_rbf_cutoff", "pair_hidden", "pair_dropout",
+        "activation", "lr", "weight_decay", "scheduler_name", "lr_plateau_patience",
+        "lr_scale_factor", "threshold", "n_threshold_bins",
+    ]
+    kwargs = {k: config[k] for k in keys if k in config}
+    logger.info("BOND MODEL (encoder_fn=%s)", kwargs.get("encoder_fn", "schnet"))
+    model = GCNBondPred(**kwargs)
+
+    init = config.get("initializer", None)
+    if init == "kaiming":
+        kaiming_init(model)
+    elif init == "xavier":
+        xavier_init(model)
+    elif init == "equi_var":
+        equi_var_init(model)
+    return model
+
+
+def convert_model_to_dense(model):
+    """Copy of a trained conv_fn="ResidualBlock" model as "ResidualBlockDense".
+
+    Rebuilds the model from its saved hyperparameters with the dense conv
+    stack, loads every non-conv module's state (embedding, encoder, readout,
+    heads, metrics) and maps each ResidualBlock onto its DenseResidualBlock
+    with copy_residual_block_weights. Outputs match to fp32 precision.
+    """
+    import inspect
+    from qtaim_embed.models.layers_dense import copy_residual_block_weights
+
+    assert model.hparams.conv_fn == "ResidualBlock", "only ResidualBlock models convert"
+    sig = inspect.signature(type(model).__init__).parameters
+    # hparams carries ctor args plus derived names for a few of them
+    aliases = {
+        "batch_norm": "batch_norm_tf", "num_heads_gat": "num_heads",
+        "dropout_feat_gat": "feat_drop", "dropout_attn_gat": "attn_drop",
+        "residual_gat": "residual", "pooling_ntypes": "ntypes_pool",
+        "pooling_ntypes_direct": "ntypes_pool_direct_cat",
+    }
+    kwargs = {}
+    for k in sig:
+        if k == "self":
+            continue
+        if k in model.hparams:
+            kwargs[k] = model.hparams[k]
+        elif aliases.get(k) in model.hparams:
+            kwargs[k] = model.hparams[aliases[k]]
+    act = kwargs.get("activation")
+    if act is not None and not isinstance(act, str):
+        kwargs["activation"] = type(act).__name__
+    kwargs["conv_fn"] = "ResidualBlockDense"
+    kwargs["compiled"] = False
+    dense = type(model)(**kwargs)
+    keep = {k: v for k, v in model.state_dict().items() if not k.startswith("conv_layers.")}
+    missing, unexpected = dense.load_state_dict(keep, strict=False)
+    assert not unexpected, unexpected
+    assert all(k.startswith("conv_layers.") for k in missing), missing
+    for src, dst in zip(model.conv_layers, dense.conv_layers):
+        copy_residual_block_weights(src, dst)
+    dense.train(model.training)
+    return dense
+
+
+class LinearWarmup(pl.Callback):
+    """Linear learning-rate warmup over the first `warmup_epochs` epochs.
+
+    ReduceLROnPlateau (the project scheduler) cannot be chained with
+    SequentialLR, so the warmup is a callback: it scales every param group
+    from base_lr / n_steps up to base_lr on each training step of the warmup
+    window and then stops touching the optimizer, leaving the plateau
+    scheduler in charge. Fractional epochs are allowed. Used with the linear
+    batch-size LR scaling rule (performance plan A1).
+    """
+
+    def __init__(self, warmup_epochs: float):
+        super().__init__()
+        self.warmup_epochs = float(warmup_epochs)
+        self._base_lrs = None
+        self._total_steps = 0
+
+    def on_train_start(self, trainer, pl_module):
+        self._base_lrs = [[g["lr"] for g in opt.param_groups] for opt in trainer.optimizers]
+        self._total_steps = int(round(self.warmup_epochs * trainer.num_training_batches))
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        step = trainer.global_step
+        if self._total_steps <= 0 or step >= self._total_steps:
+            return
+        factor = (step + 1) / self._total_steps
+        for opt, base in zip(trainer.optimizers, self._base_lrs):
+            for group, lr in zip(opt.param_groups, base):
+                group["lr"] = lr * factor
 
 
 class LogParameters(pl.Callback):

@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 from functools import partial
 import pytorch_lightning as pl
 from qtaim_embed.data.dataloader import (
@@ -8,6 +9,7 @@ from qtaim_embed.data.dataloader import (
     DataLoaderMoleculeGraphTask,
     DataLoaderLMDB,
     DataLoaderLinkLMDB,
+    DataLoaderBondLMDB,
 )
 
 from qtaim_embed.utils.data import (
@@ -727,96 +729,67 @@ class LMDBDataModule(pl.LightningDataModule):
 
         self._setup_done = True
 
-    def train_dataloader(self):
+    def _bucket_sampler(self, dataset, lmdb_loc, shuffle):
+        """BucketBatchSampler for `dataset` when config["dataset"]["bucketing"] is set.
+
+        Groups graphs by padded (atoms, bonds) shape so ResidualBlockDense sees a
+        few static shapes per epoch (performance plan A3). Sizes are read once
+        and cached next to the LMDB (or in config["dataset"]["bucket_cache_dir"]).
+        """
+        from qtaim_embed.data.bucketing import BucketBatchSampler, graph_sizes
+
+        grid = int(self.config["dataset"].get("bucket_grid", self.config["model"].get("dense_grid", 16)))
+        cache_dir = self.config["dataset"].get("bucket_cache_dir")
+        base = Path(lmdb_loc)
+        base = base.parent if base.is_file() else base
+        cache = (Path(cache_dir) if cache_dir else base) / f".qtaim_sizes_{base.name}.npz"
+        atoms, bonds = graph_sizes(dataset, cache_path=str(cache),
+                                   num_workers=self.config["optim"].get("num_workers", 0))
+        sampler = BucketBatchSampler(
+            atoms, bonds, batch_size=self.config["optim"]["train_batch_size"], grid=grid,
+            shuffle=shuffle, seed=self.config["dataset"].get("seed", 0),
+        )
+        logger.info("bucketing %s: %d shape classes, padding waste %.1f %%, %d batches/epoch",
+                    base.name, len(sampler.classes), 100 * sampler.padding_waste(), len(sampler))
+        return sampler
+
+    def _loader(self, dataset, lmdb_loc, shuffle, **extra):
+        if self.config["dataset"].get("bucketing", False):
+            return DataLoaderLMDB(
+                dataset=dataset,
+                batch_sampler=self._bucket_sampler(dataset, lmdb_loc, shuffle),
+                num_workers=self.config["optim"]["num_workers"],
+                **extra,
+            )
         return DataLoaderLMDB(
-            dataset=self.train_dataset,
+            dataset=dataset,
             batch_size=self.config["optim"]["train_batch_size"],
-            shuffle=True,
+            shuffle=shuffle,
             num_workers=self.config["optim"]["num_workers"],
+            **extra,
+        )
+
+    def train_dataloader(self):
+        return self._loader(
+            self.train_dataset, self.train_lmdb_loc, shuffle=True,
             pin_memory=self.config["optim"]["pin_memory"],
             persistent_workers=self.config["optim"]["persistent_workers"],
         )
 
     def test_dataloader(self):
-        return DataLoaderLMDB(
-            dataset=self.test_dataset,
-            batch_size=self.config["optim"]["train_batch_size"],
-            shuffle=False,
-            num_workers=self.config["optim"]["num_workers"],
-        )
+        return self._loader(self.test_dataset, self.test_lmdb_loc, shuffle=False)
 
     def val_dataloader(self):
-        return DataLoaderLMDB(
-            dataset=self.val_dataset,
-            batch_size=self.config["optim"]["train_batch_size"],
-            shuffle=False,
-            num_workers=self.config["optim"]["num_workers"],
-        )
+        return self._loader(self.val_dataset, self.val_lmdb_loc, shuffle=False)
 
 
-class LMDBLinkDataModule(pl.LightningDataModule):
+class LMDBLinkDataModule(LMDBDataModule):
+    """LMDB data module for GCNLinkPred: same dataset construction as
+    LMDBDataModule, homograph conversion plus negative sampling in the collate."""
+
     def __init__(self, config):
-        super().__init__()
-
-        self.config = config
-        self.train_lmdb_loc = config["dataset"]["train_lmdb"]
-
-        if "val_lmdb" in self.config["dataset"]:
-            self.val_lmdb_loc = config["dataset"]["val_lmdb"]
-
-        if "test_lmdb" in self.config["dataset"]:
-            self.test_lmdb_loc = config["dataset"]["test_lmdb"]
-
-        if "edge_dropout" not in self.config["dataset"].keys():
-            logger.info("No edge dropout on datamodule")
-            self.transforms = None
-        elif not isinstance(self.config["dataset"]["edge_dropout"], float):
-            logger.info("No edge dropout on datamodule")
-            self.transforms = None
-        else:
-            if self.config["dataset"]["edge_dropout"] > 0.0:
-                logger.info("Using edge dropout on datamodule")
-                self.transforms = DropBondHeterograph(
-                    p=config["dataset"]["edge_dropout"]
-                )
-            else:
-                self.transforms = None
-
-        # See LMDBDataModule: default float32, override via config dtype.
-        self._feature_dtype = self.config["dataset"].get("dtype", "float32")
-
-        self._setup_done = False
+        super().__init__(config)
         self.node_len = None
-
-    def prepare_data(self, stage=None):
-        # No-op: in DDP, prepare_data runs only on rank 0.
-        # LMDB files already exist on disk; dataset creation is in setup().
-        pass
-
-    def setup(self, stage=None):
-        if self._setup_done:
-            return
-
-        transform = partial(TransformMol, dtype=self._feature_dtype)
-
-        if "test_lmdb" in self.config["dataset"]:
-            self.test_dataset = LMDBMoleculeDataset(
-                config={"src": _resolve_lmdb_path(self.test_lmdb_loc)},
-                transform=transform,
-            )
-
-        if "val_lmdb" in self.config["dataset"]:
-            self.val_dataset = LMDBMoleculeDataset(
-                config={"src": _resolve_lmdb_path(self.val_lmdb_loc)},
-                transform=transform,
-            )
-
-        self.train_dataset = LMDBMoleculeDataset(
-            config={"src": _resolve_lmdb_path(self.train_lmdb_loc)},
-            transform=transform,
-        )
-
-        self._setup_done = True
 
     def _get_node_len(self, dl):
         """Lazily compute node_len from a DataLoader batch if not yet known."""
@@ -824,30 +797,66 @@ class LMDBLinkDataModule(pl.LightningDataModule):
             _, _, ft = next(iter(dl))
             self.node_len = ft.shape[1]
 
-    def train_dataloader(self):
-        dl = DataLoaderLinkLMDB(
-            dataset=self.train_dataset,
-            batch_size=self.config["optim"]["train_batch_size"],
-            shuffle=True,
-            num_workers=self.config["optim"]["num_workers"],
-            pin_memory=self.config["optim"]["pin_memory"],
-            persistent_workers=self.config["optim"]["persistent_workers"],
+    def _loader(self, dataset, shuffle):
+        optim = self.config["optim"]
+        return DataLoaderLinkLMDB(
+            dataset=dataset,
+            transforms=self.transforms,
+            batch_size=optim["train_batch_size"],
+            shuffle=shuffle,
+            num_workers=optim["num_workers"],
+            pin_memory=optim.get("pin_memory", False),
+            persistent_workers=bool(optim.get("persistent_workers", False)) and optim["num_workers"] > 0,
         )
+
+    def train_dataloader(self):
+        dl = self._loader(self.train_dataset, shuffle=True)
         self._get_node_len(dl)
         return dl
 
     def test_dataloader(self):
-        return DataLoaderLinkLMDB(
-            dataset=self.test_dataset,
-            batch_size=self.config["optim"]["train_batch_size"],
-            shuffle=False,
-            num_workers=self.config["optim"]["num_workers"],
-        )
+        return self._loader(self.test_dataset, shuffle=False)
 
     def val_dataloader(self):
-        return DataLoaderLinkLMDB(
-            dataset=self.val_dataset,
-            batch_size=self.config["optim"]["train_batch_size"],
-            shuffle=False,
-            num_workers=self.config["optim"]["num_workers"],
+        return self._loader(self.val_dataset, shuffle=False)
+
+
+class LMDBBondDataModule(LMDBDataModule):
+    """LMDB data module for GCNBondPred.
+
+    Same config shape and dataset construction as LMDBDataModule (train/val/test
+    LMDB paths, dtype, optim.*); differs only in the collate, which returns the
+    batched HeteroData alone since candidates and labels are built in the model
+    step. dataset.val_lmdb is required: the decision threshold is calibrated on
+    validation.
+    """
+
+    def __init__(self, config):
+        assert "val_lmdb" in config["dataset"] and config["dataset"]["val_lmdb"] is not None, (
+            "LMDBBondDataModule needs dataset.val_lmdb: the decision threshold is calibrated on validation"
         )
+        super().__init__(config)
+
+    def _loader(self, dataset, shuffle):
+        optim = self.config["optim"]
+        num_workers = optim.get("num_workers", 0)
+        return DataLoaderBondLMDB(
+            dataset=dataset,
+            transforms=self.transforms,
+            batch_size=optim["train_batch_size"],
+            shuffle=shuffle,
+            num_workers=num_workers,
+            pin_memory=optim.get("pin_memory", False),
+            persistent_workers=bool(optim.get("persistent_workers", False)) and num_workers > 0,
+        )
+
+    def train_dataloader(self):
+        return self._loader(self.train_dataset, shuffle=True)
+
+    def val_dataloader(self):
+        return self._loader(self.val_dataset, shuffle=False)
+
+    def test_dataloader(self):
+        if not hasattr(self, "test_dataset"):
+            raise ValueError("dataset.test_lmdb is not set; nothing to test on")
+        return self._loader(self.test_dataset, shuffle=False)

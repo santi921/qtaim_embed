@@ -1461,8 +1461,15 @@ class LMDBMoleculeDataset(LMDBBaseDataset):
 
     def _first_graph_has_pos(self, env) -> Optional[bool]:
         """Whether a shard's first graph carries atom.pos. None if the shard
-        has no graph at key 0."""
-        raw = env.begin().get(b"0")
+        holds no sample records (sample keys are decimal strings; metadata
+        keys are not). Uses a cursor so shards whose indices do not start at
+        0 (global or offset indexing) are still checked."""
+        raw = None
+        with env.begin() as txn:
+            for key, value in txn.cursor():
+                if key.isdigit():
+                    raw = value
+                    break
         if raw is None:
             return None
         # Local import: data.lmdb imports Subset from this module at top level.

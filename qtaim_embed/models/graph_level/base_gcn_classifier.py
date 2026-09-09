@@ -35,6 +35,8 @@ from qtaim_embed.models.layers import (
     EDGE_TYPE_MAP,
 )
 from qtaim_embed.models.encoders import ENCODER_FNS, build_encoder, encode_atom_inputs
+from qtaim_embed.models.layers_dense import DenseHeteroBatch, DenseResidualBlock, to_dense_hetero
+from qtaim_embed.models.optim import build_adam
 
 
 class GCNGraphPredClassifier(pl.LightningModule):
@@ -73,6 +75,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
         encoder_num_radial: int, dimenetpp/equivariant radial basis size
         encoder_lmax: int, max spherical harmonic l (equivariant only)
         encoder_max_neighbors: int, nearest-neighbor cap (dimenetpp only)
+        encoder_tp: str, equivariant tensor product, "channelwise" (default) or "fully_connected"
+        dense_grid: int, ResidualBlockDense pads molecules to multiples of this many atoms/bonds
 
     """
 
@@ -121,6 +125,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
         encoder_num_radial=6,
         encoder_lmax=1,
         encoder_max_neighbors=32,
+        encoder_tp: str = "channelwise",
+        dense_grid: int = 16,
     ):
         super().__init__()
         self.learning_rate = lr
@@ -142,7 +148,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             + f"but got {global_pooling}"
         )
 
-        if conv_fn == "ResidualBlock":
+        if conv_fn in ("ResidualBlock", "ResidualBlockDense"):
             assert resid_n_graph_convs is not None, (
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
@@ -199,6 +205,8 @@ class GCNGraphPredClassifier(pl.LightningModule):
             "encoder_num_radial": encoder_num_radial,
             "encoder_lmax": encoder_lmax,
             "encoder_max_neighbors": encoder_max_neighbors,
+            "encoder_tp": encoder_tp,
+            "dense_grid": dense_grid,
         }
 
         self.hparams.update(params)
@@ -251,7 +259,12 @@ class GCNGraphPredClassifier(pl.LightningModule):
                     )
                 )
 
-        elif self.hparams.conv_fn == "ResidualBlock":
+        elif self.hparams.conv_fn in ("ResidualBlock", "ResidualBlockDense"):
+            block_cls = (
+                DenseResidualBlock
+                if self.hparams.conv_fn == "ResidualBlockDense"
+                else ResidualBlock
+            )
             layer_tracker = 0
             embedding_in = True
 
@@ -282,7 +295,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
                     output_block = True
 
                 self.conv_layers.append(
-                    ResidualBlock(
+                    block_cls(
                         layer_args,
                         resid_n_graph_convs=self.hparams.resid_n_graph_convs,
                         aggregate=self.hparams.aggregate,
@@ -314,6 +327,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
+        self._dense_blocks_fn = self._run_dense_blocks
         # print("conv layer out modes", self.conv_layers[-1].mods)
 
         # print("conv layer out feats", self.conv_layers[-1].out_feats)
@@ -325,7 +339,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
                 short_name = triplet_key[1]  # e.g., ("atom", "a2b", "bond") -> "a2b"
                 conv_out_size[short_name] = conv_module.out_feats
 
-        elif self.hparams.conv_fn == "ResidualBlock":
+        elif self.hparams.conv_fn in ("ResidualBlock", "ResidualBlockDense"):
             conv_out_size = self.conv_layers[-1].out_feats
 
         elif self.hparams.conv_fn == "GATConv":
@@ -464,6 +478,30 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         self.loss = self.loss_function()
 
+    def _dense_conv_stack(self, graph, feats):
+        """conv_fn="ResidualBlockDense": pad to (N_b, B_b) blocks, run the blocks
+        (as one compiled CUDA graph when compiled=True), return flat features."""
+        dense = to_dense_hetero(graph, feats, grid=self.hparams.dense_grid)
+        # valid-row indices are dynamic in size; only the eager path uses them
+        # (cuDNN batch norm on valid rows), the compiled path keeps static shapes
+        eager = self._dense_blocks_fn == self._run_dense_blocks
+        xa, xb, xg = self._dense_blocks_fn(
+            dense.x["atom"], dense.x["bond"], dense.x["global"],
+            dense.inc_a2b, dense.inc_b2a, dense.mask["atom"], dense.mask["bond"],
+            dense.valid["atom"] if eager else None, dense.valid["bond"] if eager else None,
+        )
+        return dense.to_flat({"atom": xa, "bond": xb, "global": xg})
+
+    def _run_dense_blocks(self, xa, xb, xg, inc_a2b, inc_b2a, ma, mb, va=None, vb=None):
+        # tensor-only signature so torch.compile sees static shapes per bucket
+        dense = DenseHeteroBatch(x={}, mask={"atom": ma, "bond": mb}, inc_a2b=inc_a2b,
+                                 inc_b2a=inc_b2a, num_graphs=xa.shape[0],
+                                 valid=None if va is None else {"atom": va, "bond": vb})
+        x = {"atom": xa, "bond": xb, "global": xg}
+        for conv in self.conv_layers:
+            x = conv(dense, x)
+        return x["atom"], x["bond"], x["global"]
+
     def forward(self, graph, inputs):
         """
         Forward pass
@@ -478,11 +516,13 @@ class GCNGraphPredClassifier(pl.LightningModule):
             for key in graph.edge_types
         }
 
-        for ind, conv in enumerate(self.conv_layers):
-            if self.hparams.conv_fn == "ResidualBlock":
-                feats = conv(feats, edge_index_dict)
-            else:
-                feats = conv(feats, edge_index_dict)
+        if self.hparams.conv_fn == "ResidualBlockDense":
+            feats = self._dense_conv_stack(graph, feats)
+            conv_iter = ()
+        else:
+            conv_iter = enumerate(self.conv_layers)
+        for ind, conv in conv_iter:
+            feats = conv(feats, edge_index_dict)
             if self.hparams.conv_fn == "GATConv":
                 reshaped_feats = {}
                 for k, v in feats.items():
@@ -569,8 +609,9 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         # gated layer
         for layer in self.conv_layers[:-1]:
-            if self.hparams.conv_fn == "ResidualBlock":
-                feats = layer(feats, edge_index_dict)
+            if self.hparams.conv_fn == "ResidualBlockDense":
+                dense = to_dense_hetero(graph, feats, grid=self.hparams.dense_grid)
+                feats = dense.to_flat(layer(dense, dense.x))
             else:
                 feats = layer(feats, edge_index_dict)
             # store bond feature of each molecule
@@ -700,22 +741,10 @@ class GCNGraphPredClassifier(pl.LightningModule):
         return f1, auroc
 
     def configure_optimizers(self):
-        params = list(filter(lambda p: p.requires_grad, self.parameters()))
-        # fused Adam is incompatible with gradient clipping under mixed precision
-        use_fused = self.trainer.gradient_clip_val in (None, 0, 0.0)
-        try:
-            optimizer = torch.optim.Adam(
-                params,
-                lr=self.hparams.lr,
-                weight_decay=self.hparams.weight_decay,
-                fused=use_fused,
-            )
-        except RuntimeError:
-            optimizer = torch.optim.Adam(
-                params,
-                lr=self.hparams.lr,
-                weight_decay=self.hparams.weight_decay,
-            )
+        params = filter(lambda p: p.requires_grad, self.parameters())
+        optimizer = build_adam(
+            self, params, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
+        )
 
         scheduler = self._config_lr_scheduler(optimizer)
 
