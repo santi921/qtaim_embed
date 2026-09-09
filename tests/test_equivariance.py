@@ -1,3 +1,4 @@
+import pytest
 import torch
 import e3nn.o3 as o3
 
@@ -31,6 +32,27 @@ class TestEquivariantEncoder:
             h = enc.forward_features(pos, z)
         D = enc.irreps_h.D_from_matrix(R)
         assert torch.allclose(h_rot, h @ D.T, atol=1e-4)
+
+    @pytest.mark.parametrize("tp_mode", ["channelwise", "fully_connected"])
+    def test_both_tensor_products_invariant_and_equivariant(self, tp_mode):
+        torch.manual_seed(11)
+        enc = EquivariantEncoder(hidden_channels=8, num_interactions=2, lmax=1, tp_mode=tp_mode).eval()
+        pos, z = torch.randn(9, 3) * 2.0, torch.randint(1, 20, (9,))
+        R = o3.rand_matrix()
+        D = enc.irreps_h.D_from_matrix(R)
+        with torch.no_grad():
+            h = enc.forward_features(pos, z)
+            h_rot = enc.forward_features(pos @ R.T, z)
+        assert torch.allclose(h_rot, h @ D.T, atol=1e-4)
+        assert torch.allclose(enc(pos @ R.T, z), enc(pos, z), atol=1e-4)
+
+    def test_channelwise_weights_per_edge_are_small(self):
+        cw = EquivariantEncoder(hidden_channels=64, num_interactions=1, lmax=1)
+        fc = EquivariantEncoder(hidden_channels=64, num_interactions=1, lmax=1, tp_mode="fully_connected")
+        assert cw.tensor_products[0].weight_numel == 256
+        assert fc.tensor_products[0].weight_numel == 16384
+        with pytest.raises(ValueError):
+            EquivariantEncoder(tp_mode="dense")
 
     def test_l1_block_is_nonzero(self):
         # the vector channels must actually carry signal, otherwise the

@@ -22,8 +22,9 @@ def get_layer_args(
     assert hparams.conv_fn in [
         "GraphConvDropoutBatch",
         "ResidualBlock",
+        "ResidualBlockDense",
         "GATConv",
-    ], "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
+    ], "conv_fn must be GraphConvDropoutBatch, GATConv, ResidualBlock or ResidualBlockDense"
 
     layer_args = {}
     if hparams.conv_fn == "GraphConvDropoutBatch":
@@ -158,7 +159,7 @@ def get_layer_args(
             "batch_norm_tf": hparams.batch_norm_tf,
         }
 
-    elif hparams.conv_fn == "ResidualBlock":
+    elif hparams.conv_fn in ("ResidualBlock", "ResidualBlockDense"):
 
         atom_out = hparams.atom_input_size
         bond_out = hparams.bond_input_size
@@ -515,6 +516,24 @@ def get_layer_args(
             "concat": True,
         }
 
+    if hparams.conv_fn in ("GraphConvDropoutBatch", "ResidualBlock", "ResidualBlockDense"):
+        bn_first = bool(getattr(hparams, "bn_before_activation", False))
+        global_mean = getattr(hparams, "global_aggr", "sum") == "mean"
+        if hparams.conv_fn == "GraphConvDropoutBatch":
+            last_layer = layer_ind == hparams.n_conv_layers - 1
+        else:
+            last_layer = layer_ind == -1  # output block; its non-"_inner" entries are the final conv
+        for key, args in layer_args.items():
+            args["bn_before_activation"] = bn_first
+            # mean over a molecule's atoms / bonds into its global node; every
+            # other relation keeps the additive aggregation
+            args["aggr"] = "mean" if global_mean and key.split("_")[0] in ("a2g", "b2g") else "add"
+            if bn_first and last_layer and not key.endswith("_inner"):
+                # the final prediction layer stays linear: in the original order
+                # the trailing batch norm re-centres the ReLU output, with batch
+                # norm first a trailing ReLU would clamp the targets at zero
+                args["activation"] = None
+                args["batch_norm_tf"] = False
     return layer_args
 
 

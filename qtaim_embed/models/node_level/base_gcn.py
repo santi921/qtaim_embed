@@ -68,6 +68,8 @@ class GCNNodePred(pl.LightningModule):
         encoder_max_neighbors: int, nearest-neighbor cap (dimenetpp only)
         encoder_tp: str, equivariant tensor product, "channelwise" (default) or "fully_connected"
         dense_grid: int, ResidualBlockDense pads molecules to multiples of this many atoms/bonds
+        bn_before_activation: bool, conv -> BN -> activation -> dropout instead of BN last (see docs/research/2026-09-tm-react-eval-divergence.md)
+        global_aggr: str, "sum" (GraphConv add) or "mean" for the a2g / b2g relations into the global node
 
     """
 
@@ -106,9 +108,11 @@ class GCNNodePred(pl.LightningModule):
         encoder_num_gaussians: int = 50,
         encoder_num_radial: int = 6,
         encoder_lmax: int = 1,
-        encoder_max_neighbors: int = 32,
+        encoder_max_neighbors: int = 16,
         encoder_tp: str = "channelwise",
         dense_grid: int = 16,
+        bn_before_activation: bool = False,
+        global_aggr: str = "sum",
     ):
         super().__init__()
         self.learning_rate = lr
@@ -184,6 +188,8 @@ class GCNNodePred(pl.LightningModule):
             "encoder_max_neighbors": encoder_max_neighbors,
             "encoder_tp": encoder_tp,
             "dense_grid": dense_grid,
+            "bn_before_activation": bn_before_activation,
+            "global_aggr": global_aggr,
         }
 
         self.hparams.update(params)
@@ -393,11 +399,14 @@ class GCNNodePred(pl.LightningModule):
     def _dense_conv_stack(self, graph, feats):
         """conv_fn="ResidualBlockDense": pad to (N_b, B_b) blocks, run the blocks
         (as one compiled CUDA graph when compiled=True), return flat features."""
-        dense = to_dense_hetero(graph, feats, grid=self.hparams.dense_grid)
-        # valid-row indices are dynamic in size; only the eager path uses them
-        # (cuDNN batch norm on valid rows), the compiled path keeps static shapes
-        eager = self._dense_blocks_fn == self._run_dense_blocks
-        xa, xb, xg = self._dense_blocks_fn(
+        # eval always runs the eager blocks (cuDNN batch norm on the valid rows,
+        # no recompiles for ragged eval batches); training uses the compiled
+        # CUDA graphs when compiled=True, keyed by the bucket's stamped shape
+        fn = self._dense_blocks_fn if self.training else self._run_dense_blocks
+        eager = fn == self._run_dense_blocks
+        dense = to_dense_hetero(graph, feats, grid=self.hparams.dense_grid,
+                                shape=getattr(graph, "dense_shape", None), with_valid=eager)
+        xa, xb, xg = fn(
             dense.x["atom"], dense.x["bond"], dense.x["global"],
             dense.inc_a2b, dense.inc_b2a, dense.mask["atom"], dense.mask["bond"],
             dense.valid["atom"] if eager else None, dense.valid["bond"] if eager else None,

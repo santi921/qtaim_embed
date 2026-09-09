@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from functools import partial
 import pytorch_lightning as pl
+import torch
 from qtaim_embed.data.dataloader import (
     DataLoaderMoleculeNodeTask,
     DataLoaderLinkTaskHeterograph,
@@ -735,6 +736,9 @@ class LMDBDataModule(pl.LightningDataModule):
         Groups graphs by padded (atoms, bonds) shape so ResidualBlockDense sees a
         few static shapes per epoch (performance plan A3). Sizes are read once
         and cached next to the LMDB (or in config["dataset"]["bucket_cache_dir"]).
+        The train sampler drops each class's ragged last batch
+        (config["dataset"]["bucket_drop_last"], default True) so the batch
+        dimension is static too; eval samplers keep every graph.
         """
         from qtaim_embed.data.bucketing import BucketBatchSampler, graph_sizes
 
@@ -745,19 +749,39 @@ class LMDBDataModule(pl.LightningDataModule):
         cache = (Path(cache_dir) if cache_dir else base) / f".qtaim_sizes_{base.name}.npz"
         atoms, bonds = graph_sizes(dataset, cache_path=str(cache),
                                    num_workers=self.config["optim"].get("num_workers", 0))
+        rank, world_size = 0, 1
+        if torch.distributed.is_available() and torch.distributed.is_initialized():
+            rank, world_size = torch.distributed.get_rank(), torch.distributed.get_world_size()
         sampler = BucketBatchSampler(
             atoms, bonds, batch_size=self.config["optim"]["train_batch_size"], grid=grid,
             shuffle=shuffle, seed=self.config["dataset"].get("seed", 0),
+            drop_last=shuffle and self.config["dataset"].get("bucket_drop_last", True),
+            rank=rank, world_size=world_size,
         )
-        logger.info("bucketing %s: %d shape classes, padding waste %.1f %%, %d batches/epoch",
-                    base.name, len(sampler.classes), 100 * sampler.padding_waste(), len(sampler))
+        logger.info("bucketing %s: %d shape classes, padding waste %.1f %%, %d batches/epoch (rank %d of %d)",
+                    base.name, len(sampler.classes), 100 * sampler.padding_waste(), len(sampler),
+                    rank, world_size)
         return sampler
 
     def _loader(self, dataset, lmdb_loc, shuffle, **extra):
-        if self.config["dataset"].get("bucketing", False):
+        """DataLoaderLMDB, bucketed when config["dataset"]["bucketing"] is set.
+
+        Bucketing also applies to the val/test loaders by default so a compiled
+        dense model sees the same static shapes in eval mode; their iteration
+        order is then class-major, not dataset order (see
+        `loader.batch_sampler.indices()` to realign per-sample outputs). Set
+        config["dataset"]["bucketing_eval"] = False to keep eval loaders in
+        dataset order (each eval batch then pads to its own maximum).
+        """
+        bucketing = self.config["dataset"].get("bucketing", False)
+        if bucketing and not shuffle and not self.config["dataset"].get("bucketing_eval", True):
+            bucketing = False
+        if bucketing:
+            sampler = self._bucket_sampler(dataset, lmdb_loc, shuffle)
             return DataLoaderLMDB(
                 dataset=dataset,
-                batch_sampler=self._bucket_sampler(dataset, lmdb_loc, shuffle),
+                batch_sampler=sampler,
+                dense_shape_of=sampler.batch_shape,
                 num_workers=self.config["optim"]["num_workers"],
                 **extra,
             )

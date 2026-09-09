@@ -1,6 +1,7 @@
 import torch
 import pytest
 
+import qtaim_embed.models.encoders.neighbors as nb
 from qtaim_embed.models.encoders.neighbors import (
     RCOV,
     radius_neighbors,
@@ -76,6 +77,46 @@ class TestRadiusNeighbors:
         edge_index, _ = radius_neighbors(pos, batch, cutoff=5.0, chunk=7)
         assert (batch[edge_index[0]] == batch[edge_index[1]]).all()
         assert edge_index.shape[1] == 2 * 15 * 14  # both dense blocks, no cross
+
+
+    def test_dense_vs_brute_force_uneven_batch(self):
+        # three molecules of different sizes, so to_dense_batch pads and the
+        # flat-index remap (ptr[g] + local) must be right for every block
+        torch.manual_seed(7)
+        sizes = [5, 23, 12]
+        pos = torch.cat([torch.rand(n, 3) * 4.0 for n in sizes])
+        batch = torch.cat([torch.full((n,), g, dtype=torch.long) for g, n in enumerate(sizes)])
+        edge_index, d = radius_neighbors(pos, batch, cutoff=2.5)
+        got = set(zip(edge_index[0].tolist(), edge_index[1].tolist()))
+        assert got == _brute_radius(pos, batch, 2.5)
+        assert torch.equal(d, torch.norm(pos[edge_index[0]] - pos[edge_index[1]], dim=-1))
+
+    def test_dense_and_chunked_agree(self):
+        torch.manual_seed(8)
+        sizes = [9, 30, 17, 2]
+        pos = torch.cat([torch.rand(n, 3) * 5.0 for n in sizes])
+        batch = torch.cat([torch.full((n,), g, dtype=torch.long) for g, n in enumerate(sizes)])
+        ei_dense = nb._radius_neighbors_dense(pos, batch, 3.0)
+        ei_chunk = nb._radius_neighbors_chunked(pos, batch, 3.0, chunk=7)
+        as_set = lambda ei: set(zip(ei[0].tolist(), ei[1].tolist()))
+        assert as_set(ei_dense) == as_set(ei_chunk)
+
+    def test_chunked_fallback_when_block_too_large(self, monkeypatch):
+        # force the fallback so the batched chunked path stays covered
+        monkeypatch.setattr(nb, "_DENSE_MAX_ELEMENTS", 1)
+        torch.manual_seed(9)
+        sizes = [11, 19]
+        pos = torch.cat([torch.rand(n, 3) * 4.0 for n in sizes])
+        batch = torch.cat([torch.full((n,), g, dtype=torch.long) for g, n in enumerate(sizes)])
+        edge_index, _ = radius_neighbors(pos, batch, cutoff=2.5, chunk=7)
+        got = set(zip(edge_index[0].tolist(), edge_index[1].tolist()))
+        assert got == _brute_radius(pos, batch, 2.5)
+
+    def test_empty_neighborhood(self):
+        pos = torch.tensor([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 10.0, 0.0]])
+        batch = torch.tensor([0, 0, 1])
+        edge_index, d = radius_neighbors(pos, batch, cutoff=1.0)
+        assert edge_index.shape == (2, 0) and d.shape == (0,)
 
 
 class TestCandidatePairs:

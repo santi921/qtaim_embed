@@ -1,4 +1,5 @@
 import logging
+import math
 import torch
 import numpy as np
 import pytorch_lightning as pl
@@ -119,9 +120,11 @@ def load_graph_level_model_from_config(config):
             encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
             encoder_num_radial=config.get("encoder_num_radial", 6),
             encoder_lmax=config.get("encoder_lmax", 1),
-            encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
+            encoder_max_neighbors=config.get("encoder_max_neighbors", 16),
             encoder_tp=config.get("encoder_tp", "channelwise"),
             dense_grid=config.get("dense_grid", 16),
+            bn_before_activation=config.get("bn_before_activation", True),
+            global_aggr=config.get("global_aggr", "sum"),
         )
     else:
         logger.info("REGRESSION MODEL")
@@ -168,9 +171,11 @@ def load_graph_level_model_from_config(config):
             encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
             encoder_num_radial=config.get("encoder_num_radial", 6),
             encoder_lmax=config.get("encoder_lmax", 1),
-            encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
+            encoder_max_neighbors=config.get("encoder_max_neighbors", 16),
             encoder_tp=config.get("encoder_tp", "channelwise"),
             dense_grid=config.get("dense_grid", 16),
+            bn_before_activation=config.get("bn_before_activation", True),
+            global_aggr=config.get("global_aggr", "sum"),
         )
     # model.to(device)
 
@@ -263,9 +268,11 @@ def load_node_level_model_from_config(config):
         encoder_num_gaussians=config.get("encoder_num_gaussians", 50),
         encoder_num_radial=config.get("encoder_num_radial", 6),
         encoder_lmax=config.get("encoder_lmax", 1),
-        encoder_max_neighbors=config.get("encoder_max_neighbors", 32),
-            encoder_tp=config.get("encoder_tp", "channelwise"),
-            dense_grid=config.get("dense_grid", 16),
+        encoder_max_neighbors=config.get("encoder_max_neighbors", 16),
+        encoder_tp=config.get("encoder_tp", "channelwise"),
+        dense_grid=config.get("dense_grid", 16),
+        bn_before_activation=config.get("bn_before_activation", True),
+        global_aggr=config.get("global_aggr", "sum"),
     )
     # model.to(device)
 
@@ -469,8 +476,24 @@ class LinearWarmup(pl.Callback):
         self._total_steps = 0
 
     def on_train_start(self, trainer, pl_module):
-        self._base_lrs = [[g["lr"] for g in opt.param_groups] for opt in trainer.optimizers]
-        self._total_steps = int(round(self.warmup_epochs * trainer.num_training_batches))
+        if self._base_lrs is None:
+            # first start; on a checkpoint resume the base LRs come from
+            # load_state_dict, since the live param-group lr is mid-ramp
+            self._base_lrs = [
+                [g.get("initial_lr", g["lr"]) for g in opt.param_groups]
+                for opt in trainer.optimizers
+            ]
+        n_batches = trainer.num_training_batches
+        if not math.isfinite(n_batches):
+            raise ValueError("LinearWarmup needs a sized train dataloader (num_training_batches is inf)")
+        self._total_steps = int(round(self.warmup_epochs * n_batches))
+
+    def state_dict(self):
+        return {"base_lrs": self._base_lrs, "total_steps": self._total_steps}
+
+    def load_state_dict(self, state_dict):
+        self._base_lrs = state_dict.get("base_lrs")
+        self._total_steps = int(state_dict.get("total_steps", 0))
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
         step = trainer.global_step

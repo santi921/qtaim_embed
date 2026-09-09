@@ -96,7 +96,7 @@ Molecules are represented as heterogeneous graphs with three node types:
 
 ### Model Components
 
-- **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`, and `ResidualBlockDense` (same math as `ResidualBlock` on a padded per-molecule layout, `models/layers_dense.py`: a2b/b2a are `bmm` against an incidence matrix, global edges are masked sums/broadcasts, no gather/scatter; pair with `dataset.bucketing: true` so shapes are static and `compiled: true` captures the conv stack as CUDA graphs. 1.4-2.2x over `ResidualBlock` at bf16 on 60-350 atom molecules in the conv stack alone, 1.3-1.5x in the full training step (5,038 to 7,755 samples/s at hidden 128, batch 1024, where the data path then caps it). `convert_model_to_dense` in `models/utils.py` maps trained `ResidualBlock` weights onto it.)
+- **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`, and `ResidualBlockDense` (same math as `ResidualBlock` on a padded per-molecule layout, `models/layers_dense.py`: a2b/b2a are `bmm` against an incidence matrix, global edges are masked sums/broadcasts, no gather/scatter; pair with `dataset.bucketing: true` so shapes are static (the sampler stamps each batch's class shape as `graph.dense_shape`, train drops ragged last batches) and `compiled: true` captures the conv stack as CUDA graphs, one per shape class; eval always runs the eager dense blocks. 1.4-2.2x over `ResidualBlock` at bf16 on 60-350 atom molecules in the conv stack alone, 1.3-1.5x in the full training step (5,038 to 7,755 samples/s at hidden 128, batch 1024, where the data path then caps it). `convert_model_to_dense` in `models/utils.py` maps trained `ResidualBlock` weights onto it.)
 - **3D geometric encoders** (`encoder_fn`): `SchNetEncoder`, `DimeNetPPEncoder`, `EquivariantEncoder` (see below)
 - **Global pooling**: `SumPoolingThenCat`, `MeanPoolingThenCat`, `WeightAndSumThenCat`, `WeightAndMeanThenCat`, `GlobalAttentionPoolingThenCat`, `Set2SetThenCat`
 - **Scalers**: `HeteroGraphStandardScaler`, `HeteroGraphLogMagnitudeScaler`
@@ -153,8 +153,10 @@ config = {
         "val_prop": 0.15,
         "test_prop": 0.1,
         "extra_keys": {"atom": [], "bond": [], "global": []},
-        "bucketing": False,   # True: BucketBatchSampler groups graphs by padded (atoms, bonds) shape (LMDB path)
+        "bucketing": False,   # True: BucketBatchSampler groups graphs by padded (atoms, bonds) shape (LMDB path; DDP-safe, shards by rank)
         "bucket_grid": 16,
+        "bucketing_eval": True,  # False: val/test loaders in dataset order (bucketed order is class-major; see sampler.indices())
+        "bucket_drop_last": True,  # train only: drop each class's ragged last batch so the batch dimension is static
     },
     "model": {
         "n_conv_layers": 8,
@@ -165,6 +167,8 @@ config = {
         "embedding_size": 128,
         "dropout": 0.2,
         "batch_norm": True,   # REQUIRED for ResidualBlock on 40+ atom molecules (see Important Notes)
+        "bn_before_activation": True,   # default via configs: conv -> BN -> activation -> dropout, final layer linear (fixes the eval-mode divergence); model constructors default to False so pre-2026-09-09 checkpoints keep their layer order
+        "global_aggr": "sum",           # "mean": average (not sum) atoms/bonds into the global node (a2g/b2g)
         "activation": "ReLU",
         "lr": 1e-3,
         "loss_fn": "mse",  # or "mae"
@@ -380,7 +384,7 @@ Sweep configs are in `scripts/train/sweep_config*.json`.
 
 ## Important Notes
 - `batch_norm` must stay True for the hetero conv stack: PyG's `GraphConv` has no degree normalization (the `norm` key is inert since the DGL migration), so on 40+ atom molecules activations grow 60-100x per block and a `batch_norm: False` model collapses to predicting the label mean. Measured 2026-09-09, `docs/research/2026-09-track-a-measurements.md`.
-- OPEN: even with batch norm on, the tm_react 40-epoch reference run (batch 128, lr 1e-3) diverges in eval mode from epoch 3 while train MSE stalls at 0.64; the global node's BN running variance is 10x the others (unnormalized a2g/b2g sums). Fix path (degree normalization, clipping, or mean aggregation for global edges) is undecided; do not change the conv math without asking. Details in the measurements doc, correctness section.
+- OPEN: even with batch norm on, the tm_react reference run (batch 128, lr 1e-3) diverges in eval mode from epoch 2. Diagnosed (`docs/research/2026-09-tm-react-eval-divergence.md`): BN sits after ReLU in `GraphConvDropoutBatch`, channels dead for a whole batch drive `running_var` to the float32 floor, and in eval mode they amplify rare inputs 100-260x; the unnormalized a2g/b2g sums feed the amplifier. Weights are fine (batch-stat val MSE keeps improving). Fixed by `model.bn_before_activation: true` (conv -> BN -> activation -> dropout, final prediction layer linear; sparse and dense twins, parity tested): 40 epochs from scratch with no excursion, val R2 0.87 vs the reference's 0.72 before it diverged. `model.global_aggr: "mean"` adds nothing on top and still diverges on its own. Default True in every default config and loader since 2026-09-09; the model constructors keep False so old checkpoints load with their original order. Do not train 40+ atom models with it off.
 - Research the codebase before editing. Never change code you haven't read. Also don't make changes to code without asking first.
 - Don't use emojis and emdashes anywhere
 - User instructions always override this file.

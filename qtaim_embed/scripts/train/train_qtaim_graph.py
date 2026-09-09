@@ -17,7 +17,7 @@ from pytorch_lightning.callbacks import (
 )
 from pytorch_lightning.strategies import DDPStrategy
 from qtaim_embed.core.datamodule import QTAIMGraphTaskDataModule, LMDBDataModule
-from qtaim_embed.models.utils import LogParameters, load_graph_level_model_from_config
+from qtaim_embed.models.utils import LinearWarmup, LogParameters, load_graph_level_model_from_config
 from qtaim_embed.utils.data import get_default_graph_level_config
 
 
@@ -164,7 +164,12 @@ def main(argv=None):
                 lr_monitor,
                 log_parameters,
                 checkpoint_callback,
-            ],
+            ]
+            + (
+                [LinearWarmup(config["optim"]["warmup_epochs"])]
+                if config["optim"].get("warmup_epochs", 0) > 0
+                else []
+            ),
             enable_checkpointing=True,
             strategy=(
                 DDPStrategy(find_unused_parameters=True)
@@ -172,6 +177,8 @@ def main(argv=None):
                 else config["optim"]["strategy"]
             ),
             default_root_dir=config["dataset"]["log_save_dir"],
+            # BucketBatchSampler shards itself by rank; Lightning must not wrap it
+            use_distributed_sampler=not config["dataset"].get("bucketing", False),
             logger=[logger_tb, logger_wb],
             precision=config["optim"]["precision"],
             num_sanity_val_steps=config["optim"].get("num_sanity_val_steps", 2),

@@ -43,6 +43,7 @@ def build_encoder(hparams):
             num_radial=hparams.encoder_num_radial,
             lmax=hparams.encoder_lmax,
             cutoff=hparams.encoder_cutoff,
+            tp_mode=getattr(hparams, "encoder_tp", "channelwise") or "channelwise",
         )
     raise ValueError(f"encoder_fn must be one of {ENCODER_FNS}, got {encoder_fn}")
 
@@ -56,7 +57,8 @@ def encode_atom_inputs(encoder, graph, inputs):
     if encoder is None:
         return inputs
     atom = graph["atom"]
-    h_enc = encoder(atom.pos, atom.z, atom.batch if "batch" in atom else None)
+    with torch.profiler.record_function("encoder"):
+        h_enc = encoder(atom.pos, atom.z, atom.batch if "batch" in atom else None)
     inputs = dict(inputs)
     inputs["atom"] = torch.cat(
         [inputs["atom"], h_enc.to(inputs["atom"].dtype)], dim=-1
