@@ -72,7 +72,10 @@ class DenseHeteroBatch:
         return {
             "atom": x["atom"][self.mask["atom"].squeeze(-1).bool()],
             "bond": x["bond"][self.mask["bond"].squeeze(-1).bool()],
-            "global": x["global"].reshape(self.num_graphs, -1),
+            # clone: under CUDA graphs a view of the graph output would be
+            # overwritten by the next replay (gradient accumulation runs several
+            # replays before the optimizer step)
+            "global": x["global"].reshape(self.num_graphs, -1).clone(),
         }
 
 

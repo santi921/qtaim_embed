@@ -121,3 +121,15 @@ def test_bn_before_activation_defaults():
     # constructors keep the old order so pre-2026-09-09 checkpoints load unchanged
     direct = GCNNodePred(target_dict={"atom": ["a"]}, **COMMON)
     assert direct.hparams.bn_before_activation is False
+
+
+def test_compile_mode_default_and_accumulation_guard():
+    from qtaim_embed.utils.training import build_trainer
+    m = GCNNodePred(conv_fn="ResidualBlockDense", target_dict={"atom": ["a"]}, **COMMON)
+    assert m.hparams.compile_mode == "reduce-overhead"
+    cfg = {"model": {"compiled": True, "conv_fn": "ResidualBlockDense", "max_epochs": 1},
+           "optim": {"accumulate_grad_batches": 4}, "dataset": {}}
+    with pytest.raises(ValueError, match="compile_mode"):
+        build_trainer(cfg, loggers=False, callbacks=[], accelerator="cpu")
+    cfg["model"]["compile_mode"] = "default"
+    build_trainer(cfg, loggers=False, callbacks=[], accelerator="cpu")

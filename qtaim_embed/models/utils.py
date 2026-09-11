@@ -119,6 +119,7 @@ def load_graph_level_model_from_config(config):
             dense_grid=config.get("dense_grid", 16),
             bn_before_activation=config.get("bn_before_activation", True),
             global_aggr=config.get("global_aggr", "sum"),
+            compile_mode=config.get("compile_mode", "reduce-overhead"),
         )
     else:
         logger.info("REGRESSION MODEL")
@@ -162,6 +163,7 @@ def load_graph_level_model_from_config(config):
             dense_grid=config.get("dense_grid", 16),
             bn_before_activation=config.get("bn_before_activation", True),
             global_aggr=config.get("global_aggr", "sum"),
+            compile_mode=config.get("compile_mode", "reduce-overhead"),
         )
     # model.to(device)
 
@@ -251,6 +253,7 @@ def load_node_level_model_from_config(config):
         dense_grid=config.get("dense_grid", 16),
         bn_before_activation=config.get("bn_before_activation", True),
         global_aggr=config.get("global_aggr", "sum"),
+        compile_mode=config.get("compile_mode", "reduce-overhead"),
     )
     # model.to(device)
 

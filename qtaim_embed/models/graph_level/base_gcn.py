@@ -82,6 +82,7 @@ class GCNGraphPred(pl.LightningModule):
         dense_grid: int, ResidualBlockDense pads molecules to multiples of this many atoms/bonds
         bn_before_activation: bool, conv -> BN -> activation -> dropout instead of BN last (see docs/research/2026-09-tm-react-eval-divergence.md)
         global_aggr: str, "sum" (GraphConv add) or "mean" for the a2g / b2g relations into the global node
+        compile_mode: str, torch.compile mode for the dense conv stack: "reduce-overhead" (CUDA graphs, default) or "default" (plain inductor; required with accumulate_grad_batches > 1, whose accumulated .grad tensors alias CUDA-graph outputs)
     """
 
     def __init__(
@@ -133,6 +134,7 @@ class GCNGraphPred(pl.LightningModule):
         dense_grid: int = 16,
         bn_before_activation: bool = False,
         global_aggr: str = "sum",
+        compile_mode: str = "reduce-overhead",
     ):
         super().__init__()
         self.learning_rate = lr
@@ -222,6 +224,7 @@ class GCNGraphPred(pl.LightningModule):
             "dense_grid": dense_grid,
             "bn_before_activation": bn_before_activation,
             "global_aggr": global_aggr,
+            "compile_mode": compile_mode,
         }
 
         self.hparams.update(params)
@@ -469,7 +472,7 @@ class GCNGraphPred(pl.LightningModule):
                     torch._dynamo.config.cache_size_limit, 64
                 )
                 self._dense_blocks_fn = torch.compile(
-                    self._run_dense_blocks, mode="reduce-overhead", dynamic=False
+                    self._run_dense_blocks, mode=compile_mode, dynamic=False
                 )
             self.forward_fn = self.compiled_forward
         else:
@@ -539,6 +542,10 @@ class GCNGraphPred(pl.LightningModule):
         # CUDA graphs when compiled=True, keyed by the bucket's stamped shape
         fn = self._dense_blocks_fn if self.training else self._run_dense_blocks
         eager = fn == self._run_dense_blocks
+        if not eager and self.hparams.get("compile_mode", "reduce-overhead") == "reduce-overhead":
+            # new iteration for cudagraph trees: outputs of the previous replay
+            # may now be overwritten (to_flat copies everything we keep)
+            torch.compiler.cudagraph_mark_step_begin()
         dense = to_dense_hetero(graph, feats, grid=self.hparams.dense_grid,
                                 shape=getattr(graph, "dense_shape", None), with_valid=eager)
         xa, xb, xg = fn(
@@ -689,7 +696,11 @@ class GCNGraphPred(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             batch_size=len(labels),
-            sync_dist=True,
+            # rank-local on purpose: with sync_dist=True the rank-0 progress bar
+            # all-reduces this value before on_*_epoch_end while the other ranks
+            # are already inside the torchmetrics all-gather, and DDP deadlocks
+            # (2026-09-09 smoke). The synced metrics come from torchmetrics.
+            sync_dist=False,
         )
         self.update_metrics(logits, labels, mode)
 
@@ -842,6 +853,19 @@ class GCNGraphPred(pl.LightningModule):
             self.test_torch_mse.reset()
 
         return r2, torch_l1, torch_mse
+
+    def on_fit_start(self):
+        # restored checkpoints bypass the config check in build_trainer
+        if (
+            self.hparams.get("compiled")
+            and self.hparams.conv_fn == "ResidualBlockDense"
+            and self.hparams.get("compile_mode", "reduce-overhead") == "reduce-overhead"
+            and self.trainer.accumulate_grad_batches > 1
+        ):
+            raise ValueError(
+                'compiled ResidualBlockDense with accumulate_grad_batches > 1 needs compile_mode="default" '
+                "(CUDA-graph outputs alias the accumulated .grad tensors)"
+            )
 
     def configure_optimizers(self):
         params = filter(lambda p: p.requires_grad, self.parameters())

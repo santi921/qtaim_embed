@@ -44,6 +44,9 @@ Measured on one RTX A5000 (bf16-mixed, batch norm on, raw training step):
 | H7 (250-350 atoms) hidden 256, batch 64, same switch | 769 | 979 | 1.3x |
 | tm_react schnet encoder, batch 512 (neighbor build) | 2,652 | 4,182 | 1.6x |
 | tm_react equivariant encoder lmax 1 hidden 64, batch 128 (channel-wise TP) | OOM at 23 GB | 1,261 samples/s at 2.3 GB | trains |
+| accuracy check, 40 epochs, batch 128 / lr 1e-3 to batch 1024 / lr 8e-3 / 1 warmup epoch | test MAE 0.1938 | test MAE 0.1925 | within the 2 % gate, 8x fewer steps |
+| same recipe with `dataset.bucketing` + `ResidualBlockDense` + CUDA graphs | test MAE 0.1925 | 0.2189 (0.2014 with batch 256 x 4 accumulation) | bucketing costs accuracy: exploration only |
+| DimeNet++ encoder, cutoff 4 / cap 16 vs no encoder, batch 128 | test MAE 0.1938 | 0.1779 | best tm_react model, about 2x the step time (cutoff 5 / cap 32: 0.1947, 4.5x the step time) |
 
 Also changed under the hood, no config needed: the radius-graph build for 3D encoders is per molecule (65-180x faster, exact), the LMDB collate skips PyG's generic `Batch.from_data_list` (4x), and `encoder_max_neighbors` defaults to 16.
 

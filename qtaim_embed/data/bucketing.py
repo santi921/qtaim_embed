@@ -154,12 +154,16 @@ class BucketBatchSampler(Sampler[List[int]]):
         if self.world_size == 1:
             return batches
         n = len(batches)
+        if n == 0:
+            return []
         rem = n % self.world_size
         if rem:
             if self.shuffle:
                 batches = batches[: n - rem]
             else:
-                batches = batches + batches[: self.world_size - rem]
+                # cycle, not slice: with fewer batches than ranks a slice would
+                # leave some ranks empty and their collectives waiting forever
+                batches = batches + [batches[i % n] for i in range(self.world_size - rem)]
         return batches[self.rank :: self.world_size]
 
     def _batches(self) -> List[List[int]]:
@@ -192,7 +196,7 @@ class BucketBatchSampler(Sampler[List[int]]):
 
     def __len__(self) -> int:
         n = self._total_batches()
-        if self.world_size == 1:
+        if self.world_size == 1 or n == 0:
             return n
         rem = n % self.world_size
         if rem:
@@ -236,7 +240,9 @@ def graph_sizes(
     if cache_path is not None:
         try:
             Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
-            np.savez(cache_path, n=n, atoms=atoms, bonds=bonds)
+            tmp = f"{cache_path}.tmp.{os.getpid()}"
+            np.savez(tmp, n=n, atoms=atoms, bonds=bonds)
+            os.replace(f"{tmp}.npz", cache_path)  # atomic: DDP ranks never read a half-written file
         except OSError as exc:
             logger.warning("could not write size cache %s: %s", cache_path, exc)
     return atoms, bonds

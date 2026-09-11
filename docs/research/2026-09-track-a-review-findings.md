@@ -89,3 +89,37 @@ across replays), no dynamic shapes in the compiled signature, sampler covers
 every index once per epoch, direct collate ptr/batch/edge offsets, checkpoint
 loading defaults, non-dense path behaviour unchanged, dense neighbor edge
 order identical to the chunked builder.
+
+## Second pass (2026-09-09, follow-up changes: flags, compile_mode, DDP, sharding)
+
+Applied:
+
+- Unshuffled rank sharding padded by slicing, so with fewer eval batches than
+  ranks some ranks got no batch while `__len__` said one; the idle rank's
+  epoch-end collectives would then hang DDP. Padding now cycles, `__len__`
+  matches on every rank; test with 7 graphs across 3 and 4 ranks.
+- Every DDP rank wrote the size cache at once (`np.savez` on the same path, a
+  reader could hit a half-written file). Rank 0 now builds the cache, the
+  others wait at a barrier, and the write is atomic (temp file + `os.replace`).
+- The `build_trainer` accumulation guard reads the config, which a restored
+  checkpoint bypasses; `GCNNodePred` / `GCNGraphPred.on_fit_start` re-check
+  from the live hparams.
+
+Noted, not changed:
+
+- `GCNGraphPredClassifier` has no compiled path at all (`compiled` is not a
+  constructor argument), so `compile_mode` and the cudagraph step mark are
+  inert there and its docstring overstates. Wire it like `GCNGraphPred` or drop
+  the argument.
+- `set_epoch` on `BucketBatchSampler` is never called by Lightning (it only
+  reaches `batch_sampler.sampler`); the sampler advances its own epoch in
+  `__iter__`, rank-consistently, but a `ckpt_path` resume restarts the shuffle
+  sequence at epoch 0.
+- `val_loss` is rank-0-local since the DDP fix; `ModelCheckpoint` selection on
+  it is rank-0 only. `val_mae` / `val_mse` from torchmetrics are synced.
+- Under `bn_before_activation` the final conv is linear in graph-level models
+  too, where pooling and the FC stack follow; parity holds, it is a design
+  choice, not a bug.
+- `compile_mode` is not validated at construction (a typo fails at the first
+  compiled step).
+

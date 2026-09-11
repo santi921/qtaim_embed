@@ -37,8 +37,8 @@ def main(argv=None):
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=1,
-        help="number of parallel workers for dataset preprocessing (default: 1)",
+        default=None,
+        help="DataLoader workers; overrides both dataset.num_workers and optim.num_workers when set",
     )
 
     args = parser.parse_args()
@@ -60,8 +60,10 @@ def main(argv=None):
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
-    # set num_workers from CLI (overrides config file)
-    config["dataset"]["num_workers"] = args.num_workers
+    # CLI overrides both worker settings (pickle datamodules read dataset.*, LMDB ones optim.*)
+    if args.num_workers is not None:
+        config["dataset"]["num_workers"] = args.num_workers
+        config["optim"]["num_workers"] = args.num_workers
 
     logger.info("config_settings")
 

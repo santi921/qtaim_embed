@@ -96,7 +96,7 @@ Molecules are represented as heterogeneous graphs with three node types:
 
 ### Model Components
 
-- **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`, and `ResidualBlockDense` (same math as `ResidualBlock` on a padded per-molecule layout, `models/layers_dense.py`: a2b/b2a are `bmm` against an incidence matrix, global edges are masked sums/broadcasts, no gather/scatter; pair with `dataset.bucketing: true` so shapes are static (the sampler stamps each batch's class shape as `graph.dense_shape`, train drops ragged last batches) and `compiled: true` captures the conv stack as CUDA graphs, one per shape class; eval always runs the eager dense blocks. 1.4-2.2x over `ResidualBlock` at bf16 on 60-350 atom molecules in the conv stack alone, 1.3-1.5x in the full training step (5,038 to 7,755 samples/s at hidden 128, batch 1024, where the data path then caps it). `convert_model_to_dense` in `models/utils.py` maps trained `ResidualBlock` weights onto it.)
+- **Message-passing functions**: `GraphConvDropoutBatch`, `ResidualBlock`, `GATConv`, and `ResidualBlockDense` (same math as `ResidualBlock` on a padded per-molecule layout, `models/layers_dense.py`: a2b/b2a are `bmm` against an incidence matrix, global edges are masked sums/broadcasts, no gather/scatter; pair with `dataset.bucketing: true` so shapes are static (the sampler stamps each batch's class shape as `graph.dense_shape`, train drops ragged last batches) and `compiled: true` captures the conv stack as CUDA graphs, one per shape class (`compile_mode: "default"` for plain inductor, mandatory with gradient accumulation); eval always runs the eager dense blocks. Accuracy caveat (2026-09-09): class-homogeneous bucketed batches optimize worse, 11-14 % higher test MAE than unbucketed at batch 1024 on tm_react, 4.6 % with batch 256 x 4 accumulation; use bucketing for throughput exploration, not for a final model. 1.4-2.2x over `ResidualBlock` at bf16 on 60-350 atom molecules in the conv stack alone, 1.3-1.5x in the full training step (5,038 to 7,755 samples/s at hidden 128, batch 1024, where the data path then caps it). `convert_model_to_dense` in `models/utils.py` maps trained `ResidualBlock` weights onto it.)
 - **3D geometric encoders** (`encoder_fn`): `SchNetEncoder`, `DimeNetPPEncoder`, `EquivariantEncoder` (see below)
 - **Global pooling**: `SumPoolingThenCat`, `MeanPoolingThenCat`, `WeightAndSumThenCat`, `WeightAndMeanThenCat`, `GlobalAttentionPoolingThenCat`, `Set2SetThenCat`
 - **Scalers**: `HeteroGraphStandardScaler`, `HeteroGraphLogMagnitudeScaler`
@@ -141,7 +141,8 @@ and oversized blocks fall back to the row-chunked cdist. The build is
 data-dependent, so it is incompatible with `torch.compile`: `compiled: true`
 with an encoder raises at construction. `encoder_max_neighbors` defaults to
 16 (dimenetpp triplet memory is sum(deg^2); cutoff 5 / cap 32 needs 9.4 GB at
-batch 128 on 60-atom molecules).
+batch 128 on 60-atom molecules, and cutoff 4 / cap 16 is also the more
+accurate setting on tm_react: test MAE 0.178 vs 0.194 without an encoder).
 
 ## Configuration System
 
@@ -168,6 +169,7 @@ config = {
         "n_conv_layers": 8,
         "conv_fn": "ResidualBlock",  # or "ResidualBlockDense" (padded, needs dataset.bucketing), "GraphConvDropoutBatch", "GATConv"
         "dense_grid": 16,            # ResidualBlockDense: pad atoms/bonds to multiples of this
+        "compile_mode": "reduce-overhead",  # dense + compiled: CUDA graphs; use "default" with accumulate_grad_batches > 1 (build_trainer raises otherwise)
         "global_pooling_fn": "SumPoolingThenCat",
         "hidden_size": 128,
         "embedding_size": 128,
@@ -193,8 +195,8 @@ config = {
     "optim": {
         "precision": "bf16-mixed",  # default; "16-mixed" or 32 also work, never bare 16
         "max_epochs": 100,
-        "gradient_clip_val": 1.0,
-        "train_batch_size": 128,    # node default is 1024 with lr 8e-3 and warmup_epochs 1 (E1 gate on 119K graphs); use 128 / 1e-3 on small datasets
+        "gradient_clip_val": 5.0,   # default in all four configs (norm clipping; 0 disables)
+        "train_batch_size": 128,    # LMDB datamodules read optim.train_batch_size / optim.num_workers; the pickle datamodules read dataset.train_batch_size / dataset.num_workers; the --num_workers CLI flag, when given, overrides both. Node default is 1024 with lr 8e-3 and warmup_epochs 1 (E1 gate on 119K graphs); use 128 / 1e-3 on small datasets
         "num_workers": 8,           # LMDB path needs >= 8 at batch >= 512 (data-bound otherwise)
         "pin_memory": True,
         "warmup_epochs": 0,         # > 0 adds LinearWarmup (linear LR ramp, then ReduceLROnPlateau)
@@ -390,6 +392,7 @@ Sweep configs are in `scripts/train/sweep_config*.json`.
 
 
 ## Important Notes
+- DDP: never log a `sync_dist=True` value that the progress bar shows (`prog_bar=True`) from a model that also runs torchmetrics `compute()` in `on_*_epoch_end`; the rank-0 progress bar triggers the all-reduce before the hook while other ranks are already in the all-gather, and training deadlocks. The GCN models log the bar loss rank-local for this reason (`link_model.py` and `bond_model.py` still use `sync_dist=True`, untested under DDP). Smoke: `profiling/train_configs/tm_react_ddp_smoke.json`.
 - `batch_norm` must stay True for the hetero conv stack: PyG's `GraphConv` has no degree normalization (the `norm` key is inert since the DGL migration), so on 40+ atom molecules activations grow 60-100x per block and a `batch_norm: False` model collapses to predicting the label mean. Measured 2026-09-09, `docs/research/2026-09-track-a-measurements.md`.
 - OPEN: even with batch norm on, the tm_react reference run (batch 128, lr 1e-3) diverges in eval mode from epoch 2. Diagnosed (`docs/research/2026-09-tm-react-eval-divergence.md`): BN sits after ReLU in `GraphConvDropoutBatch`, channels dead for a whole batch drive `running_var` to the float32 floor, and in eval mode they amplify rare inputs 100-260x; the unnormalized a2g/b2g sums feed the amplifier. Weights are fine (batch-stat val MSE keeps improving). Fixed by `model.bn_before_activation: true` (conv -> BN -> activation -> dropout, final prediction layer linear; sparse and dense twins, parity tested): 40 epochs from scratch with no excursion, val R2 0.87 vs the reference's 0.72 before it diverged. `model.global_aggr: "mean"` adds nothing on top and still diverges on its own. Default True in every default config and loader since 2026-09-09; the model constructors keep False so old checkpoints load with their original order. Do not train 40+ atom models with it off.
 - Research the codebase before editing. Never change code you haven't read. Also don't make changes to code without asking first.

@@ -92,6 +92,15 @@ class TestBucketBatchSampler:
         assert s.indices() == [i for b in s for i in b]
         assert sorted(s.indices()) == list(range(500))
 
+    def test_fewer_batches_than_ranks_keeps_every_rank_busy(self):
+        atoms, bonds = _sizes(n=7)
+        for ws in (3, 4):
+            for shuffle, drop_last in ((False, False), (True, True), (True, False)):
+                shards = [BucketBatchSampler(atoms, bonds, batch_size=8, grid=16, shuffle=shuffle,
+                                             drop_last=drop_last, rank=r, world_size=ws) for r in range(ws)]
+                counts = [len(list(iter(s))) for s in shards]
+                assert counts == [len(shards[0])] * ws, (ws, shuffle, drop_last, counts)
+
     def test_rank_out_of_range(self):
         atoms, bonds = _sizes(n=100)
         with pytest.raises(ValueError):
@@ -110,6 +119,13 @@ class TestBucketBatchSampler:
         atoms, bonds = _sizes(333)
         s = BucketBatchSampler(atoms, bonds, batch_size=50, drop_last=True, min_class_fraction=0.0)
         assert all(len(b) == 50 for b in iter(s)) and len(list(iter(s))) == len(s)
+
+
+def test_graph_sizes_cache_write_is_atomic(tmp_path):
+    ds = LMDBMoleculeDataset(config={"src": f"{LMDB}/train"}, transform=partial(TransformMol, dtype="float32"))
+    cache = tmp_path / "sizes.npz"
+    graph_sizes(ds, cache_path=str(cache))
+    assert cache.exists() and not list(tmp_path.glob("*.tmp.*"))
 
 
 def test_graph_sizes_matches_dataset_and_caches(tmp_path):

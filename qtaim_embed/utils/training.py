@@ -28,6 +28,18 @@ def build_trainer(
     distributed sampler, BucketBatchSampler shards by rank itself).
     """
     optim = config["optim"]
+    model_cfg = config.get("model", {})
+    if (
+        model_cfg.get("compiled")
+        and model_cfg.get("conv_fn") == "ResidualBlockDense"
+        and optim.get("accumulate_grad_batches", 1) > 1
+        and model_cfg.get("compile_mode", "reduce-overhead") == "reduce-overhead"
+    ):
+        raise ValueError(
+            "accumulate_grad_batches > 1 with compiled ResidualBlockDense needs "
+            'model.compile_mode = "default": accumulated .grad tensors alias CUDA-graph '
+            "outputs and are overwritten by the next replay (2026-09-09)."
+        )
     callbacks = list(callbacks)
     if optim.get("warmup_epochs", 0) > 0:
         from qtaim_embed.models.utils import LinearWarmup

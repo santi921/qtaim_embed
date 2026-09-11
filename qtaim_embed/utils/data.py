@@ -334,7 +334,7 @@ def get_default_graph_level_config():
             "bias": True,
             "norm": "both",
             "aggregate": "sum",
-            "lr": 0.01,
+            "lr": 0.001,  # TMQM gate 2026-09-09
             "scheduler_name": "reduce_on_plateau",
             "weight_decay": 0.00001,
             "lr_plateau_patience": 25,
@@ -374,7 +374,7 @@ def get_default_graph_level_config():
             "persistent_workers": False,
             "num_sanity_val_steps": 2,
             "warmup_epochs": 0,
-            "train_batch_size": 2,
+            "train_batch_size": 128,  # TMQM gate 2026-09-09: batch 1024 (lr 8e-3, warmup 1) is 29 % worse in test MAE on 48K graphs
         },
     }
 

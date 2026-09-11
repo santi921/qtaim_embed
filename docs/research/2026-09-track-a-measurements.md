@@ -23,7 +23,7 @@ default), on in every row marked `__bn__` and in the A3 tables.
 
 | item | evidence | decision |
 |---|---|---|
-| A1 batch size | E1: 3,006 to 4,983 samples/s from batch 128 to 256, then flat with 4 workers because data wait rises to 40-53 %; 7,163 at batch 1024 with 8 workers | batch 1024 at 8 workers as the working point; the default batch/lr stays 128 / 1e-3 until the E1 accuracy run passes (blocked, see the correctness section) |
+| A1 batch size | E1: 3,006 to 4,983 samples/s from batch 128 to 256, then flat with 4 workers because data wait rises to 40-53 %; 7,163 at batch 1024 with 8 workers. Accuracy gate (40 epochs, bn_before_activation on): batch 1024 / lr 8e-3 / 1 warmup epoch reaches best val loss 1.466 and test MAE 0.1925 against 1.463 and 0.1938 for batch 128 / lr 1e-3 (0.2 % worse val loss, 0.7 % better test MAE, within the 2 % gate); batch 1024 at the unscaled lr 1e-3 is 3 % worse (1.505, MAE 0.1939) | node default config: batch 1024, lr 8e-3, warmup_epochs 1, 8 workers; graph-level defaults unchanged (no graph-level accuracy run) |
 | A1 precision | bf16-mixed within 7 % of fp32 at every batch; the residual stream stays fp32 so gathers move fp32 data | bf16-mixed default (halves activation memory; needed for the dense path where it matters) |
 | A2 fused sparse conv | E3: 0.83-0.99x of the reference above batch 128, more memory | dropped |
 | A3 dense padded conv | E3: dense + CUDA graphs 1.43-1.68x on tm_react at batch 1024 (31 % padding waste in the test batches), 1.66-2.2x on H7 (6-11 % waste), 4-5x lower peak memory. End to end in the real training step (batch norm on, bucketing, 8 workers): 5,038 to 7,755 samples/s at hidden 128 (1.54x, data-bound), 3,805 to 5,310 at hidden 256 (1.40x), 769 to 979 on H7 at hidden 256 / batch 64 (1.27x); eager dense without compile is 1.0-1.3x | implemented as `conv_fn: "ResidualBlockDense"` with `compiled: true`; bucketed sampler (E4) removes most of the remaining waste |
@@ -31,9 +31,9 @@ default), on in every row marked `__bn__` and in the A3 tables.
 | A4 collate | E5: direct collate 3.6-4.1x faster than `Batch.from_data_list` (163 to 40 ms per 1024 graphs) | implemented in `DataLoaderLMDB` |
 | A4 tensor-dict serialization | E5: `weights_only=True` load of a flat tensor dict is 0.45x the speed of the pickled HeteroData (0.77 vs 0.35 ms per record) | not adopted; security-only argument remains (todos/005) |
 | A5 neighbor build | E6: per-molecule dense cdist exact and 65x (batch 512) to 180x (batch 1024) faster, one sync instead of 114-235 | implemented, dispatched automatically for batched inputs |
-| A5 DimeNet++ | E2: cutoff 5 / cap 32 needs 9.4 GB at batch 128 and OOMs at 512; cutoff 4 / cap 16 is 1.8x faster at 3.6 GB | `encoder_max_neighbors` default 16; cutoff 4.0 recommended pending an accuracy sweep |
+| A5 DimeNet++ | E2: cutoff 5 / cap 32 needs 9.4 GB at batch 128 and OOMs at 512; cutoff 4 / cap 16 is 1.8x faster at 3.6 GB. Accuracy (40 epochs, tm_react, batch 128, bn_first): cutoff 4 / cap 16 reaches test MAE 0.1779 and R2 0.917, the best tm_react model so far (no encoder: 0.1938); cutoff 5 / cap 32 reaches 0.1947 with three eval-mode spikes and is 2.3x slower | `encoder_max_neighbors` default 16; cutoff 4.0 for dimenetpp |
 | A5 equivariant | E2: fully connected per-edge tensor product OOMs at hidden 64 / batch 128; 16,384 weights per edge. A5-2: hidden 64 / batch 128 runs at 1,261 samples/s and 2.3 GB (was OOM); at hidden 32 it is 0.88x the fully connected speed at equal memory | channel-wise `uvu` tensor product default (256 weights per edge); fully connected kept behind `encoder_tp` |
-| E1 accuracy (40 epochs, tm_react) | batch 128 / lr 1e-3 with batch norm on: val R2 0.72 at epochs 1-2, then eval-mode val MSE diverges (1e3 at epoch 3, 4e11 by epoch 23) while train MSE stalls at 0.64. Cause: post-ReLU batch norm channels collapse their running variance. With `bn_before_activation: true` the same recipe trains 40 epochs cleanly to val R2 0.87 | `bn_before_activation` is the config default since 2026-09-09; the batch-size half of the gate is rerun with it on |
+| E1 accuracy (40 epochs, tm_react) | batch 128 / lr 1e-3 with batch norm on: val R2 0.72 at epochs 1-2, then eval-mode val MSE diverges (1e3 at epoch 3, 4e11 by epoch 23) while train MSE stalls at 0.64. Cause: post-ReLU batch norm channels collapse their running variance. With `bn_before_activation: true` the same recipe trains 40 epochs cleanly to val R2 0.87, and so do both batch-1024 arms (see A1) | `bn_before_activation` is the config default since 2026-09-09; the batch-size gate passed with it on |
 
 ## Correctness finding: batch_norm must be on (blocks the E1 accuracy check)
 
@@ -105,8 +105,24 @@ excursion and reaches val R2 0.87 / RMSE 0.41 against the reference's 0.72 /
 0.55 at its best epoch before diverging; test R2 0.94 / 0.97 / 0.97 / 0.87 on
 ADCH / CM5 / Loewdin / Mulliken. Mean global aggregation on top changes
 nothing (0.870 vs 0.867), and on its own it still diverges (from epoch 3
-instead of 2). The flag is the config default since 2026-09-09; the E1
-batch-size gate is rerun with it on.
+instead of 2). The flag is the config default since 2026-09-09.
+
+E1 accuracy gate with it on (40 epochs each, `profiling/run_divergence_fix.sh`
+with the `tm_react_b1024_*` configs, runs under `profiling/train_runs/`):
+
+| arm | best val loss (epoch) | val R2 / RMSE at epoch 39 | test MAE | test RMSE | test R2 ADCH / CM5 / Loewdin / Mulliken |
+|---|---|---|---|---|---|
+| batch 128, lr 1e-3 (`b128_bnfirst`) | 1.463 (30) | 0.867 / 0.413 | 0.1938 | 0.419 | 0.939 / 0.973 / 0.968 / 0.870 |
+| batch 1024, lr 8e-3, 1 warmup epoch | 1.466 (39) | 0.863 / 0.422 | 0.1925 | 0.418 | 0.940 / 0.972 / 0.975 / 0.868 |
+| batch 1024, lr 1e-3 | 1.505 (39) | 0.853 / 0.422 | 0.1939 | 0.424 | 0.936 / 0.973 / 0.975 / 0.855 |
+
+Linear LR scaling with one warmup epoch keeps batch 1024 within 0.2 % of the
+batch-128 val loss (and 0.7 % better test MAE), so the gate passes; the
+unscaled lr is 3 % worse and still improving at epoch 39. Batch 1024 needs
+about 20 s per epoch against 65 s at batch 128 on the same GPU (raw-step
+numbers are in E1 and A3). Adopted in the node-level default config: batch
+1024, lr 8e-3, `warmup_epochs: 1`, 8 workers. Small datasets should go back
+to 128 / 1e-3 / no warmup.
 
 Also found there: the tm_react shard LMDBs carry no QTAIM `extra_feat_*`
 columns despite `dataset.extra_keys` in the configs (atom features are degree,
@@ -357,6 +373,61 @@ data-wait floor: at batch 1024 a worker now needs about 590 ms per batch
 (1024 x 0.54 ms deserialization + 40 ms collate), so 8 workers sustain one
 batch per 74 ms, which is enough for the reference model (199 ms per step)
 and just short of the compiled dense model (94 ms per step, see A3).
+
+## Defaults and batching audit against the plan (2026-09-09)
+
+Checked after the Track A snapshot (`d753264`) and the trainer refactor
+(`3bdaa5f`):
+
+| plan item | state | note |
+|---|---|---|
+| A1 `precision: "bf16-mixed"` in all four default configs | done | node, graph, link, bond |
+| A1 `torch.set_float32_matmul_precision("high")` at script import | done | all ten training and bayes-opt scripts, link included |
+| A1 `pin_memory: True`, 8 workers in the optim blocks | done | `dataset.num_workers` (pickle datamodules) stays 1: workers hurt on in-memory datasets |
+| A1 batch / lr from the accuracy sweep | node: 1024 / 8e-3 / warmup 1 (gate passed); graph: 128 / 1e-3 (TMQM gate failed for 1024) | TMQM graph level, 100 epochs, `bn_before_activation` on: batch 128 / lr 1e-3 reaches test MAE 0.1211 (R2 0.969, best val loss 0.0229 at epoch 93); batch 1024 / lr 8e-3 / 1 warmup epoch reaches 0.1561 (R2 0.955, best val 0.0369 at epoch 76), 29 % worse and still improving: 48K graphs give only 48 steps per epoch at batch 1024. Graph default set to 128 / 1e-3 (was the test leftover 2 / 1e-2) |
+| A1 warmup wired into every Trainer | done | `build_trainer` adds `LinearWarmup` from `optim.warmup_epochs` |
+| A3 bucketing opt-in, paired with the dense path | done | round-up-16 shape classes instead of the plan's 8 total-size buckets (E4: 11 % waste vs the 15 % target) |
+| A3 "no accuracy change vs unbucketed at equal epochs" | FAILED as configured | `tm_react_b1024_dense_compiled` (ResidualBlockDense, bucketing, CUDA graphs, same batch / lr / warmup) reaches best val loss 1.589 vs 1.466 and test MAE 0.2189 vs 0.1925 (14 % worse; test loss 2.04 vs 1.51, ADCH test R2 0.71 vs 0.94). Confirmed to be the bucketing, not the dense math: `ResidualBlock` + bucketing at the same recipe lands at best val 1.580 and test MAE 0.2146 (11 % worse), the dense path adds 2 % on top. Not a batch-norm train/eval effect: on the dense checkpoint eval-mode running statistics and batch statistics give the same test MSE (0.273 vs 0.268), bucketed and plain test loaders too. Class-homogeneous batches (one size class per optimizer step) simply optimize worse. Mitigation measured: batch 256 per class with `accumulate_grad_batches: 4` (four classes per optimizer step, static shapes) reaches best val 1.550 and test MAE 0.2014, recovering about half of the gap (4.6 % worse than unbucketed instead of 14 %), still outside the 2 % gate. Bucketing therefore stays opt-in and is a throughput tool for exploration, not for a final model, until batches can mix classes fully. Found on the way: CUDA graphs (`compile_mode: "reduce-overhead"`) cannot be used with gradient accumulation, the accumulated `.grad` tensors are outputs of the compiled backward graph and the next replay overwrites them before AccumulateGrad reads them (reproduced outside Lightning); `compile_mode: "default"` (plain inductor, same steady-state throughput within 1 %) is required and `build_trainer` now raises on the bad combination |
+| A3 GPU utilization >= 70 % at batch 1024 | tm_react only | 84 % at hidden 256, 63 % at hidden 128 (data-bound); TMQM not measured |
+| A4 direct collate; tensor-dict serialization | done; rejected by gate | |
+| A6 DDP + bucketing | smoke passed (2 GPUs, 2 epochs + test, `TORCH_DISTRIBUTED_DEBUG=DETAIL`) | first attempt deadlocked: the rank-0 progress bar all-reduced the `sync_dist=True` epoch loss before the model's epoch-end hook while rank 1 was already in torchmetrics' all-gather (collective mismatch ALLREDUCE vs ALLGATHER at the same sequence number). The three GCN models now log the progress-bar loss rank-local; the synced metrics come from torchmetrics. The 1.8x throughput acceptance is not measured |
+| `batch_norm` / `bn_before_activation` | both True everywhere | constructors keep `bn_before_activation=False` for old checkpoints |
+
+Inconsistencies found, not changed (need a decision):
+
+- Two batch / worker sources. LMDB datamodules read `optim.train_batch_size`
+  and `optim.num_workers`; the pickle datamodules read
+  `dataset.train_batch_size` (128 graph, 512 node) and `dataset.num_workers`
+  (1). The `--num_workers` CLI flag now overrides both when given (it used
+  to set only the dataset one, and unconditionally, with a default of 1).
+- `gradient_clip_val` defaults to 5.0 in all configs (E1 set it after the
+  unclipped run diverged); the bench configs use 0.0. CLAUDE.md now shows 5.0.
+- Bench configs inherit `bn_before_activation: True` from the defaults, so
+  bench rows recorded from here on run BN-first; every row in this document
+  was measured with the original order (same kernels, one fewer fusion).
+
+## A5-3: DimeNet++ cutoff and neighbor cap, accuracy
+
+Reference recipe (batch 128, lr 1e-3, 40 epochs, `bn_before_activation`),
+`encoder_fn: dimenetpp`, `encoder_hidden` 64, both arms sharing a GPU with
+another run:
+
+| arm | best val loss (epoch) | test MAE | test RMSE | test R2 ADCH / CM5 / Loewdin / Mulliken | s per epoch (shared GPU) |
+|---|---|---|---|---|---|
+| no encoder (`b128_bnfirst`) | 1.463 (30) | 0.1938 | 0.419 | 0.939 / 0.973 / 0.968 / 0.870 | 65 (alone) |
+| dimenetpp cutoff 4.0, cap 16 | 1.368 (32) | 0.1779 | 0.397 | 0.940 / - / 0.977 / 0.917 | 115 |
+| dimenetpp cutoff 5.0, cap 32 | 1.413 (29) | 0.1947 | 0.419 | 0.921 / - / 0.973 / 0.899 | 275 (180 alone) |
+
+The cheaper setting is both 2.3x faster and more accurate (test MAE 0.1779
+vs 0.1947; the cutoff-5 model is no better than no encoder at all on the
+final-epoch weights Lightning tests with); the E2 memory argument (cutoff 5 /
+cap 32 needs 9.4 GB at batch 128) and this accuracy result agree, so cutoff
+4.0 / cap 16 is the DimeNet++ setting. The cutoff-5 trace also had three
+eval-mode spikes (val loss 3.57, 5.23, 2.66 at epochs 21, 35, 36, back to
+1.42-1.51 the following epoch) while cutoff 4 had none; the encoder's own
+layers sit before the batch-norm-first conv stack and are not protected by it,
+so a denser radius graph seems to make the eval pass more fragile. Not
+investigated further.
 
 ## Acceptance against the plan
 

@@ -74,9 +74,10 @@ def main(argv=None):
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
-    # override num_workers from CLI only if explicitly passed
+    # CLI overrides both worker settings (pickle datamodules read dataset.*, LMDB ones optim.*)
     if args.num_workers is not None:
         config["dataset"]["num_workers"] = args.num_workers
+        config["optim"]["num_workers"] = args.num_workers
 
     logger.info("config_settings")
 

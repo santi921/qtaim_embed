@@ -746,11 +746,16 @@ class LMDBDataModule(pl.LightningDataModule):
         base = Path(lmdb_loc)
         base = base.parent if base.is_file() else base
         cache = (Path(cache_dir) if cache_dir else base) / f".qtaim_sizes_{base.name}.npz"
+        rank, world_size = 0, 1
+        distributed = torch.distributed.is_available() and torch.distributed.is_initialized()
+        if distributed:
+            rank, world_size = torch.distributed.get_rank(), torch.distributed.get_world_size()
+            if rank != 0:
+                torch.distributed.barrier()  # rank 0 reads the LMDB once and writes the cache
         atoms, bonds = graph_sizes(dataset, cache_path=str(cache),
                                    num_workers=self.config["optim"].get("num_workers", 0))
-        rank, world_size = 0, 1
-        if torch.distributed.is_available() and torch.distributed.is_initialized():
-            rank, world_size = torch.distributed.get_rank(), torch.distributed.get_world_size()
+        if distributed and rank == 0:
+            torch.distributed.barrier()
         sampler = BucketBatchSampler(
             atoms, bonds, batch_size=self.config["optim"]["train_batch_size"], grid=grid,
             shuffle=shuffle, seed=self.config["dataset"].get("seed", 0),
