@@ -16,7 +16,6 @@ import argparse
 import json
 import logging
 
-import pytorch_lightning as pl
 import torch
 import wandb
 from pytorch_lightning.callbacks import (
@@ -25,7 +24,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from pytorch_lightning.strategies import DDPStrategy
+from qtaim_embed.utils.training import build_trainer
 
 from qtaim_embed.core.datamodule import LMDBDataModule
 from qtaim_embed.data.lmdb import TransformMol
@@ -125,28 +124,12 @@ def main(argv=None):
             mode="max",
         )
 
-        trainer = pl.Trainer(
-            max_epochs=config["model"]["max_epochs"],
+        trainer = build_trainer(
+            config,
+            loggers=[logger_tb, logger_wb],
+            callbacks=[early_stopping_callback, lr_monitor, log_parameters, checkpoint_callback],
             accelerator="gpu" if torch.cuda.is_available() else "cpu",
-            devices=config["optim"]["num_devices"],
-            gradient_clip_val=config["optim"]["gradient_clip_val"],
-            accumulate_grad_batches=config["optim"]["accumulate_grad_batches"],
-            enable_progress_bar=True,
-            callbacks=[
-                early_stopping_callback,
-                lr_monitor,
-                log_parameters,
-                checkpoint_callback,
-            ],
-            enable_checkpointing=True,
-            strategy=(
-                DDPStrategy(find_unused_parameters=True)
-                if config["optim"]["strategy"] == "ddp"
-                else config["optim"]["strategy"]
-            ),
             default_root_dir=args.log_save_dir,
-            logger=[logger_tb, logger_wb],
-            precision=config["optim"]["precision"],
         )
 
         trainer.fit(model, dm)

@@ -7,7 +7,7 @@ from typing import Optional, Dict, List
 
 logger = logging.getLogger(__name__)
 
-from qtaim_embed.utils.scalers import _transform
+from qtaim_embed.utils.scalers import _transform, guard_std
 
 
 def _get_ndata(data, key):
@@ -254,7 +254,7 @@ class HeteroGraphStandardScalerIterative:
             if std is None:
                 self._std = {}
             else:
-                self._std = std
+                self._std = {k: guard_std(v.clone(), (mean or {}).get(k)) for k, v in std.items()}
 
             if dict_node_sizes is None:
                 self.dict_node_sizes = {}
@@ -271,8 +271,6 @@ class HeteroGraphStandardScalerIterative:
         Takes:
             graphs: list of PyG HeteroData graphs
         """
-        g = graphs[0]
-        # node_types = g.ntypes
         node_feats = defaultdict(list)
 
         if self.features_tf:  # separate track for features and labels
@@ -280,24 +278,15 @@ class HeteroGraphStandardScalerIterative:
         else:
             graph_key = "labels"
 
-        node_types = list(_get_ndata(g, graph_key).keys())
-        # graphs with no entries for this track (e.g. no labels when
-        # keys_target is empty) have nothing to update
-        if not node_types:
-            return
-        # obtain feats from ALL graphs
-
+        # per graph, not graphs[0]: a graph without this track (e.g. no labels
+        # when keys_target is empty) is skipped on its own, the rest still fit
         for g in graphs:
-            for nt in node_types:
-                data = getattr(g[nt], graph_key)
+            for nt, data in _get_ndata(g, graph_key).items():
                 node_feats[nt].append(data)
-                # node_feats_size[nt].append(len(data))
+        if not node_feats:
+            return
 
-        # standardize
-        # print(node_feats)
-        dtype = node_feats[node_types[0]][0].dtype
-
-        for nt in node_types:
+        for nt in node_feats:
             # Update running statistics for new node types
             if nt not in self._mean:
                 self._mean[nt] = torch.zeros(
@@ -349,47 +338,51 @@ class HeteroGraphStandardScalerIterative:
         logger.debug("Finalizing scaler")
         for nt in self._mean.keys():
             if self.dict_node_sizes[nt] > 0:
-                self._std[nt] = torch.sqrt(
-                    self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2
-                )
-                # update with epsilon to avoid division by zero
-                self._std[nt][self._std[nt] == 0] = self.epsilon
+                var = self._sum_x2[nt] / self.dict_node_sizes[nt] - self._mean[nt] ** 2
+                # clamp tiny negatives from floating-point cancellation on
+                # constant columns (would otherwise give NaN std)
+                self._std[nt] = torch.sqrt(torch.clamp(var, min=0.0))
+                # sklearn convention: zero-variance (constant) columns get
+                # scale 1.0, so any off-distribution value maps to a small
+                # deviation instead of (x - mean)/eps blowing up to ~1e6
+                self._std[nt] = guard_std(self._std[nt], self._mean[nt])
             else:
                 self._std[nt] = torch.zeros_like(self._mean[nt])
+        if self.features_tf and sum(self.dict_node_sizes.values()) == 0:
+            logger.warning(
+                "feature scaler finalized with zero observations; applying it "
+                "to featurized graphs will raise"
+            )
         self.finalized = True
 
     def __call__(self, graphs) -> List:
 
         # assert that the scaler is finalized
         assert self.finalized, "must finalize the scaler before using it"
-        g = graphs[0]
-        # node_types = g.ntypes
         node_feats = defaultdict(list)
         node_feats_size = defaultdict(list)
+        owners = defaultdict(list)
         if self.features_tf:  # separate track for features and labels
             graph_key = "feat"
         else:
             graph_key = "labels"
-        node_types = list(_get_ndata(g, graph_key).keys())
 
-        # obtain feats from ALL graphs
         for g in graphs:
-            for nt in node_types:
-                data = getattr(g[nt], graph_key)
+            for nt, data in _get_ndata(g, graph_key).items():
                 node_feats[nt].append(data)
                 node_feats_size[nt].append(len(data))
+                owners[nt].append(g)
 
-        # standardize
-        if self._mean and self._std:
-            for nt in node_types:
-                # safely handle the case where std is zeron
-                feats = (torch.cat(node_feats[nt]) - self._mean[nt]) / self._std[nt]
-                node_feats[nt] = feats
+        missing = [nt for nt in node_feats if nt not in self._mean or nt not in self._std]
+        if missing:
+            raise ValueError(
+                f"scaler has no statistics for node types {missing} on track "
+                f"'{graph_key}'; it was fitted on zero graphs carrying them"
+            )
 
-        # assign data back
-        for nt in node_types:
-            feats = torch.split(node_feats[nt], node_feats_size[nt])
-            for g, ft in zip(graphs, feats):
+        for nt in node_feats:
+            feats = (torch.cat(node_feats[nt]) - self._mean[nt]) / self._std[nt]
+            for g, ft in zip(owners[nt], torch.split(feats, node_feats_size[nt])):
                 setattr(g[nt], graph_key, ft.clone())
 
         return graphs
@@ -723,8 +716,13 @@ def merge_scalers(
     exactly: var = E[x^2] - E[x]^2. This is robust to *unfinalized* input
     scalers (whose ._std is still zero because std is only computed in
     finalize()) and correctly accounts for between-scaler mean differences,
-    unlike pooling ._std directly. The std==0 -> epsilon guard is applied so
-    constant features never yield a divide-by-zero at apply time.
+    unlike pooling ._std directly. Constant columns get std 1.0 (sklearn
+    convention, same as finalize()) so they never divide by zero at apply time.
+
+    Scalers built from stored mean/std (no ._sum_x2, e.g. reconstructed from
+    checkpoint hparams) are merged from their finalized moments,
+    sum_x2 = (std^2 + mean^2) * n, which is exact except for constant columns
+    whose std was already replaced by 1.0.
 
     Takes:
         list_scalers: list of scalers (finalized or not)
@@ -744,11 +742,17 @@ def merge_scalers(
             n_i = scaler.dict_node_sizes[nt]
             if nt not in sum_x_merged:
                 sum_x_merged[nt] = torch.zeros_like(scaler._mean[nt])
-                sum_x2_merged[nt] = torch.zeros_like(scaler._sum_x2[nt])
+                sum_x2_merged[nt] = torch.zeros_like(scaler._mean[nt])
                 dict_node_sizes_merged[nt] = 0
 
             sum_x_merged[nt] += scaler._mean[nt] * n_i
-            sum_x2_merged[nt] += scaler._sum_x2[nt]
+            if nt in scaler._sum_x2:
+                sum_x2_merged[nt] += scaler._sum_x2[nt]
+            else:
+                assert scaler.finalized, (
+                    f"scaler has no second moments for {nt} and is not finalized; cannot merge"
+                )
+                sum_x2_merged[nt] += (scaler._std[nt] ** 2 + scaler._mean[nt] ** 2) * n_i
             dict_node_sizes_merged[nt] += n_i
 
     mean_merged = {}
@@ -760,7 +764,8 @@ def merge_scalers(
             var = sum_x2_merged[nt] / n - mean ** 2
             # clamp tiny negatives from floating-point cancellation
             std = torch.sqrt(torch.clamp(var, min=0.0))
-            std[std == 0] = epsilon
+            # sklearn convention: constant columns get scale 1.0 (see finalize)
+            std = guard_std(std, mean)
             mean_merged[nt] = mean
             std_merged[nt] = std
         else:
