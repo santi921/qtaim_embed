@@ -1589,31 +1589,55 @@ class Subset(Dataset):
 
 
 class SubsetLMDB(Dataset):
+    """A view over a subset of an LMDB-backed dataset.
+
+    Every attribute other than the sequence protocol is delegated to the
+    wrapped dataset, so a subset is a drop-in replacement anywhere the
+    datamodules and training scripts read dataset metadata
+    (``feature_size``, ``feature_names``, ``target_dict``, the LMDB metadata
+    properties, label scalers). Delegating rather than copying also keeps the
+    LMDB properties lazy: they read from the env on access, and eagerly
+    reading them here would open transactions in the parent process that the
+    per-worker env init is designed to avoid.
+    """
+
     def __init__(self, dataset: Any, indices: Sequence[int]):
-        self.dtype = dataset.dtype
         self.dataset = dataset
-        self.indices = indices
+        self.indices = list(indices)
 
-        self.feature_size = dataset.feature_size
-        self.feature_names = dataset.feature_names
+    @classmethod
+    def random(
+        cls,
+        dataset: Any,
+        frac: Optional[float] = None,
+        n: Optional[int] = None,
+        seed: int = 0,
+    ) -> "SubsetLMDB":
+        """Seeded random subset of ``dataset``.
 
-        self.element_set = dataset.element_set
-        self.log_scale_features = dataset.log_scale_features
-        self.allowed_charges = dataset.allowed_charges
-        self.allowed_spins = dataset.allowed_spins
-        self.allowed_ring_size = dataset.allowed_ring_size
-        self.target_dict = dataset.target_dict
-        self.extra_dataset_info = dataset.extra_dataset_info
+        The same (len(dataset), frac/n, seed) always yields the same indices,
+        so every sweep trial sees identical data. Indices are returned sorted:
+        the DataLoader shuffles anyway, and sequential keys read far better
+        from LMDB than a scattered permutation.
+        """
+        total = len(dataset)
+        if (frac is None) == (n is None):
+            raise ValueError("pass exactly one of frac or n")
+        if frac is not None:
+            if not 0.0 < frac <= 1.0:
+                raise ValueError(f"frac must be in (0, 1] but got {frac}")
+            n = int(round(total * frac))
+        n = max(1, min(int(n), total))
+        indices = np.sort(np.random.default_rng(seed).permutation(total)[:n])
+        return cls(dataset, indices.tolist())
 
-        self.graphs = dataset.graphs
-
-    @property
-    def feature_size(self) -> Any:
-        return self._feature_size
-
-    @property
-    def feature_name(self) -> Any:
-        return self._feature_name
+    def __getattr__(self, name: str) -> Any:
+        # Only reached when the attribute is not found on the subset itself.
+        try:
+            dataset = self.__dict__["dataset"]
+        except KeyError:  # during unpickling, before __init__ has run
+            raise AttributeError(name) from None
+        return getattr(dataset, name)
 
     def __getitem__(self, idx: int) -> Any:
         return self.dataset[self.indices[idx]]

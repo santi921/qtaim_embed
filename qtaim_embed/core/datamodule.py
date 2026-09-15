@@ -22,6 +22,7 @@ from qtaim_embed.core.dataset import (
     HeteroGraphGraphLabelDataset,
     HeteroGraphGraphLabelClassifierDataset,
     LMDBMoleculeDataset,
+    SubsetLMDB,
 )
 from qtaim_embed.utils.data import train_validation_test_split
 from qtaim_embed.data.transforms import DropBondHeterograph
@@ -727,6 +728,32 @@ class LMDBDataModule(pl.LightningDataModule):
             transform=transform,
         )
 
+        # config["dataset"]["subset_frac"]: train on a seeded random fraction
+        # without writing a second LMDB. Applied to train and val, never to
+        # test. The same frac and seed give the same graphs on every rank and
+        # in every run, so sweep trials are comparable (a fresh draw per epoch
+        # would add data-draw noise to the metric the optimizer fits).
+        frac = self.config["dataset"].get("subset_frac")
+        if frac is not None and frac < 1.0:
+            seed = self.config["dataset"].get("subset_seed", 0)
+            full_train = len(self.train_dataset)
+            self.train_dataset = SubsetLMDB.random(
+                self.train_dataset, frac=frac, seed=seed
+            )
+            logger.info(
+                "subset_frac %s (seed %s): train %d -> %d graphs",
+                frac, seed, full_train, len(self.train_dataset),
+            )
+            if "val_lmdb" in self.config["dataset"]:
+                full_val = len(self.val_dataset)
+                self.val_dataset = SubsetLMDB.random(
+                    self.val_dataset, frac=frac, seed=seed
+                )
+                logger.info(
+                    "subset_frac %s (seed %s): val %d -> %d graphs",
+                    frac, seed, full_val, len(self.val_dataset),
+                )
+
         self._setup_done = True
 
     def _bucket_sampler(self, dataset, lmdb_loc, shuffle):
@@ -745,7 +772,12 @@ class LMDBDataModule(pl.LightningDataModule):
         cache_dir = self.config["dataset"].get("bucket_cache_dir")
         base = Path(lmdb_loc)
         base = base.parent if base.is_file() else base
-        cache = (Path(cache_dir) if cache_dir else base) / f".qtaim_sizes_{base.name}.npz"
+        # a subset has different sizes than the full LMDB, so it needs its own cache
+        frac = self.config["dataset"].get("subset_frac")
+        tag = base.name
+        if frac is not None and frac < 1.0:
+            tag = f"{tag}_sub{frac:g}s{self.config['dataset'].get('subset_seed', 0)}"
+        cache = (Path(cache_dir) if cache_dir else base) / f".qtaim_sizes_{tag}.npz"
         rank, world_size = 0, 1
         distributed = torch.distributed.is_available() and torch.distributed.is_initialized()
         if distributed:

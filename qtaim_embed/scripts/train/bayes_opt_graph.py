@@ -321,6 +321,19 @@ def main(argv=None):
     parser.add_argument("-log_save_dir", type=str, default="./logs_lightning/")
     parser.add_argument("-project_name", type=str, default="qtaim_embed_lightning")
     parser.add_argument("-sweep_config", type=str, default="./sweep_config.json")
+    parser.add_argument(
+        "-sweep_id",
+        type=str,
+        default=None,
+        help="join this existing sweep instead of creating one. Every worker "
+        "of a multi-task launch must pass the same id, otherwise each task "
+        "registers its own sweep and the searches never share results.",
+    )
+    parser.add_argument(
+        "--create_sweep_only",
+        action="store_true",
+        help="register the sweep, print its id, and exit without running an agent",
+    )
     parser.add_argument("-wandb_entity", type=str, default="santi")
 
     args = parser.parse_args()
@@ -345,9 +358,17 @@ def main(argv=None):
         sweep_config["metric"] = {"name": "val_loss", "goal": "minimize"}
 
     # wandb loop
-    sweep_id = wandb.sweep(
-        sweep_config, project=wandb_project_name, entity=wandb_entity
-    )
+    if args.sweep_id is not None:
+        sweep_id = args.sweep_id
+        logger.info("joining existing sweep: %s", sweep_id)
+    else:
+        sweep_id = wandb.sweep(
+            sweep_config, project=wandb_project_name, entity=wandb_entity
+        )
+        logger.info("created sweep: %s", sweep_id)
+        if args.create_sweep_only:
+            print(sweep_id)
+            return sweep_id
     training_obj = TrainingObject(
         sweep_config,
         log_save_dir,
