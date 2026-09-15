@@ -85,6 +85,16 @@ class TrainingObject:
                     "test_lmdb"
                 ]["values"][0]
 
+            # A fixed data subsample for the search. Read from values[0] like
+            # the rest of the data settings: the datamodule is built once per
+            # agent, and every trial and every agent must see the same graphs
+            # so that trials differ only by hyperparameters.
+            for key in ("subset_frac", "subset_seed"):
+                if key in self.sweep_config["parameters"]:
+                    dm_config["dataset"][key] = self.sweep_config["parameters"][key][
+                        "values"
+                    ][0]
+
             self.dm = LMDBDataModule(config=dm_config)
 
         else:
@@ -232,6 +242,9 @@ class TrainingObject:
                     "precision": init_config["precision"],
                     "strategy": init_config["strategy"],
                     "train_batch_size": init_config["train_batch_size"],
+                    "num_sanity_val_steps": init_config.get(
+                        "num_sanity_val_steps", 2
+                    ),
                 },
             }
 
