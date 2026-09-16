@@ -1,4 +1,4 @@
-./data/*
+data/
 *CONTCAR
 *EIGENVAL
 *POTCAR
@@ -68,3 +68,4 @@ qtaim_embed.egg-info/not-zip-safe
 *pt
 *.lmdb-lock
 *.lmdb
+profiling/train_runs/

@@ -102,7 +102,7 @@ class TestNodePred:
     val_dataloader = dm.val_dataloader()
     scalers = dm.full_dataset.label_scalers
 
-    def main_train(self, model="ResidualBlock"):
+    def main_train(self, model="ResidualBlock", encoder_fn="none"):
         config = deepcopy(self.config_base)
 
         if model == "ResidualBlock":
@@ -119,6 +119,11 @@ class TestNodePred:
 
         else:
             raise ValueError(f"Model {model} not recognized.")
+
+        if encoder_fn != "none":
+            config["model"]["encoder_fn"] = encoder_fn
+            config["model"]["encoder_hidden"] = 16
+            config["model"]["encoder_n_interactions"] = 2
 
         config["model"]["atom_feature_size"] = self.feature_size["atom"]
         config["model"]["bond_feature_size"] = self.feature_size["bond"]
@@ -157,3 +162,29 @@ class TestNodePred:
 
     def test_gcn(self):
         self.main_train("GraphConvDropoutBatch")
+
+    def test_schnet_encoder(self):
+        self.main_train("GraphConvDropoutBatch", encoder_fn="schnet")
+
+    def test_encoder_concat_widens_atom_inputs(self):
+        # the embedding is called from two sites (compiled_forward and
+        # feature_at_each_layer); both must concat the encoder output first
+        # or the widened atom Linear gets the wrong input dim
+        from qtaim_embed.models.encoders import encode_atom_inputs
+
+        config = deepcopy(self.config_base)
+        config["model"]["conv_fn"] = "GraphConvDropoutBatch"
+        config["model"]["encoder_fn"] = "schnet"
+        config["model"]["encoder_hidden"] = 16
+        config["model"]["encoder_n_interactions"] = 2
+        config["model"]["atom_feature_size"] = self.feature_size["atom"]
+        config["model"]["bond_feature_size"] = self.feature_size["bond"]
+        config["model"]["global_feature_size"] = self.feature_size["global"]
+        model = load_node_level_model_from_config(config["model"])
+
+        batch_graph, _ = next(iter(self.val_dataloader))
+        feats = {nt: batch_graph[nt].feat for nt in batch_graph.node_types}
+        widened = encode_atom_inputs(model.encoder, batch_graph, feats)
+        assert widened["atom"].shape[1] == self.feature_size["atom"] + 16
+        out = model.embedding(widened)
+        assert out["atom"].shape[1] == config["model"]["embedding_size"]

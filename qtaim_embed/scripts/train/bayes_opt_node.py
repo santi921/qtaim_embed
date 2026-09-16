@@ -5,7 +5,6 @@ import wandb, argparse, torch, json
 import numpy as np
 from copy import deepcopy
 
-import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
@@ -15,7 +14,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from pytorch_lightning.strategies import DDPStrategy
+from qtaim_embed.utils.training import build_trainer
 from qtaim_embed.core.datamodule import QTAIMNodeTaskDataModule, LMDBDataModule
 from qtaim_embed.models.utils import load_node_level_model_from_config
 
@@ -85,6 +84,16 @@ class TrainingObject:
                 dm_config["dataset"]["test_lmdb"] = self.sweep_config["parameters"][
                     "test_lmdb"
                 ]["values"][0]
+
+            # A fixed data subsample for the search. Read from values[0] like
+            # the rest of the data settings: the datamodule is built once per
+            # agent, and every trial and every agent must see the same graphs
+            # so that trials differ only by hyperparameters.
+            for key in ("subset_frac", "subset_seed"):
+                if key in self.sweep_config["parameters"]:
+                    dm_config["dataset"][key] = self.sweep_config["parameters"][key][
+                        "values"
+                    ][0]
 
             self.dm = LMDBDataModule(config=dm_config)
 
@@ -233,6 +242,9 @@ class TrainingObject:
                     "precision": init_config["precision"],
                     "strategy": init_config["strategy"],
                     "train_batch_size": init_config["train_batch_size"],
+                    "num_sanity_val_steps": init_config.get(
+                        "num_sanity_val_steps", 2
+                    ),
                 },
             }
 
@@ -300,28 +312,12 @@ class TrainingObject:
             train_dl = self.dm.train_dataloader()
             _, _ = next(iter(train_dl))
 
-            trainer = pl.Trainer(
-                max_epochs=config["model"]["max_epochs"],
+            trainer = build_trainer(
+                config,
+                loggers=[logger_wb],
+                callbacks=[early_stopping_callback, lr_monitor, checkpoint_callback],
                 accelerator="gpu",
-                devices=config["optim"]["num_devices"],
-                num_nodes=config["optim"]["num_nodes"],
-                gradient_clip_val=config["optim"]["gradient_clip_val"],
-                accumulate_grad_batches=config["optim"]["accumulate_grad_batches"],
-                enable_progress_bar=True,
-                callbacks=[
-                    early_stopping_callback,
-                    lr_monitor,
-                    checkpoint_callback,
-                ],
-                enable_checkpointing=True,
-                strategy=(
-                    DDPStrategy(find_unused_parameters=True)
-                    if config["optim"]["strategy"] == "ddp"
-                    else config["optim"]["strategy"]
-                ),
                 default_root_dir=self.log_save_dir,
-                logger=[logger_wb],
-                precision=config["optim"]["precision"],
             )
 
             trainer.fit(model, self.dm)
@@ -346,6 +342,19 @@ def main(argv=None):
     parser.add_argument("-log_save_dir", type=str, default="./logs_lightning/")
     parser.add_argument("-project_name", type=str, default="qtaim_embed_lightning")
     parser.add_argument("-sweep_config", type=str, default="./sweep_config.json")
+    parser.add_argument(
+        "-sweep_id",
+        type=str,
+        default=None,
+        help="join this existing sweep instead of creating one. Every worker "
+        "of a multi-task launch must pass the same id, otherwise each task "
+        "registers its own sweep and the searches never share results.",
+    )
+    parser.add_argument(
+        "--create_sweep_only",
+        action="store_true",
+        help="register the sweep, print its id, and exit without running an agent",
+    )
     parser.add_argument("-wandb_entity", type=str, default="santi")
     parser.add_argument("-count", type=int, default=3000)
 
@@ -372,9 +381,17 @@ def main(argv=None):
         sweep_config["metric"] = {"name": "val_loss", "goal": "minimize"}
 
     # wandb loop
-    sweep_id = wandb.sweep(
-        sweep_config, project=wandb_project_name, entity=wandb_entity
-    )
+    if args.sweep_id is not None:
+        sweep_id = args.sweep_id
+        logger.info("joining existing sweep: %s", sweep_id)
+    else:
+        sweep_id = wandb.sweep(
+            sweep_config, project=wandb_project_name, entity=wandb_entity
+        )
+        logger.info("created sweep: %s", sweep_id)
+        if args.create_sweep_only:
+            print(sweep_id)
+            return sweep_id
     training_obj = TrainingObject(
         sweep_config,
         log_save_dir,
@@ -392,4 +409,14 @@ def main(argv=None):
     logger.info("wandb_project_name: %s", wandb_project_name)
     logger.info("sweep_config_loc: %s", sweep_config_loc)
     logger.info("use_lmdb: %s", use_lmdb)
-    wandb.agent(sweep_id, function=training_obj.train, count=count, entity=wandb_entity)
+    # project= is required: a bare sweep id carries no project, and when the
+    # agent joins a sweep created by another process (-sweep_id) there is no
+    # wandb.sweep() call in this process to have set the default. Without it the
+    # agent registers against a nonexistent project and 404s.
+    wandb.agent(
+        sweep_id,
+        function=training_obj.train,
+        count=count,
+        entity=wandb_entity,
+        project=wandb_project_name,
+    )

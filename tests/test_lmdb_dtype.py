@@ -4,7 +4,7 @@ Scaled LMDBs carry float64 `feat` tensors (the scaler stores mean/std as
 float64), which collide with float32/bf16 model weights at the first linear.
 `TransformMol` downcasts `feat` to a configurable dtype (default float32) on
 load; the LMDB datamodules plumb `config["dataset"]["dtype"]` through to it.
-These tests pin that behavior and confirm labels/edge_index are untouched.
+These tests pin that behavior: `labels` follow the same dtype, edge_index stays long.
 """
 import pytest
 import torch
@@ -24,7 +24,7 @@ def _graph_with_dtypes(feat_dtype=torch.float64, label_dtype=torch.float64):
     graph, _ = make_hetero_graph()
     for nt in graph.node_types:
         graph[nt].feat = graph[nt].feat.to(feat_dtype)
-    # attach a label tensor on the atom store to prove it is left alone
+    # attach a label tensor on the atom store to check how it is cast
     graph["atom"].labels = torch.ones(
         graph["atom"].num_nodes, 2, dtype=label_dtype
     )
@@ -41,9 +41,17 @@ def test_default_downcasts_feat_to_float32():
         assert out[nt].feat.dtype == torch.float32
 
 
-def test_labels_dtype_preserved():
-    # labels start float64 and must stay float64 (only feat is cast)
+def test_labels_follow_feature_dtype():
+    # scaled LMDBs carry float64 labels; they are cast with feat so the loss
+    # sees matching dtypes (performance plan A1)
     out = TransformMol(_serialized(_graph_with_dtypes(label_dtype=torch.float64)))
+    assert out["atom"].labels.dtype == torch.float32
+
+
+def test_dtype_none_leaves_labels_alone():
+    out = TransformMol(
+        _serialized(_graph_with_dtypes(label_dtype=torch.float64)), dtype=None
+    )
     assert out["atom"].labels.dtype == torch.float64
 
 
@@ -120,3 +128,10 @@ def test_datamodule_feature_dtype_default_and_override(dm_cls):
         "dataset": {"train_lmdb": "/nonexistent/train.lmdb", "dtype": "float64"}
     }
     assert dm_cls(config=override)._feature_dtype == "float64"
+
+
+def test_labels_never_below_float32():
+    # bf16 features keep full-precision regression targets
+    out = TransformMol(_serialized(_graph_with_dtypes()), dtype="bfloat16")
+    assert out["atom"].feat.dtype == torch.bfloat16
+    assert out["atom"].labels.dtype == torch.float32

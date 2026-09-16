@@ -38,15 +38,15 @@
         "standard_scale_targets": false,
         "extra_keys": {
             "atom": [],
-            "bond": [],
+            "bond": ["rbf_bessel_50", "boo_1"],
             "global": ["success"]
         },
         "rbf_cutoff": 5.0,
         "impute": false,
         "verbose": true,
-        "train_lmdb": "data/oact_classifier/actinides_lmdb/train/",
-        "val_lmdb": "data/oact_classifier/actinides_lmdb/val/",
-        "test_lmdb": "data/oact_classifier/actinides_lmdb/test/"
+        "train_lmdb": "data/oact_classifier/lmdbs/actinides_lmdb/train/",
+        "val_lmdb": "data/oact_classifier/lmdbs/actinides_lmdb/val/",
+        "test_lmdb": "data/oact_classifier/lmdbs/actinides_lmdb/test/"
     },
     "model": {
         "classifier": true,
@@ -76,7 +76,7 @@
         "fc_dropout": 0.2,
         "fc_batch_norm": true,
         "output_dims": 2,
-        "global_pooling_fn": "SumPoolingThenCat",
+        "global_pooling_fn": "GlobalAttentionPoolingThenCat",
         "pooling_ntypes": ["atom", "bond", "global"],
         "pooling_ntypes_direct": ["global"],
         "lstm_iters": 3,
@@ -90,9 +90,9 @@
         "restore": false,
         "max_epochs": 500,
         "compiled": false,
-        "extra_stop_patience": 5,
+        "extra_stop_patience": 100,
         "ntasks": 1,
         "initializer": "kaiming",
-        "class_weights": [10.9, 1.0]
+        "class_weights": [3.7, 1.0]
     }
 }
