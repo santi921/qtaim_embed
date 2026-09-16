@@ -386,4 +386,12 @@ def main(argv=None):
     logger.info("wandb_project_name: %s", wandb_project_name)
     logger.info("sweep_config_loc: %s", sweep_config_loc)
     logger.info("use_lmdb: %s", use_lmdb)
-    wandb.agent(sweep_id, function=training_obj.train, count=3000, entity="santi")
+    # project= is required when joining a sweep created by another process
+    # (-sweep_id): a bare sweep id carries no project and the agent 404s without it.
+    wandb.agent(
+        sweep_id,
+        function=training_obj.train,
+        count=3000,
+        entity="santi",
+        project=wandb_project_name,
+    )
