@@ -71,20 +71,28 @@ class GraphConvDropoutBatch(nn.Module):
         activation: Optional[nn.Module] = None,
         dropout: float = 0.1,
         batch_norm_tf: bool = True,
+        bn_before_activation: bool = False,
+        aggr: str = "add",
         **kwargs,
     ):
+        """conv -> activation -> dropout -> batch norm (the original order), or
+        conv -> batch norm -> activation -> dropout when `bn_before_activation`.
+        The original order normalizes post-ReLU activations: a channel that is
+        inactive for a whole batch has zero batch variance and its running
+        variance decays to the float32 floor, which then amplifies rare inputs
+        100x in eval mode (docs/research/2026-09-tm-react-eval-divergence.md).
+        `aggr` is PyG GraphConv's neighbor aggregation ("add" or "mean")."""
         super(GraphConvDropoutBatch, self).__init__()
-        # Create graph convolutional layer using PyG's GraphConv
         # GraphConv supports bipartite message passing needed for HeteroConv
-        # Uses additive aggregation (equivalent to sum of neighbor messages)
         self.graph_conv = GraphConv(
             in_channels=in_feats,
             out_channels=out_feats,
-            aggr="add",
+            aggr=aggr,
         )
         self.activation = activation
         self.dropout = nn.Dropout(p=dropout) if dropout > 0 else None
         self.batch_norm = nn.BatchNorm1d(out_feats) if batch_norm_tf else None
+        self.bn_before_activation = bn_before_activation
         self.out_feats = out_feats
 
     def forward(
@@ -105,19 +113,18 @@ class GraphConvDropoutBatch(nn.Module):
         """
         with profiler.record_function("GCN Conv"):
 
-            # Apply graph convolutional layer
             x = self.graph_conv(x, edge_index, edge_weight)
 
-            # Apply activation
+            if self.batch_norm is not None and self.bn_before_activation:
+                x = self.batch_norm(x)
+
             if self.activation is not None:
                 x = self.activation(x)
 
-            # Apply dropout to output features
             if self.dropout is not None:
                 x = self.dropout(x)
 
-            # Apply batch normalization
-            if self.batch_norm is not None:
+            if self.batch_norm is not None and not self.bn_before_activation:
                 x = self.batch_norm(x)
 
         return x

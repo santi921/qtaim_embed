@@ -700,3 +700,84 @@ def test_train_with_rbf_features():
 
     # verify bond feature width: 7 ring features + 10 RBF = 17
     assert dataset.feature_size["bond"] == 17
+
+
+def test_schnet_encoder_graph_level():
+    """encoder_fn=schnet plumbing through GCNGraphPred: fit + viz path."""
+    dataset = get_dataset_graph_level(
+        log_scale_features=True,
+        log_scale_targets=False,
+        standard_scale_features=True,
+        standard_scale_targets=True,
+    )
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset, batch_size=len(dataset.graphs), shuffle=False
+    )
+
+    model_config = get_default_graph_level_config()
+    model_config["model"]["atom_feature_size"] = dataset.feature_size["atom"]
+    model_config["model"]["bond_feature_size"] = dataset.feature_size["bond"]
+    model_config["model"]["global_feature_size"] = dataset.feature_size["global"]
+    model_config["model"]["target_dict"]["global"] = dataset.target_dict["global"]
+    model_config["model"]["initializer"] = None
+    model_config["model"]["encoder_fn"] = "schnet"
+    model_config["model"]["encoder_hidden"] = 16
+    model_config["model"]["encoder_n_interactions"] = 2
+
+    model = load_graph_level_model_from_config(model_config["model"])
+    assert model.encoder is not None
+
+    trainer = pl.Trainer(
+        max_epochs=2,
+        accelerator="auto",
+        devices=1,
+        enable_progress_bar=False,
+        enable_checkpointing=False,
+        log_every_n_steps=1,
+    )
+    trainer.fit(model, data_loader)
+
+    # the second embedding call site must apply the encoder concat too
+    batch_graph, _ = next(iter(data_loader))
+    feat_dict = {nt: batch_graph[nt].feat for nt in batch_graph.node_types}
+    model.cpu().feature_at_each_layer(batch_graph, feat_dict)
+
+
+def test_schnet_encoder_graph_level_classifier():
+    """encoder_fn=schnet plumbing through GCNGraphPredClassifier."""
+    dataset_single, _ = get_datasets_graph_level_classifier(
+        log_scale_features=True, standard_scale_features=True
+    )
+    data_loader = DataLoaderMoleculeGraphTask(
+        dataset_single, batch_size=len(dataset_single.graphs), shuffle=False
+    )
+
+    model_config = get_default_graph_level_config()
+    model_config["model"]["atom_feature_size"] = dataset_single.feature_size["atom"]
+    model_config["model"]["bond_feature_size"] = dataset_single.feature_size["bond"]
+    model_config["model"]["global_feature_size"] = dataset_single.feature_size["global"]
+    model_config["model"]["target_dict"]["global"] = dataset_single.target_dict[
+        "global"
+    ]
+    model_config["model"]["classifier"] = True
+    model_config["model"]["initializer"] = None
+    model_config["model"]["encoder_fn"] = "schnet"
+    model_config["model"]["encoder_hidden"] = 16
+    model_config["model"]["encoder_n_interactions"] = 2
+
+    model = load_graph_level_model_from_config(model_config["model"])
+    assert model.encoder is not None
+
+    batch_graph, batch_label = next(iter(data_loader))
+    labels_one_hot = torch.argmax(batch_label["global"], axis=2).reshape(-1)
+    feat_dict = {nt: batch_graph[nt].feat for nt in batch_graph.node_types}
+
+    opt = torch.optim.Adam(model.parameters(), lr=0.01)
+    for _ in range(3):
+        logits = model(batch_graph, feat_dict)
+        loss = F.cross_entropy(logits, labels_one_hot)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+    assert torch.isfinite(loss)

@@ -7,6 +7,25 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+
+def guard_std(std, mean=None, rel_tol: float = 10.0):
+    """Set the scale of constant and float-noise-constant columns to 1.0.
+
+    A column is constant when std <= rel_tol * eps64 * max(|mean|, 1), the same
+    relative test sklearn uses in _is_constant_feature, so fit, apply, merge and
+    inverse all agree and a column that is constant up to rounding never divides
+    by ~1e-17. Genuine small variances (std 1e-3 and up) are untouched. Accepts
+    torch tensors or numpy arrays and returns the same type, modified in place.
+    """
+    eps = torch.finfo(torch.float64).eps
+    if isinstance(std, np.ndarray):
+        m = np.ones_like(std) if mean is None else np.maximum(np.abs(np.asarray(mean)), 1.0)
+        std[std <= rel_tol * eps * m] = 1.0
+        return std
+    m = torch.ones_like(std) if mean is None else torch.clamp(mean.abs().to(std.dtype), min=1.0)
+    std[std <= rel_tol * eps * m] = 1.0
+    return std
+
 def compute_running_average(
     old_avg: float, new_value: float, n: int, n_new: Optional[int] = 1
 ) -> float:
@@ -57,9 +76,9 @@ def _transform(
             )
 
     rst = scaler.transform(X)
-    # make all values < eta in std to be eta
-    std[std < eta] = eta
-    # manually scale the data
-    # rst = (rst - mean) / std
+    # sklearn's transform divides constant columns by 1.0 internally
+    # (_handle_zeros_in_scale, relative tolerance); the returned std must match
+    # what was actually used or later apply/inverse calls disagree
+    std = guard_std(std, mean)
 
     return rst, mean, std
