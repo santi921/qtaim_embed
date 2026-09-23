@@ -16,6 +16,7 @@ from pytorch_lightning.callbacks import (
 )
 from qtaim_embed.utils.training import build_trainer
 from qtaim_embed.core.datamodule import QTAIMNodeTaskDataModule, LMDBDataModule
+from qtaim_embed.models.encoders import ENCODER_DEFAULTS
 from qtaim_embed.models.utils import load_node_level_model_from_config
 
 # from qtaim_embed.utils.data import get_default_graph_level_config
@@ -231,6 +232,8 @@ class TrainingObject:
                     "restore": init_config["restore"],
                     "max_epochs": init_config["max_epochs"],
                     "compiled": init_config["compiled"],
+                    # 3D encoder knobs; absent keys fall back to ENCODER_DEFAULTS (encoder_fn "none")
+                    **{k: init_config[k] for k in ENCODER_DEFAULTS if k in init_config},
                 },
                 "dataset": {},
                 "optim": {
