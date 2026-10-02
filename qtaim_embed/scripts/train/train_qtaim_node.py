@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
 import logging
-import wandb, argparse, torch, json
+import argparse, torch, json
 import numpy as np
 from copy import deepcopy
 import pandas as pd
 
-import pytorch_lightning as pl
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -16,7 +15,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from pytorch_lightning.strategies import DDPStrategy
+from qtaim_embed.utils.training import build_trainer
 
 
 from qtaim_embed.utils.data import get_default_node_level_config
@@ -42,8 +41,8 @@ def main(argv=None):
     parser.add_argument(
         "--num_workers",
         type=int,
-        default=1,
-        help="number of parallel workers for dataset preprocessing (default: 1)",
+        default=None,
+        help="DataLoader workers; overrides both dataset.num_workers and optim.num_workers when set",
     )
 
     args = parser.parse_args()
@@ -76,8 +75,10 @@ def main(argv=None):
 
     # set log save dir
     config["dataset"]["log_save_dir"] = log_save_dir
-    # set num_workers from CLI (overrides config file)
-    config["dataset"]["num_workers"] = args.num_workers
+    # CLI overrides both worker settings (pickle datamodules read dataset.*, LMDB ones optim.*)
+    if args.num_workers is not None:
+        config["dataset"]["num_workers"] = args.num_workers
+        config["optim"]["num_workers"] = args.num_workers
 
     logger.info("config_settings")
 
@@ -135,83 +136,64 @@ def main(argv=None):
     model = load_node_level_model_from_config(config["model"])
     logger.info("Model constructed")
 
-    with wandb.init(project=project_name) as run:
-        log_parameters = LogParameters()
-        logger_tb = TensorBoardLogger(
-            config["dataset"]["log_save_dir"], name="test_logs"
-        )
-        logger_wb = WandbLogger(
-            project=project_name, name="test_logs", entity=wandb_entity
-        )
-        lr_monitor = LearningRateMonitor(logging_interval="step")
+    log_parameters = LogParameters()
+    logger_tb = TensorBoardLogger(
+        config["dataset"]["log_save_dir"], name="test_logs"
+    )
+    logger_wb = WandbLogger(
+        project=project_name, name=None, entity=wandb_entity
+    )
+    lr_monitor = LearningRateMonitor(logging_interval="step")
 
-        checkpoint_callback = ModelCheckpoint(
-            dirpath=config["dataset"]["log_save_dir"],
-            filename="model_lightning_{epoch:03d}-{val_loss:.4f}",
-            monitor="val_mae",
-            mode="min",
-            auto_insert_metric_name=True,
-            save_last=True,
-        )
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=config["dataset"]["log_save_dir"],
+        filename="model_lightning_{epoch:03d}-{val_loss:.4f}",
+        monitor="val_mae",
+        mode="min",
+        auto_insert_metric_name=True,
+        save_last=True,
+    )
 
-        early_stopping_callback = EarlyStopping(
-            monitor="val_loss",
-            min_delta=0.00,
-            patience=config["model"]["extra_stop_patience"],
-            verbose=False,
-            mode="min",
-        )
+    early_stopping_callback = EarlyStopping(
+        monitor="val_loss",
+        min_delta=0.00,
+        patience=config["model"]["extra_stop_patience"],
+        verbose=False,
+        mode="min",
+    )
 
-        dm.setup(stage="fit")
-        val_dl = dm.train_dataloader()
-        _, _ = next(iter(val_dl))
+    dm.setup(stage="fit")
+    val_dl = dm.train_dataloader()
+    _, _ = next(iter(val_dl))
 
-        # DDP Strategy Note:
-        # This project requires strategy="ddp" (not "ddp_spawn") for multi-GPU
-        # training. LMDB datasets use lazy per-worker env init that is compatible
-        # with fork-based DDP but not spawn-based ddp_spawn (LMDB environments
-        # are not picklable). For PCIe GPUs without NVLink (e.g. A5000), set
-        # NCCL_P2P_DISABLE=1 before launching.
-        trainer = pl.Trainer(
-            max_epochs=config["model"]["max_epochs"],
-            accelerator="gpu",
-            devices=config["optim"]["num_devices"],
-            num_nodes=config["optim"]["num_nodes"],
-            gradient_clip_val=config["optim"]["gradient_clip_val"],
-            accumulate_grad_batches=config["optim"]["accumulate_grad_batches"],
-            enable_progress_bar=True,
-            callbacks=[
-                early_stopping_callback,
-                lr_monitor,
-                log_parameters,
-                checkpoint_callback,
-            ],
-            enable_checkpointing=True,
-            strategy=(
-                DDPStrategy(find_unused_parameters=True)
-                if config["optim"]["strategy"] == "ddp"
-                else config["optim"]["strategy"]
-            ),
-            default_root_dir=config["dataset"]["log_save_dir"],
-            logger=[logger_tb, logger_wb],
-            precision=config["optim"]["precision"],
-        )
+    # DDP Strategy Note:
+    # This project requires strategy="ddp" (not "ddp_spawn") for multi-GPU
+    # training. LMDB datasets use lazy per-worker env init that is compatible
+    # with fork-based DDP but not spawn-based ddp_spawn (LMDB environments
+    # are not picklable). For PCIe GPUs without NVLink (e.g. A5000), set
+    # NCCL_P2P_DISABLE=1 before launching.
+    trainer = build_trainer(
+        config,
+        loggers=[logger_tb, logger_wb],
+        callbacks=[early_stopping_callback, lr_monitor, log_parameters, checkpoint_callback],
+        accelerator="gpu",
+        default_root_dir=config["dataset"]["log_save_dir"],
+    )
 
-        # log dataset and optim settings from config
-        run.config.update(config["dataset"], allow_val_change=True)
-        run.config.update(config["optim"], allow_val_change=True)
+    # log dataset and optim settings from config
+    logger_wb.log_hyperparams({**config["dataset"], **config["optim"]})
 
-        logger.info("Dataset and optim settings logged")
-        logger.info("Fitting model")
-        trainer.fit(model, dm)
+    logger.info("Dataset and optim settings logged")
+    logger.info("Fitting model")
+    trainer.fit(model, dm)
 
-        logger.info("Model fitted, testing")
-        if use_lmdb:
-            if "test_lmdb" in config["dataset"]:
-                trainer.test(model, dm)
+    logger.info("Model fitted, testing")
+    if use_lmdb:
+        if "test_lmdb" in config["dataset"]:
+            trainer.test(model, dm)
 
-        else:
-            if config["dataset"]["test_prop"] > 0.0:
-                trainer.test(model, dm)
+    else:
+        if config["dataset"]["test_prop"] > 0.0:
+            trainer.test(model, dm)
 
-    run.finish()
+    logger_wb.experiment.finish()

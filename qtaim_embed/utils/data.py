@@ -1,4 +1,6 @@
 from pathlib import Path
+
+from qtaim_embed.models.encoders import ENCODER_DEFAULTS
 import numpy as np
 from qtaim_embed.core.dataset import Subset
 from typing import Optional, Any
@@ -53,7 +55,9 @@ def get_default_link_level_config():
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,
-            "batch_norm": False,
+            "batch_norm": True,
+            "bn_before_activation": True,
+            "global_aggr": "sum",
             "activation": "ReLU",
             "bias": True,
             "norm": "both",
@@ -92,14 +96,67 @@ def get_default_link_level_config():
         "optim": {
             "num_devices": 1,
             "num_nodes": 1,
-            "num_workers": 4,
+            "num_workers": 8,
             "gradient_clip_val": 5.0,
             "strategy": "auto",
-            "precision": "bf16",
+            "precision": "bf16-mixed",
             "accumulate_grad_batches": 1,
             "pin_memory": True,
             "persistent_workers": False,
+            "num_sanity_val_steps": 2,
+            "warmup_epochs": 0,
             "train_batch_size": 128,
+        },
+    }
+
+
+def get_default_bond_level_config():
+    """Defaults for the T3 bond classifier (GCNBondPred), LMDB input only."""
+    root = str(Path(__file__).parent.parent.parent)
+    return {
+        "dataset": {
+            "train_lmdb": root + "/tests/data/lmdb_link/train/molecule.lmdb",
+            "val_lmdb": root + "/tests/data/lmdb_link/val/molecule.lmdb",
+            "test_lmdb": root + "/tests/data/lmdb_link/test/molecule.lmdb",
+            "dtype": "float32",
+            "log_save_dir": "./test_logs/",
+        },
+        "model": {
+            **{**ENCODER_DEFAULTS, "encoder_fn": "schnet"},
+            "use_atom_feat": False,
+            "atom_input_size": 0,
+            "embedding_size": 64,
+            "pool_multiplier": 2.0,
+            "pair_rbf": "bessel",
+            "pair_rbf_n": 50,
+            "pair_rbf_cutoff": None,
+            "pair_hidden": [256, 128],
+            "pair_dropout": 0.1,
+            "activation": "SiLU",
+            "lr": 1e-3,
+            "weight_decay": 1e-5,
+            "scheduler_name": "reduce_on_plateau",
+            "lr_plateau_patience": 10,
+            "lr_scale_factor": 0.5,
+            "threshold": None,
+            "initializer": None,
+            "restore": False,
+            "max_epochs": 200,
+            "extra_stop_patience": 30,
+        },
+        "optim": {
+            "num_devices": 1,
+            "num_nodes": 1,
+            "num_workers": 8,
+            "gradient_clip_val": 5.0,
+            "strategy": "auto",
+            "precision": "bf16-mixed",
+            "accumulate_grad_batches": 1,
+            "pin_memory": True,
+            "persistent_workers": False,
+            "num_sanity_val_steps": 2,
+            "warmup_epochs": 0,
+            "train_batch_size": 64,
         },
     }
 
@@ -167,12 +224,14 @@ def get_default_node_level_config():
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "GlobalAttentionPoolingThenCat",
             "dropout": 0.2,
-            "batch_norm": False,
+            "batch_norm": True,
+            "bn_before_activation": True,
+            "global_aggr": "sum",
             "activation": "ReLU",
             "bias": True,
             "norm": "both",
             "aggregate": "sum",
-            "lr": 0.01,
+            "lr": 0.008,  # E1 gate 2026-09-09: batch 1024 with linear LR scaling from 128 / 1e-3
             "scheduler_name": "reduce_on_plateau",
             "weight_decay": 0.00001,
             "lr_plateau_patience": 25,
@@ -198,18 +257,21 @@ def get_default_node_level_config():
             "restore": False,
             "max_epochs": 1000,
             "initializer": "kaiming",
+            **ENCODER_DEFAULTS,
         },
         "optim": {
             "num_devices": 1,
             "num_nodes": 1,
-            "num_workers": 0,
+            "num_workers": 8,
             "gradient_clip_val": 5.0,
             "strategy": "auto",
-            "precision": "32",
+            "precision": "bf16-mixed",
             "accumulate_grad_batches": 1,
-            "pin_memory": False,
+            "pin_memory": True,
             "persistent_workers": False,
-            "train_batch_size": 3,
+            "num_sanity_val_steps": 2,
+            "warmup_epochs": 1,
+            "train_batch_size": 1024,  # E1 gate 2026-09-09 (tm_react, 119K graphs); use 128 / lr 1e-3 / no warmup on small datasets
         },
     }
 
@@ -265,12 +327,14 @@ def get_default_graph_level_config():
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,
-            "batch_norm": False,
+            "batch_norm": True,
+            "bn_before_activation": True,
+            "global_aggr": "sum",
             "activation": "ReLU",
             "bias": True,
             "norm": "both",
             "aggregate": "sum",
-            "lr": 0.01,
+            "lr": 0.001,  # TMQM gate 2026-09-09
             "scheduler_name": "reduce_on_plateau",
             "weight_decay": 0.00001,
             "lr_plateau_patience": 25,
@@ -296,18 +360,21 @@ def get_default_graph_level_config():
             "restore": False,
             "max_epochs": 1000,
             "initializer": "kaiming",
+            **ENCODER_DEFAULTS,
         },
         "optim": {
             "num_devices": 1,
             "num_nodes": 1,
-            "num_workers": 0,
+            "num_workers": 8,
             "gradient_clip_val": 5.0,
             "strategy": "auto",
-            "precision": "bf16",
+            "precision": "bf16-mixed",
             "accumulate_grad_batches": 1,
-            "pin_memory": False,
+            "pin_memory": True,
             "persistent_workers": False,
-            "train_batch_size": 2,
+            "num_sanity_val_steps": 2,
+            "warmup_epochs": 0,
+            "train_batch_size": 128,  # TMQM gate 2026-09-09: batch 1024 (lr 8e-3, warmup 1) is 29 % worse in test MAE on 48K graphs
         },
     }
 
@@ -398,7 +465,9 @@ def get_default_graph_level_config_classif():
             "conv_fn": "ResidualBlock",
             "global_pooling_fn": "SumPoolingThenCat",
             "dropout": 0.2,
-            "batch_norm": False,
+            "batch_norm": True,
+            "bn_before_activation": True,
+            "global_aggr": "sum",
             "activation": "ReLU",
             "bias": True,
             "norm": "both",
@@ -428,13 +497,14 @@ def get_default_graph_level_config_classif():
             "pooling_ntypes_direct": ["global"],
             "restore": False,
             "max_epochs": 1000,
+            **ENCODER_DEFAULTS,
         },
         "optim": {
             "num_devices": 1,
             "num_nodes": 1,
             "gradient_clip_val": 5.0,
             "strategy": "auto",
-            "precision": "bf16",
+            "precision": "bf16-mixed",
             "accumulate_grad_batches": 3,
         },
     }

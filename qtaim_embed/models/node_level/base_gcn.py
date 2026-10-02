@@ -23,6 +23,9 @@ from qtaim_embed.models.layers import (
     UnifySize,
     EDGE_TYPE_MAP,
 )
+from qtaim_embed.models.encoders import attach_encoder, check_encoder_hparams, encode_atom_inputs
+from qtaim_embed.models.layers_dense import DenseHeteroBatch, DenseResidualBlock, to_dense_hetero
+from qtaim_embed.models.optim import build_adam
 import torch.autograd.profiler as profiler
 
 from typing import List, Tuple, Dict, Optional
@@ -52,6 +55,23 @@ class GCNNodePred(pl.LightningModule):
         loss_fn: str, loss function
         resid_n_graph_convs: int, number of graph convolutions per residual block
         scalers: list, list of scalers applied to each node type
+        encoder_fn: str, optional 3D encoder ("none", "schnet", "dimenetpp",
+            "equivariant"); requires atom.pos/atom.z on the graphs and
+            compiled=False. Output is concatenated onto atom features ahead
+            of UnifySize.
+        encoder_hidden: int, encoder output width added to the atom input dim
+        encoder_cutoff: float, radius-graph cutoff in Angstrom
+        encoder_n_interactions: int, number of encoder interaction blocks
+        encoder_num_gaussians: int, schnet RBF size
+        encoder_num_radial: int, dimenetpp/equivariant radial basis size
+        encoder_lmax: int, max spherical harmonic l (equivariant only)
+        encoder_max_neighbors: int, nearest-neighbor cap (dimenetpp only)
+        encoder_tp: str, equivariant tensor product, "channelwise" (default) or "fully_connected"
+        encoder_max_z: int, atomic-number embedding rows in the encoder (119 covers the table)
+        dense_grid: int, ResidualBlockDense pads molecules to multiples of this many atoms/bonds
+        bn_before_activation: bool, conv -> BN -> activation -> dropout instead of BN last (see docs/research/2026-09-tm-react-eval-divergence.md)
+        global_aggr: str, "sum" (GraphConv add) or "mean" for the a2g / b2g relations into the global node
+        compile_mode: str, torch.compile mode for the dense conv stack: "reduce-overhead" (CUDA graphs, default) or "default" (plain inductor; required with accumulate_grad_batches > 1, whose accumulated .grad tensors alias CUDA-graph outputs)
 
     """
 
@@ -83,6 +103,20 @@ class GCNNodePred(pl.LightningModule):
         lr_scale_factor: float = 0.5,
         loss_fn: str = "mse",
         compiled: bool = False,
+        encoder_fn: str = "none",
+        encoder_hidden: int = 64,
+        encoder_cutoff: float = 5.0,
+        encoder_n_interactions: int = 3,
+        encoder_num_gaussians: int = 50,
+        encoder_num_radial: int = 6,
+        encoder_lmax: int = 1,
+        encoder_max_neighbors: int = 16,
+        encoder_tp: str = "channelwise",
+        encoder_max_z: int = 119,
+        dense_grid: int = 16,
+        bn_before_activation: bool = False,
+        global_aggr: str = "sum",
+        compile_mode: str = "reduce-overhead",
     ):
         super().__init__()
         self.learning_rate = lr
@@ -100,16 +134,18 @@ class GCNNodePred(pl.LightningModule):
             if v != [None]:
                 output_dims += len(v)
 
-        assert conv_fn in ["GraphConvDropoutBatch", "ResidualBlock", "GATConv"], (
+        assert conv_fn in ["GraphConvDropoutBatch", "ResidualBlock", "ResidualBlockDense", "GATConv"], (
             "conv_fn must be either GraphConvDropoutBatch, GATConv or ResidualBlock"
             + f"but got {conv_fn}"
         )
 
-        if conv_fn == "ResidualBlock":
+        if conv_fn in ("ResidualBlock", "ResidualBlockDense"):
             assert resid_n_graph_convs is not None, (
                 "resid_n_graph_convs must be specified for ResidualBlock"
                 + f"but got {resid_n_graph_convs}"
             )
+
+        check_encoder_hparams(encoder_fn, compiled, conv_fn)
 
         params = {
             "atom_input_size": atom_input_size,
@@ -139,17 +175,35 @@ class GCNNodePred(pl.LightningModule):
             "hidden_size": hidden_size,
             "embedding_size": embedding_size,
             "compiled": compiled,
+            "encoder_fn": encoder_fn,
+            "encoder_hidden": encoder_hidden,
+            "encoder_cutoff": encoder_cutoff,
+            "encoder_n_interactions": encoder_n_interactions,
+            "encoder_num_gaussians": encoder_num_gaussians,
+            "encoder_num_radial": encoder_num_radial,
+            "encoder_lmax": encoder_lmax,
+            "encoder_max_neighbors": encoder_max_neighbors,
+            "encoder_tp": encoder_tp,
+            "encoder_max_z": encoder_max_z,
+            "dense_grid": dense_grid,
+            "bn_before_activation": bn_before_activation,
+            "global_aggr": global_aggr,
+            "compile_mode": compile_mode,
         }
 
         self.hparams.update(params)
         self.save_hyperparameters()
 
         # convert string activation to function
-        if self.hparams.activation is not None:
+        # checkpoints store the module (not the name) because hparams is
+        # mutated after save_hyperparameters; accept both on reload
+        if isinstance(self.hparams.activation, str):
             self.hparams.activation = getattr(torch.nn, self.hparams.activation)()
 
+        self.encoder, encoder_width = attach_encoder(self.hparams)
+
         input_size = {
-            "atom": self.hparams.atom_input_size,
+            "atom": self.hparams.atom_input_size + encoder_width,
             "bond": self.hparams.bond_input_size,
             "global": self.hparams.global_input_size,
         }
@@ -182,7 +236,12 @@ class GCNNodePred(pl.LightningModule):
                     HeteroConv(conv_dict, aggr=self.hparams.aggregate)
                 )
 
-        elif self.hparams.conv_fn == "ResidualBlock":
+        elif self.hparams.conv_fn in ("ResidualBlock", "ResidualBlockDense"):
+            block_cls = (
+                DenseResidualBlock
+                if self.hparams.conv_fn == "ResidualBlockDense"
+                else ResidualBlock
+            )
             layer_tracker = 0
 
             while layer_tracker < self.hparams.n_conv_layers:
@@ -208,7 +267,7 @@ class GCNNodePred(pl.LightningModule):
                     output_block = True
 
                 self.conv_layers.append(
-                    ResidualBlock(
+                    block_cls(
                         layer_args,
                         resid_n_graph_convs=self.hparams.resid_n_graph_convs,
                         aggregate=self.hparams.aggregate,
@@ -237,6 +296,7 @@ class GCNNodePred(pl.LightningModule):
                 )
 
         self.conv_layers = nn.ModuleList(self.conv_layers)
+        self._dense_blocks_fn = self._run_dense_blocks
         # print(self.conv_layers)
         self.target_dict = target_dict
 
@@ -278,23 +338,42 @@ class GCNNodePred(pl.LightningModule):
             warnings.warn("torch.compile disabled on ROCm (no benefit, potential instability)")
             compiled = False
 
-        self.forward_fn = (
-            torch.compile(self.compiled_forward, dynamic=True)
-            if compiled
-            else self.compiled_forward
-        )
+        if self.hparams.conv_fn == "ResidualBlockDense":
+            # compile only the padded block stack: shapes are static per bucket,
+            # the encoder and the padding step stay eager. Bucketed loaders
+            # produce ~25 distinct shapes, above dynamo's default cache of 8.
+            if compiled:
+                torch._dynamo.config.cache_size_limit = max(
+                    torch._dynamo.config.cache_size_limit, 64
+                )
+                self._dense_blocks_fn = torch.compile(
+                    self._run_dense_blocks, mode=compile_mode, dynamic=False
+                )
+            self.forward_fn = self.compiled_forward
+        else:
+            self.forward_fn = (
+                torch.compile(self.compiled_forward, dynamic=True)
+                if compiled
+                else self.compiled_forward
+            )
 
     def compiled_forward(self, graph: HeteroData, inputs: dict) -> dict:
         """
         Forward pass with JIT compatibility
         """
 
+        inputs = encode_atom_inputs(self.encoder, graph, inputs)
         feats = self.embedding(inputs)
 
         # Extract edge_index_dict from PyG HeteroData graph
         edge_index_dict = graph.edge_index_dict
 
-        for ind, conv in enumerate(self.conv_layers):
+        if self.hparams.conv_fn == "ResidualBlockDense":
+            feats = self._dense_conv_stack(graph, feats)
+            conv_iter = ()
+        else:
+            conv_iter = enumerate(self.conv_layers)
+        for ind, conv in conv_iter:
             feats = conv(feats, edge_index_dict)
 
             if self.hparams.conv_fn == "GATConv":
@@ -315,6 +394,37 @@ class GCNNodePred(pl.LightningModule):
 
         return feats
 
+    def _dense_conv_stack(self, graph, feats):
+        """conv_fn="ResidualBlockDense": pad to (N_b, B_b) blocks, run the blocks
+        (as one compiled CUDA graph when compiled=True), return flat features."""
+        # eval always runs the eager blocks (cuDNN batch norm on the valid rows,
+        # no recompiles for ragged eval batches); training uses the compiled
+        # CUDA graphs when compiled=True, keyed by the bucket's stamped shape
+        fn = self._dense_blocks_fn if self.training else self._run_dense_blocks
+        eager = fn == self._run_dense_blocks
+        if not eager and self.hparams.get("compile_mode", "reduce-overhead") == "reduce-overhead":
+            # new iteration for cudagraph trees: outputs of the previous replay
+            # may now be overwritten (to_flat copies everything we keep)
+            torch.compiler.cudagraph_mark_step_begin()
+        dense = to_dense_hetero(graph, feats, grid=self.hparams.dense_grid,
+                                shape=getattr(graph, "dense_shape", None), with_valid=eager)
+        xa, xb, xg = fn(
+            dense.x["atom"], dense.x["bond"], dense.x["global"],
+            dense.inc_a2b, dense.inc_b2a, dense.mask["atom"], dense.mask["bond"],
+            dense.valid["atom"] if eager else None, dense.valid["bond"] if eager else None,
+        )
+        return dense.to_flat({"atom": xa, "bond": xb, "global": xg})
+
+    def _run_dense_blocks(self, xa, xb, xg, inc_a2b, inc_b2a, ma, mb, va=None, vb=None):
+        # tensor-only signature so torch.compile sees static shapes per bucket
+        dense = DenseHeteroBatch(x={}, mask={"atom": ma, "bond": mb}, inc_a2b=inc_a2b,
+                                 inc_b2a=inc_b2a, num_graphs=xa.shape[0],
+                                 valid=None if va is None else {"atom": va, "bond": vb})
+        x = {"atom": xa, "bond": xb, "global": xg}
+        for conv in self.conv_layers:
+            x = conv(dense, x)
+        return x["atom"], x["bond"], x["global"]
+
     def forward(self, graph: HeteroData, inputs: dict) -> dict:
         """
         Forward pass
@@ -334,6 +444,7 @@ class GCNNodePred(pl.LightningModule):
         layer_idx = 0
         atom_feats, bond_feats, global_feats = {}, {}, {}
 
+        feats = encode_atom_inputs(model.encoder, graph, feats)
         feats = model.embedding(feats)
         bond_feats[layer_idx] = _split_batched_output(graph, feats["bond"], "bond")
         atom_feats[layer_idx] = _split_batched_output(graph, feats["atom"], "atom")
@@ -403,7 +514,11 @@ class GCNNodePred(pl.LightningModule):
             on_epoch=True,
             prog_bar=True,
             batch_size=len(labels),
-            sync_dist=True,
+            # rank-local on purpose: with sync_dist=True the rank-0 progress bar
+            # all-reduces this value before on_*_epoch_end while the other ranks
+            # are already inside the torchmetrics all-gather, and DDP deadlocks
+            # (2026-09-09 smoke). The synced metrics come from torchmetrics.
+            sync_dist=False,
         )
         self.update_metrics(logits, labels, mode)
 
@@ -607,7 +722,7 @@ class GCNNodePred(pl.LightningModule):
         Compute metrics using torchmetrics interfaces
         """
 
-        _nan = torch.tensor([float("nan")])
+        _nan = torch.full((self.hparams.output_dims,), float("nan"))
 
         if mode == "train":
             try:
@@ -662,21 +777,24 @@ class GCNNodePred(pl.LightningModule):
 
         return r2, torch_l1, torch_mse
 
+    def on_fit_start(self):
+        # restored checkpoints bypass the config check in build_trainer
+        if (
+            self.hparams.get("compiled")
+            and self.hparams.conv_fn == "ResidualBlockDense"
+            and self.hparams.get("compile_mode", "reduce-overhead") == "reduce-overhead"
+            and self.trainer.accumulate_grad_batches > 1
+        ):
+            raise ValueError(
+                'compiled ResidualBlockDense with accumulate_grad_batches > 1 needs compile_mode="default" '
+                "(CUDA-graph outputs alias the accumulated .grad tensors)"
+            )
+
     def configure_optimizers(self):
-        params = list(filter(lambda p: p.requires_grad, self.parameters()))
-        try:
-            optimizer = torch.optim.Adam(
-                params,
-                lr=self.hparams.lr,
-                weight_decay=self.hparams.weight_decay,
-                fused=True,
-            )
-        except RuntimeError:
-            optimizer = torch.optim.Adam(
-                params,
-                lr=self.hparams.lr,
-                weight_decay=self.hparams.weight_decay,
-            )
+        params = filter(lambda p: p.requires_grad, self.parameters())
+        optimizer = build_adam(
+            self, params, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
+        )
 
         scheduler = self._config_lr_scheduler(optimizer)
 

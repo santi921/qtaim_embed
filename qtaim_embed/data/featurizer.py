@@ -87,7 +87,7 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         super(BaseFeaturizer, self).__init__()
         self._feature_size = 0
         self._feature_name = []
-        self.selected_keys = selected_keys
+        self.selected_keys = list(selected_keys or [])
         self.dtype = dtype
         self.allowed_ring_size = allowed_ring_size
         self.rbf_cutoff = rbf_cutoff
@@ -117,32 +117,35 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
         features = mol.bond_features
         xyz_coordinates = mol.coords
 
-        bool_boo = False
-        for key in self.selected_keys:
-            if "boo_" in key:
-                bool_boo = True
-                l_order = int(key.split("_")[1])
+        # expanding keys are matched by prefix, not substring, so a scalar
+        # descriptor whose name merely contains "boo_"/"rbf_" stays scalar;
+        # a second key of either kind used to win silently, now it is an error
+        boo_keys = [k for k in self.selected_keys if k.startswith("boo_")]
+        rbf_keys = [k for k in self.selected_keys if k.startswith("rbf_")]
+        if len(boo_keys) > 1 or len(rbf_keys) > 1:
+            raise ValueError(
+                f"at most one boo_* and one rbf_* key is supported, got {boo_keys + rbf_keys}"
+            )
+        bool_boo = bool(boo_keys)
+        l_order = int(boo_keys[0].split("_")[1]) if bool_boo else 0
 
-        # Parse RBF config from selected_keys (only one RBF key supported)
-        bool_rbf = False
-        rbf_type = None
-        rbf_n_basis = 0
-        rbf_key_name = None
-        for key in self.selected_keys:
-            if "rbf_" in key:
-                bool_rbf = True
-                parts = key.split("_")  # "rbf_bessel_50" -> ["rbf", "bessel", "50"]
-                rbf_type = parts[1]
-                rbf_n_basis = int(parts[2])
-                rbf_key_name = key
-                break  # only one RBF key supported
+        bool_rbf = bool(rbf_keys)
+        rbf_type, rbf_n_basis, rbf_key_name = None, 0, None
+        if bool_rbf:
+            rbf_key_name = rbf_keys[0]
+            parts = rbf_key_name.split("_")  # "rbf_bessel_50" -> ["rbf", "bessel", "50"]
+            if len(parts) != 3 or parts[1] not in ("bessel", "gaussian") or not parts[2].isdigit():
+                raise ValueError(
+                    f"rbf key must look like rbf_bessel_50 or rbf_gaussian_50, got {rbf_key_name!r}"
+                )
+            rbf_type, rbf_n_basis = parts[1], int(parts[2])
 
         # Scalar keys: everything that is not an expanding key (bond_length,
         # boo_*, rbf_*). Shared by the fallback width, the per-bond append,
         # and the feature-name loop so the three cannot drift apart.
         scalar_keys = [
             k for k in self.selected_keys
-            if k != "bond_length" and "boo_" not in k and "rbf_" not in k
+            if k != "bond_length" and not k.startswith("boo_") and not k.startswith("rbf_")
         ]
 
         # Row width for the zero-bond fallback. Must mirror the per-bond
@@ -160,6 +163,15 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
         if num_bonds == 0:
             ft = [0.0 for _ in range(num_feats)]
+            if bool_boo:
+                # |Y00| is identically 1.0 for every real bond, so a 0 here is
+                # off-distribution in a column the scaler sees as constant
+                boo_start = 0
+                if self.allowed_ring_size != []:
+                    boo_start += 2 + len(self.allowed_ring_size)
+                if "bond_length" in self.selected_keys:
+                    boo_start += 1
+                ft[boo_start] = 1.0
             feats = [ft]
 
         else:
@@ -233,8 +245,9 @@ class BondAsNodeGraphFeaturizerGeneral(BaseFeaturizer):
 
         feats = torch.tensor(feats, dtype=getattr(torch, self.dtype))
 
+        self._feature_name = []
         if self.allowed_ring_size != []:
-            self._feature_name = ["metal bond"]
+            self._feature_name += ["metal bond"]
             self._feature_name += ["ring inclusion"] + [
                 "ring size_{}".format(i) for i in self.allowed_ring_size
             ]
@@ -282,7 +295,7 @@ class AtomFeaturizerGraphGeneral(BaseFeaturizer):
         self.dtype = dtype
         self._feature_size = 0
         self._feature_name = []
-        self.selected_keys = selected_keys
+        self.selected_keys = list(selected_keys or [])
         self.allowed_ring_size = allowed_ring_size
         self.element_set = element_set
 
@@ -376,7 +389,7 @@ class GlobalFeaturizerGraph(BaseFeaturizer):
             )
         self.dtype = dtype
         self.allowed_charges = allowed_charges
-        self.selected_keys = selected_keys
+        self.selected_keys = list(selected_keys or [])
         self.allowed_spins = allowed_spins
         self._feature_size = 0
         self._feature_name = []

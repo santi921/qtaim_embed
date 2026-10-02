@@ -31,6 +31,7 @@ from qtaim_embed.models.link_pred.losses import (
     F1Metric,
     AccuracyMetric,
 )
+from qtaim_embed.models.optim import build_adam
 
 
 class GCNLinkPred(pl.LightningModule):
@@ -555,20 +556,10 @@ class GCNLinkPred(pl.LightningModule):
         return acc, f1, auc
 
     def configure_optimizers(self):
-        params = list(filter(lambda p: p.requires_grad, self.parameters()))
-        try:
-            optimizer = torch.optim.Adam(
-                params,
-                lr=self.hparams.lr,
-                weight_decay=self.hparams.weight_decay,
-                fused=True,
-            )
-        except RuntimeError:
-            optimizer = torch.optim.Adam(
-                params,
-                lr=self.hparams.lr,
-                weight_decay=self.hparams.weight_decay,
-            )
+        params = filter(lambda p: p.requires_grad, self.parameters())
+        optimizer = build_adam(
+            self, params, lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
+        )
 
         scheduler = self._config_lr_scheduler(optimizer)
 

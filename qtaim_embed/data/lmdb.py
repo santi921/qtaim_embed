@@ -50,26 +50,34 @@ def _resolve_dtype(dtype):
         )
 
 
+_CAST_KEYS = ("feat", "labels")
+
+
 def _cast_graph_floats(graph, dtype):
-    """Cast the input feature tensor (`feat`) on every store to dtype.
+    """Cast `feat` and `labels` on every store to dtype.
 
-    Only `feat` is touched -- the tensor the model embedding consumes
-    (base_gcn reads ``batch_graph[ntype].feat``). Labels, positions, and
-    edge_index are left alone: matmul is the only op that hard-errors on a
-    dtype mismatch, while the loss subtracts elementwise and promotes dtypes,
-    so labels need not match. A dtype of None disables casting.
+    `feat` is what the model embedding consumes (base_gcn reads
+    ``batch_graph[ntype].feat``); `labels` is what the loss and torchmetrics
+    consume. Positions and edge_index are left alone. A dtype of None
+    disables casting.
 
-    The scaler stores mean/std as float64, so scaled graphs carry a float64
-    `feat`; without this cast it collides with float32/bf16 weights at the
-    first linear.
+    The scaler stores mean/std as float64, so scaled graphs carry float64
+    `feat` and `labels`; without this cast `feat` collides with float32/bf16
+    weights at the first linear and float64 `labels` fail in
+    ``F.mse_loss`` against float32 predictions (they also double the label
+    bytes moved per batch). Labels are never cast below float32: a bf16 or
+    fp16 feature dtype keeps regression targets (and the loss and metrics
+    computed against them) at full precision.
     """
     if dtype is None:
         return graph
+    label_dtype = torch.promote_types(dtype, torch.float32)
     for store in (*graph.node_stores, *graph.edge_stores):
-        if "feat" in store:
-            feat = store["feat"]
-            if torch.is_tensor(feat) and feat.is_floating_point():
-                store["feat"] = feat.to(dtype)
+        for key in _CAST_KEYS:
+            if key in store:
+                t = store[key]
+                if torch.is_tensor(t) and t.is_floating_point():
+                    store[key] = t.to(dtype if key == "feat" else label_dtype)
     return graph
 
 
