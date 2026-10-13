@@ -193,7 +193,7 @@ def main(argv=None):
     logger.info("Fitting model")
     if args.test_only:
         logger.info("test_only: scoring %s, skipping fit", args.test_only)
-        trainer.test(model, dm, ckpt_path=args.test_only)
+        trainer.test(model, dm, ckpt_path=args.test_only, weights_only=False)
         logger_wb.experiment.finish()
         return None
 
@@ -202,10 +202,10 @@ def main(argv=None):
     logger.info("Model fitted, testing")
     if use_lmdb:
         if "test_lmdb" in config["dataset"]:
-            trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
+            trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer), weights_only=False)
 
     else:
         if config["dataset"]["test_prop"] > 0.0:
-            trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
+            trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer), weights_only=False)
 
     logger_wb.experiment.finish()

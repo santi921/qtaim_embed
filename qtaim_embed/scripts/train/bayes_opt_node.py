@@ -326,10 +326,10 @@ class TrainingObject:
             trainer.fit(model, self.dm)
             if self.lmdbs:
                 if "test_lmdb" in config["dataset"]:
-                    trainer.test(model, self.dm, ckpt_path=best_ckpt_path(trainer))
+                    trainer.test(model, self.dm, ckpt_path=best_ckpt_path(trainer), weights_only=False)
             else:
                 if config["dataset"]["test_prop"] > 0.0:
-                    trainer.test(model, self.dm, ckpt_path=best_ckpt_path(trainer))
+                    trainer.test(model, self.dm, ckpt_path=best_ckpt_path(trainer), weights_only=False)
 
         run.finish()
 

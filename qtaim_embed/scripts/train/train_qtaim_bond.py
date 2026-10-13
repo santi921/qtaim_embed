@@ -95,7 +95,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     trainer = build_trainer(config, loggers, bond_callbacks(config), accelerator=args.accelerator)
     trainer.fit(model, dm)
     if config["dataset"].get("test_lmdb") is not None:
-        trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
+        trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer), weights_only=False)
     if run is not None:
         run.finish()
 

@@ -160,3 +160,22 @@ def test_datamodule_batches_and_eval_script(tmp_path):
     eval_main(["--lmdb", str(DATA_DIR / "train"), "--out_dir", str(tmp_path / "bl"), "--pool_multipliers", "2.0", "3.0", "--k_step", "0.05"])
     assert (tmp_path / "bl" / "README.md").exists()
     assert (tmp_path / "bl" / "pool_summary.csv").exists()
+
+
+def test_pair_use_ratio_toggles_the_d_over_rcov_input():
+    """T3-b ablation arm: the plan requires runs with and without d/rcov.
+
+    The scalar the distance-rule baseline is built on; removing it isolates
+    what the encoder contributes. It was hardcoded on until 2026-10-13.
+    """
+    cfg = get_default_bond_level_config()["model"]
+    built = {}
+    for flag in (True, False):
+        c = dict(cfg)
+        c["pair_use_ratio"] = flag
+        model = load_bond_model_from_config(c)
+        assert model.hparams.pair_use_ratio is flag
+        assert model.pair_head.use_ratio is flag
+        built[flag] = sum(p.numel() for p in model.parameters())
+    # the ratio feeds one extra input column into the pair head
+    assert built[True] > built[False]

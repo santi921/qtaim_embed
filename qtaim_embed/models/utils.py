@@ -44,14 +44,14 @@ def load_graph_level_model_from_config(config):
             try:
                 try:
                     model = GCNGraphPred.load_from_checkpoint(
-                        checkpoint_path=config["restore_path"]
+                        checkpoint_path=config["restore_path"], weights_only=False
                     )
                     logger.info("MODEL LOADED")
                     return model
                 except Exception as e:
                     logger.warning(f"GCNGraphPred load failed: {e}, trying GCNGraphPredClassifier")
                     model = GCNGraphPredClassifier.load_from_checkpoint(
-                        checkpoint_path=config["restore_path"]
+                        checkpoint_path=config["restore_path"], weights_only=False
                     )
                     logger.info("MODEL LOADED")
                     return model
@@ -62,7 +62,7 @@ def load_graph_level_model_from_config(config):
             load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNGraphPred.load_from_checkpoint(
-                    checkpoint_path=load_dir + "/last.ckpt"
+                    checkpoint_path=load_dir + "/last.ckpt", weights_only=False
                 )
                 logger.info("MODEL LOADED")
                 return model
@@ -201,7 +201,7 @@ def load_node_level_model_from_config(config):
         if config["restore_path"] is not None:
             try:
                 model = GCNNodePred.load_from_checkpoint(
-                    checkpoint_path=config["restore_path"]
+                    checkpoint_path=config["restore_path"], weights_only=False
                 )
                 logger.info("MODEL LOADED")
                 return model
@@ -212,7 +212,7 @@ def load_node_level_model_from_config(config):
             load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNNodePred.load_from_checkpoint(
-                    checkpoint_path=load_dir + "/last.ckpt"
+                    checkpoint_path=load_dir + "/last.ckpt", weights_only=False
                 )
                 logger.info("MODEL LOADED")
                 return model
@@ -291,7 +291,7 @@ def load_link_model_from_config(config):
         if config["restore_path"] is not None:
             try:
                 model = GCNLinkPred.load_from_checkpoint(
-                    checkpoint_path=config["restore_path"]
+                    checkpoint_path=config["restore_path"], weights_only=False
                 )
                 logger.info("MODEL LOADED")
                 return model
@@ -302,7 +302,7 @@ def load_link_model_from_config(config):
             load_dir = config.get("restore_dir", "./")
             try:
                 model = GCNLinkPred.load_from_checkpoint(
-                    checkpoint_path=load_dir + "/last.ckpt"
+                    checkpoint_path=load_dir + "/last.ckpt", weights_only=False
                 )
                 logger.info("MODEL LOADED")
                 return model
@@ -366,7 +366,7 @@ def load_bond_model_from_config(config):
     if config.get("restore", False):
         path = config.get("restore_path") or (config.get("restore_dir", "./") + "/last.ckpt")
         try:
-            model = GCNBondPred.load_from_checkpoint(checkpoint_path=path)
+            model = GCNBondPred.load_from_checkpoint(checkpoint_path=path, weights_only=False)
             logger.info("BOND MODEL LOADED FROM %s", path)
             return model
         except Exception as e:
@@ -375,7 +375,8 @@ def load_bond_model_from_config(config):
     keys = [
         *ENCODER_DEFAULTS,
         "use_atom_feat", "atom_input_size", "embedding_size", "pool_multiplier",
-        "pair_rbf", "pair_rbf_n", "pair_rbf_cutoff", "pair_hidden", "pair_dropout",
+        "pair_rbf", "pair_rbf_n", "pair_rbf_cutoff", "pair_use_ratio",
+        "pair_hidden", "pair_dropout",
         "activation", "lr", "weight_decay", "scheduler_name", "lr_plateau_patience",
         "lr_scale_factor", "threshold", "n_threshold_bins",
     ]

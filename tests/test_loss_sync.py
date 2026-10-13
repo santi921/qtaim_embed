@@ -125,3 +125,46 @@ def test_test_only_flag_and_best_ckpt_are_wired(module):
     assert "ckpt_path=args.test_only" in text
     assert "trainer.test(model, dm)" not in text  # must pass a ckpt_path
     assert "best_ckpt_path(trainer)" in text
+
+
+class TestCheckpointLoading:
+    """torch >= 2.6 defaults torch.load to weights_only=True.
+
+    Every checkpoint this repo writes holds an instantiated nn.ReLU in
+    hyper_parameters["activation"], which that mode refuses, so each load site
+    passes weights_only=False (these are checkpoints the pipeline itself
+    wrote). Without it, passing any ckpt_path to trainer.test raises
+    UnpicklingError, which broke --test_only and every post-fit test stage.
+    """
+
+    @staticmethod
+    def _one_epoch_checkpoint(tmp_path):
+        model, dm = _node_model_and_dm()
+        cb = ModelCheckpoint(dirpath=str(tmp_path), save_last=True)
+        trainer = pl.Trainer(
+            max_epochs=1, accelerator="cpu", logger=False, callbacks=[cb],
+            enable_progress_bar=False, limit_train_batches=2, limit_val_batches=2,
+            num_sanity_val_steps=0,
+        )
+        trainer.fit(model, dm)
+        path = cb.last_model_path or cb.best_model_path
+        assert path, "no checkpoint written"
+        return model, dm, path
+
+    def test_hparams_hold_a_module_so_weights_only_true_fails(self, tmp_path):
+        """If this ever passes, hparams became primitives and the kwargs can go."""
+        _, _, path = self._one_epoch_checkpoint(tmp_path)
+        with pytest.raises(Exception):
+            torch.load(path, map_location="cpu", weights_only=True)
+        payload = torch.load(path, map_location="cpu", weights_only=False)
+        assert isinstance(payload["hyper_parameters"]["activation"], torch.nn.Module)
+
+    def test_test_stage_accepts_a_ckpt_path(self, tmp_path):
+        """The regression: ckpt_path + the torch 2.6 default raised UnpicklingError."""
+        model, dm, path = self._one_epoch_checkpoint(tmp_path)
+        trainer = pl.Trainer(
+            accelerator="cpu", logger=False, enable_checkpointing=False,
+            enable_progress_bar=False, limit_test_batches=2,
+        )
+        trainer.test(model, dm, ckpt_path=path, weights_only=False, verbose=False)
+        assert "test_loss" in trainer.callback_metrics

@@ -352,6 +352,72 @@ Reading the table:
   7,524 samples/s at 4.5 GB. Recompilation is bounded by the number of shape
   classes, which `BucketBatchSampler` fixes per dataset.
 
+### Correction 2026-10-13: the hidden-128 baseline above is wrong, and "hidden" means embedding_size
+
+Re-measured every arm of the table above in one session on one idle GPU
+(`profiling/bench_results/bk_*.json`, `e256*.json`), after repairing the local
+environment (a CPU-only torch 2.6.0 wheel had replaced the pinned
+2.11.0+cu130, so `torch.compile` had been raising for some time).
+
+Two errors in the table above.
+
+**1. The tm_react hidden-128 `ResidualBlock` baseline does not reproduce.**
+It is 5,038 samples/s above and 6,850 today at the same kernel count (3,840 vs
+3,909), 148 ms per step against 199 ms. The compiled dense number reproduces
+almost exactly (7,690 vs 7,755), so the *baseline* was the bad measurement,
+most likely taken with another process on the GPU. The real end-to-end gain at
+this size is **1.12x, not 1.54x**: at hidden 128 both arms are data-bound
+(30 % data wait, 68 % GPU utilization on the compiled arm), so the conv-stack
+speedup cannot show up. Every other row reproduces within 5 % and those ratios
+stand.
+
+**2. The "hidden" column is `embedding_size`, not `hidden_size`.**
+`ResidualBlock{,Dense}` never reads `hidden_size`: parameter count is
+2,101,784 at `hidden_size` 128, 256 or 512, and 8,332,312 only when
+`embedding_size` is 256. (`GraphConvDropoutBatch` is the opposite.) A first
+re-measurement pass that set `hidden_size=256` silently re-measured the
+128-wide model; the rows below set `embedding_size`. `get_layer_args` now
+warns on the inert combination. Anything that swept `hidden_size` over a
+`ResidualBlock` space trained identical models under different labels.
+
+| dataset | width | batch | arm | samples/s | ratio | step ms | GPU util % | data wait |
+|---|---|---|---|---|---|---|---|---|
+| tm_react | emb 128 (2.1M) | 1024 | ResidualBlock | 6,850 | 1.00x | 148 | 86 | 0.08 |
+| tm_react | emb 128 | 1024 | dense + bucketing + CUDA graphs | 7,690 | **1.12x** | 133 | 68 | 0.30 |
+| tm_react | emb 256 (8.4M) | 1024 | ResidualBlock | 3,950 | 1.00x | 257 | 90 | 0.05 |
+| tm_react | emb 256 | 1024 | dense + bucketing + CUDA graphs | 5,430 | **1.37x** | 189 | 83 | 0.09 |
+| H7 | emb 128 | 64 | ResidualBlock | 1,200 | 1.00x | 53 | 78 | 0.03 |
+| H7 | emb 128 | 64 | dense + bucketing + CUDA graphs | 1,690 | **1.41x** | 38 | 81 | 0.06 |
+| H7 | emb 256 | 64 | ResidualBlock | 729 | 1.00x | 88 | 89 | 0.02 |
+| H7 | emb 256 | 64 | dense + bucketing + CUDA graphs | 1,000 | **1.37x** | 64 | 91 | 0.20 |
+
+The dense path pays off where the GPU is the constraint: 1.37-1.41x at
+embedding 256 and on H7's large molecules, against 1.12x at embedding 128 on
+tm_react where 8 workers cannot keep up. `peak_mem_gb` is not reported for the
+CUDA-graph rows: the graph memory pool defeats the accounting (it reads 0.35 GB).
+
+### Bucketing in isolation (2026-10-13)
+
+The table above never separated bucketing from the dense layout and compilation;
+every dense row had it on and every sparse row had it off. Measured separately,
+tm_react embedding 128, batch 1024, 8 workers:
+
+| arm | samples/s | vs its own baseline |
+|---|---|---|
+| ResidualBlock, no bucketing | 6,850 | 1.00x |
+| ResidualBlock + bucketing | 6,760 | **0.99x** |
+| dense eager, no bucketing | 5,040 | 1.00x |
+| dense eager + bucketing | 6,620 | **1.31x** |
+| dense + bucketing + CUDA graphs | 7,690 | 1.16x over dense eager + bucketing |
+
+Bucketing does nothing for the sparse path, which never pads: it costs 10 ms
+per batch in collate and raises peak memory from 3.6 to 5.7 GB, because
+class-homogeneous batches put the largest molecules in one step. It is worth
+1.31x on the dense path, where it cuts padding waste from 31 % to 11 %. Dense
+without bucketing is 26 % *slower* than plain sparse. So bucketing is not a
+speedup on its own; it is the precondition for the dense path and for static
+shapes, and it still carries the accuracy cost recorded in the A3 gate row.
+
 ## A4: direct collate in the real step
 
 `collate_hetero_direct` replaces `Batch.from_data_list` in `DataLoaderLMDB`

@@ -133,7 +133,7 @@ def main(argv=None):
     trainer.fit(model, dm)
 
     if args.test_lmdb:
-        trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
+        trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer), weights_only=False)
 
     logger_wb.experiment.finish()
 

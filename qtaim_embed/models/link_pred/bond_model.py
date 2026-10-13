@@ -89,6 +89,9 @@ class GCNBondPred(pl.LightningModule):
             (see the leakage rules in the plan). Requires atom_input_size.
         embedding_size: width of the projected atom embedding fed to the head.
         pool_multiplier: candidate radius as a multiple of rcov_i + rcov_j.
+        pair_use_ratio: feed d / (rcov_i + rcov_j) to the pair head. False is
+            the T3-b ablation arm that removes the scalar the distance-rule
+            baseline is built on, isolating what the encoder adds.
         pair_*: SymmetricPairHead settings. pair_rbf_cutoff=None resolves to
             pool_multiplier * 2 * max(rcov), the largest possible candidate
             distance, so the Bessel envelope never zeroes a real candidate.
@@ -115,6 +118,7 @@ class GCNBondPred(pl.LightningModule):
         pair_rbf: str = "bessel",
         pair_rbf_n: int = 50,
         pair_rbf_cutoff: Optional[float] = None,
+        pair_use_ratio: bool = True,
         pair_hidden: Sequence[int] = (256, 128),
         pair_dropout: float = 0.1,
         activation: str = "SiLU",
@@ -151,7 +155,7 @@ class GCNBondPred(pl.LightningModule):
             rbf_cutoff=pair_rbf_cutoff,
             dropout=pair_dropout,
             activation=activation,
-            use_ratio=True,
+            use_ratio=pair_use_ratio,
         )
 
         self.register_buffer("rcov", RCOV.clone())

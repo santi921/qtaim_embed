@@ -130,6 +130,7 @@ def get_default_bond_level_config():
             "pair_rbf": "bessel",
             "pair_rbf_n": 50,
             "pair_rbf_cutoff": None,
+            "pair_use_ratio": True,
             "pair_hidden": [256, 128],
             "pair_dropout": 0.1,
             "activation": "SiLU",
