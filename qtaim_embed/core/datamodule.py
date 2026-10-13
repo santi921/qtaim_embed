@@ -734,6 +734,10 @@ class LMDBDataModule(pl.LightningDataModule):
         # in every run, so sweep trials are comparable (a fresh draw per epoch
         # would add data-draw noise to the metric the optimizer fits).
         frac = self.config["dataset"].get("subset_frac")
+        if frac is not None and not 0.0 < frac <= 1.0:
+            raise ValueError(
+                f"dataset.subset_frac must be in (0, 1] but got {frac}"
+            )
         if frac is not None and frac < 1.0:
             seed = self.config["dataset"].get("subset_seed", 0)
             full_train = len(self.train_dataset)

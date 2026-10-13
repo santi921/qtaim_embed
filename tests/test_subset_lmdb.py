@@ -118,6 +118,11 @@ class TestDataModuleSubset:
         dm = _dm(subset_frac=1.0)
         assert not isinstance(dm.train_dataset, SubsetLMDB)
 
+    @pytest.mark.parametrize("frac", [0.0, -0.1, 1.5, 20])
+    def test_out_of_range_frac_rejected(self, frac):
+        with pytest.raises(ValueError, match="subset_frac"):
+            _dm(subset_frac=frac)
+
     def test_seed_is_honoured_across_datamodules(self):
         a = _dm(subset_frac=0.3, subset_seed=2)
         b = _dm(subset_frac=0.3, subset_seed=2)

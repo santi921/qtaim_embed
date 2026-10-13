@@ -393,8 +393,9 @@ def main(argv=None):
         )
         logger.info("created sweep: %s", sweep_id)
         if args.create_sweep_only:
+            # stdout only; a returned value becomes the console script's exit status
             print(sweep_id)
-            return sweep_id
+            return None
     training_obj = TrainingObject(
         sweep_config,
         log_save_dir,

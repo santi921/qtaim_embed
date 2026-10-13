@@ -169,14 +169,22 @@ class RunLog:
             done = [r for r in rs if r.step >= r.total]
             nxt = by_epoch[epochs[i + 1]][0] if i + 1 < len(epochs) else None
             src = nxt if nxt is not None else last
+            epoch_time = done[0].elapsed_s if done else math.nan
+            rates = [r.rate for r in rs if not math.isnan(r.rate)]
+            mean_rate = math.nan
+            if done and not math.isnan(epoch_time) and epoch_time > 0:
+                mean_rate = first.total / epoch_time
             row = {
                 "epoch": ep,
                 "max_epochs": first.max_epoch + 1,
                 "batches_seen": max(r.step for r in rs),
                 "batches_per_epoch": first.total,
                 "completed": bool(done),
-                "epoch_time_s": done[0].elapsed_s if done else math.nan,
-                "it_per_s": max(r.rate for r in rs),
+                "epoch_time_s": epoch_time,
+                # batches / wall time; Rich's own rate is instantaneous and peaks
+                # well above the epoch mean, so it is reported separately
+                "it_per_s": mean_rate,
+                "it_per_s_peak": max(rates) if rates else math.nan,
                 "val_source": "next_epoch" if nxt is not None else "last_render",
             }
             for k in ("val_loss", "val_r2", "val_mse", "val_mae", "train_mse"):
