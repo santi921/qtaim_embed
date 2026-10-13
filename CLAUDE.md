@@ -171,8 +171,8 @@ config = {
         "dense_grid": 16,            # ResidualBlockDense: pad atoms/bonds to multiples of this
         "compile_mode": "reduce-overhead",  # dense + compiled: CUDA graphs; use "default" with accumulate_grad_batches > 1 (build_trainer raises otherwise)
         "global_pooling_fn": "SumPoolingThenCat",
-        "hidden_size": 128,
-        "embedding_size": 128,
+        "hidden_size": 128,      # GraphConvDropoutBatch/GATConv width only; IGNORED by ResidualBlock{,Dense} (get_layer_args warns)
+        "embedding_size": 128,   # the width knob for ResidualBlock{,Dense}: every conv layer is this wide
         "dropout": 0.2,
         "batch_norm": True,   # REQUIRED for ResidualBlock on 40+ atom molecules (see Important Notes)
         "bn_before_activation": True,   # default via configs: conv -> BN -> activation -> dropout, final layer linear (fixes the eval-mode divergence); model constructors default to False so pre-2026-09-09 checkpoints keep their layer order

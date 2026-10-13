@@ -487,6 +487,15 @@ class GCNGraphPredClassifier(pl.LightningModule):
 
         self.loss = self.loss_function()
 
+        # Rank-synced epoch loss. The per-step {mode}_loss log stays rank-local
+        # so the progress bar never sits on a collective (see shared_step), and
+        # with on_step=True Lightning's bare `{mode}_loss` key is only the last
+        # batch. This metric is all-reduced inside the epoch-end hook and
+        # overrides that key, so the monitors see the whole validation set.
+        self.loss_metrics = torch.nn.ModuleDict(
+            {f"m_{m}": torchmetrics.MeanMetric() for m in ("train", "val", "test")}
+        )
+
     def _dense_conv_stack(self, graph, feats):
         """conv_fn="ResidualBlockDense": pad to (N_b, B_b) blocks, run the blocks
         (as one compiled CUDA graph when compiled=True), return flat features."""
@@ -671,6 +680,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
             sync_dist=False,
             logger=True,
         )
+        self.loss_metrics[f"m_{mode}"].update(all_loss.detach(), weight=len(labels))
 
         return all_loss
 
@@ -696,6 +706,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         Training epoch end
         """
+        self._log_epoch_loss("train")
         f1, auroc = self.compute_metrics(mode="train")
         # TorchMetrics .compute() already syncs across ranks; sync_dist=False avoids double-sync
         self.log("train_f1", f1.mean(), prog_bar=False, sync_dist=False)
@@ -705,6 +716,7 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         Validation epoch end
         """
+        self._log_epoch_loss("val")
         f1, auroc = self.compute_metrics(mode="val")
         self.log("val_f1", f1.mean(), prog_bar=True, sync_dist=False)
         self.log("val_auroc", auroc.mean(), prog_bar=True, sync_dist=False)
@@ -714,9 +726,21 @@ class GCNGraphPredClassifier(pl.LightningModule):
         """
         Test epoch end
         """
+        self._log_epoch_loss("test")
         f1, auroc = self.compute_metrics(mode="test")
         self.log("test_f1", f1.mean(), prog_bar=False, sync_dist=False)
         self.log("test_auroc", auroc.mean(), prog_bar=False, sync_dist=False)
+
+    def _log_epoch_loss(self, mode: str):
+        """Log the rank-synced epoch loss from inside the epoch-end hook.
+
+        Overrides the rank-local per-step `{mode}_loss` with the all-reduced
+        mean. compute() is a collective, so every rank must reach it.
+        """
+        loss = self.loss_metrics[f"m_{mode}"].compute()
+        self.loss_metrics[f"m_{mode}"].reset()
+        if torch.isfinite(loss):
+            self.log(f"{mode}_loss", loss, prog_bar=True, sync_dist=False)
 
     def update_metrics(self, pred, target, mode):
         """

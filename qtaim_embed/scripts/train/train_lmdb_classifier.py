@@ -23,7 +23,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from qtaim_embed.utils.training import build_trainer
+from qtaim_embed.utils.training import best_ckpt_path, build_trainer
 
 from qtaim_embed.core.datamodule import LMDBDataModule
 from qtaim_embed.data.lmdb import TransformMol
@@ -133,7 +133,7 @@ def main(argv=None):
     trainer.fit(model, dm)
 
     if args.test_lmdb:
-        trainer.test(model, dm)
+        trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
 
     logger_wb.experiment.finish()
 

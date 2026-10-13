@@ -1,0 +1,104 @@
+{
+ "dataset": {
+  "train_lmdb": "/pscratch/sd/s/santiago/qtaim_embed_experiments/data/node/OMol4M_charge_canonical/train/merged/merged.lmdb",
+  "val_lmdb": "/pscratch/sd/s/santiago/qtaim_embed_experiments/data/node/OMol4M_charge_canonical/val/merged/merged.lmdb",
+  "test_lmdb": "/pscratch/sd/s/santiago/qtaim_embed_experiments/data/node/OMol4M_charge_canonical/test/merged/merged.lmdb",
+  "target_dict": {
+   "atom": [
+    "charge_adch",
+    "charge_hirshfeld",
+    "charge_cm5",
+    "charge_becke",
+    "charge_mulliken_orca",
+    "charge_loewdin_orca"
+   ],
+   "bond": [
+    null
+   ],
+   "global": [
+    null
+   ]
+  },
+  "log_save_dir": "runs/omol4m_canonical_dimenetpp_c4",
+  "train_batch_size": 512
+ },
+ "model": {
+  "conv_fn": "GraphConvDropoutBatch",
+  "dropout": 0.1,
+  "bn_before_activation": true,
+  "initializer": "xavier",
+  "batch_norm_tf": true,
+  "activation": "ReLU",
+  "bias": true,
+  "norm": "both",
+  "aggregate": "sum",
+  "n_conv_layers": 9,
+  "lr": 0.00197,
+  "weight_decay": 0,
+  "lr_plateau_patience": 10,
+  "lr_scale_factor": 0.75,
+  "scheduler_name": "reduce_on_plateau",
+  "loss_fn": "mse",
+  "resid_n_graph_convs": 3,
+  "embedding_size": 128,
+  "hidden_size": 176,
+  "lstm_iters": 15,
+  "lstm_layers": 2,
+  "num_heads": 2,
+  "feat_drop": 0,
+  "attn_drop": 0.1,
+  "residual": true,
+  "num_heads_gat": 2,
+  "dropout_feat_gat": 0,
+  "dropout_attn_gat": 0.1,
+  "hidden_size_gat": 64,
+  "residual_gat": true,
+  "batch_norm": true,
+  "fc_hidden_size_1": 1024,
+  "fc_num_layers": 2,
+  "restore": false,
+  "max_epochs": 200,
+  "extra_stop_patience": 20,
+  "compiled": false,
+  "encoder_fn": "dimenetpp",
+  "encoder_hidden": 64,
+  "encoder_cutoff": 4,
+  "encoder_n_interactions": 3,
+  "encoder_num_gaussians": 50,
+  "encoder_max_z": 119,
+  "target_dict": {
+   "atom": [
+    "charge_adch",
+    "charge_hirshfeld",
+    "charge_cm5",
+    "charge_becke",
+    "charge_mulliken_orca",
+    "charge_loewdin_orca"
+   ],
+   "bond": [
+    null
+   ],
+   "global": [
+    null
+   ]
+  },
+  "encoder_max_neighbors": 16,
+  "encoder_lmax": 1,
+  "encoder_tp": "channelwise",
+  "encoder_num_radial": 6
+ },
+ "optim": {
+  "num_devices": 4,
+  "num_nodes": 1,
+  "gradient_clip_val": 5,
+  "precision": "bf16-mixed",
+  "strategy": "ddp",
+  "accumulate_grad_batches": 1,
+  "num_workers": 8,
+  "warmup_epochs": 1,
+  "pin_memory": true,
+  "train_batch_size": 512,
+  "persistent_workers": false,
+  "num_sanity_val_steps": 0
+ }
+}

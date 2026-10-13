@@ -18,7 +18,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from qtaim_embed.core.datamodule import LMDBBondDataModule
 from qtaim_embed.models.utils import LogParameters, load_bond_model_from_config
 from qtaim_embed.utils.data import get_default_bond_level_config
-from qtaim_embed.utils.training import build_trainer
+from qtaim_embed.utils.training import best_ckpt_path, build_trainer
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     trainer = build_trainer(config, loggers, bond_callbacks(config), accelerator=args.accelerator)
     trainer.fit(model, dm)
     if config["dataset"].get("test_lmdb") is not None:
-        trainer.test(model, dm)
+        trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
     if run is not None:
         run.finish()
 

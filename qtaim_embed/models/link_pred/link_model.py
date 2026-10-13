@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 import torch.nn as nn
 from torch.optim import lr_scheduler
 import pytorch_lightning as pl
+from torchmetrics import MeanMetric
 
 from torch_geometric.nn import SAGEConv, GATConv
 from torch_geometric.data import Data
@@ -275,6 +276,16 @@ class GCNLinkPred(pl.LightningModule):
         self.val_f1 = F1Metric()  # .to(self.device)
         self.test_f1 = F1Metric()  # .to(self.device)
 
+        # Rank-synced epoch loss: the per-step log in shared_step is rank-local
+        # so the progress bar never sits on a collective (the rank-0 bar
+        # all-reducing before the epoch-end hook, while other ranks are inside
+        # the metric all-gather, is what deadlocked the GCN models on
+        # 2026-09-09). This is all-reduced in the epoch-end hooks instead and
+        # overrides the same key.
+        self.loss_metrics = nn.ModuleDict(
+            {f"m_{m}": MeanMetric() for m in ("train", "val", "test")}
+        )
+
         self.loss = self.loss_function()
 
         if compiled and hasattr(torch.version, "hip") and torch.version.hip is not None:
@@ -441,8 +452,9 @@ class GCNLinkPred(pl.LightningModule):
             on_step=False,
             on_epoch=True,
             prog_bar=True,
-            sync_dist=True,
+            sync_dist=False,
         )
+        self.loss_metrics[f"m_{mode}"].update(all_loss.sum().detach())
         # if mode == "train":
         self.update_metrics(pred_pos, pred_neg, mode)
         # else:
@@ -478,6 +490,7 @@ class GCNLinkPred(pl.LightningModule):
         """
         Training epoch end
         """
+        self._log_epoch_loss("train")
         acc, f1, auc = self.compute_metrics(mode="train")
 
         if self.trainer.current_epoch < 2:
@@ -491,6 +504,7 @@ class GCNLinkPred(pl.LightningModule):
         """
         Validation epoch end
         """
+        self._log_epoch_loss("val")
         acc, f1, auc = self.compute_metrics(mode="val")
         self.log("val_f1", f1, prog_bar=True, sync_dist=False)
         self.log("val_auc", auc, prog_bar=False, sync_dist=False)
@@ -500,6 +514,7 @@ class GCNLinkPred(pl.LightningModule):
         """
         Test epoch end
         """
+        self._log_epoch_loss("test")
         acc, f1, auc = self.compute_metrics(mode="test")
         self.log("test_f1", f1, prog_bar=True, sync_dist=False)
         self.log("test_auc", auc, prog_bar=False, sync_dist=False)
@@ -523,6 +538,17 @@ class GCNLinkPred(pl.LightningModule):
             self.test_accuracy(pred, target)
             self.test_f1(pred, target)
             self.test_auc(pred, target)
+
+    def _log_epoch_loss(self, mode: str):
+        """Log the rank-synced epoch loss from inside the epoch-end hook.
+
+        Overrides the rank-local per-step `{mode}_loss`. compute() is a
+        collective, so every rank must reach it.
+        """
+        loss = self.loss_metrics[f"m_{mode}"].compute()
+        self.loss_metrics[f"m_{mode}"].reset()
+        if torch.isfinite(loss):
+            self.log(f"{mode}_loss", loss, prog_bar=True, sync_dist=False)
 
     def compute_metrics(self, mode):
         """

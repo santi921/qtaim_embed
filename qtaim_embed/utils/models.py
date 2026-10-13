@@ -1,5 +1,8 @@
+import logging
 import torch
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def get_layer_args(
@@ -170,6 +173,22 @@ def get_layer_args(
         global_in = hparams.global_input_size
 
         # print("layer ind: ", layer_ind)
+        # ResidualBlock{,Dense} is embedding_size wide throughout and never
+        # reads hidden_size (GraphConvDropoutBatch is the opposite: layer 0 maps
+        # embedding_size -> hidden_size and the rest stay hidden_size wide).
+        # Sweeping hidden_size here trains identical models under new labels.
+        if layer_ind in (0, -1) and getattr(hparams, "hidden_size", None) not in (
+            None,
+            hparams.embedding_size,
+        ):
+            logger.warning(
+                "conv_fn=%s ignores hidden_size=%s; width comes from "
+                "embedding_size=%s. Set embedding_size to change model width.",
+                hparams.conv_fn,
+                hparams.hidden_size,
+                hparams.embedding_size,
+            )
+
         if embedding_in:
             atom_in = hparams.embedding_size
             bond_in = hparams.embedding_size

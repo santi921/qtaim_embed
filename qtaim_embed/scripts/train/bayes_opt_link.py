@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from qtaim_embed.utils.training import build_trainer
+from qtaim_embed.utils.training import best_ckpt_path, build_trainer
 
 from qtaim_embed.utils.data import get_default_link_level_config
 from qtaim_embed.core.datamodule import QTAIMLinkTaskDataModule, LMDBLinkDataModule
@@ -296,10 +296,10 @@ class TrainingObject:
             trainer.fit(model, self.dm)
             if use_lmdb:
                 if "test_lmdb" in config["dataset"]:
-                    trainer.test(model, self.dm)
+                    trainer.test(model, self.dm, ckpt_path=best_ckpt_path(trainer))
             else:
                 if config["dataset"]["test_prop"] > 0.0:
-                    trainer.test(model, self.dm)
+                    trainer.test(model, self.dm, ckpt_path=best_ckpt_path(trainer))
 
         run.finish()
 

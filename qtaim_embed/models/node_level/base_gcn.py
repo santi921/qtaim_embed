@@ -333,6 +333,15 @@ class GCNNodePred(pl.LightningModule):
             torchmetrics.MeanSquaredError(squared=False), num_outputs=output_dims
         )
 
+        # Rank-synced epoch loss. The per-step {mode}_loss log stays rank-local
+        # so the progress bar never sits on a collective (see shared_step); this
+        # metric is all-reduced inside the epoch-end hook instead, next to the
+        # other torchmetrics, and overrides that key so EarlyStopping and the
+        # sweeps monitor the whole validation set rather than rank 0's shard.
+        self.loss_metrics = torch.nn.ModuleDict(
+            {f"m_{m}": torchmetrics.MeanMetric() for m in ("train", "val", "test")}
+        )
+
         if compiled and hasattr(torch.version, "hip") and torch.version.hip is not None:
             import warnings
             warnings.warn("torch.compile disabled on ROCm (no benefit, potential instability)")
@@ -520,6 +529,7 @@ class GCNNodePred(pl.LightningModule):
             # (2026-09-09 smoke). The synced metrics come from torchmetrics.
             sync_dist=False,
         )
+        self.loss_metrics[f"m_{mode}"].update(all_loss.sum().detach(), weight=len(labels))
         self.update_metrics(logits, labels, mode)
 
         return all_loss.sum()
@@ -595,6 +605,7 @@ class GCNNodePred(pl.LightningModule):
         """
         Training epoch end
         """
+        self._log_epoch_loss("train")
         r2, mae, mse = self.compute_metrics(mode="train")
 
         if isinstance(r2, list):
@@ -633,6 +644,7 @@ class GCNNodePred(pl.LightningModule):
         """
         Validation epoch end
         """
+        self._log_epoch_loss("val")
         r2, mae, mse = self.compute_metrics(mode="val")
 
         if isinstance(r2, list):
@@ -668,6 +680,7 @@ class GCNNodePred(pl.LightningModule):
         """
         Test epoch end
         """
+        self._log_epoch_loss("test")
         r2, mae, mse = self.compute_metrics(mode="test")
 
         # compat with older torchmetrics
@@ -716,6 +729,17 @@ class GCNNodePred(pl.LightningModule):
                 self.test_r2.update(pred, target)
                 self.test_torch_l1.update(pred, target)
                 self.test_torch_mse.update(pred, target)
+
+    def _log_epoch_loss(self, mode: str):
+        """Log the rank-synced epoch loss from inside the epoch-end hook.
+
+        Overrides the rank-local per-step `{mode}_loss` with the all-reduced
+        mean. compute() is a collective, so every rank must reach it.
+        """
+        loss = self.loss_metrics[f"m_{mode}"].compute()
+        self.loss_metrics[f"m_{mode}"].reset()
+        if torch.isfinite(loss):
+            self.log(f"{mode}_loss", loss, prog_bar=True, sync_dist=False)
 
     def compute_metrics(self, mode):
         """

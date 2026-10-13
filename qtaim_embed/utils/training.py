@@ -8,7 +8,7 @@ existing ones migrate as they are touched (docs/todos/037).
 from typing import List, Optional
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks import Callback, ModelCheckpoint
 from pytorch_lightning.strategies import DDPStrategy
 
 
@@ -67,3 +67,18 @@ def build_trainer(
         precision=optim.get("precision", 32),
         num_sanity_val_steps=optim.get("num_sanity_val_steps", 2),
     )
+
+
+def best_ckpt_path(trainer: pl.Trainer) -> Optional[str]:
+    """Path of the best checkpoint saved during this run, or None.
+
+    `trainer.test(model, dm)` with no ckpt_path scores whatever weights the
+    model currently holds, i.e. the last epoch, not the checkpoint that was
+    selected on the monitored metric. Pass this as ckpt_path to score the
+    selected checkpoint instead. None (nothing was saved) keeps the current
+    weights, which is the only sensible fallback.
+    """
+    for cb in trainer.callbacks:
+        if isinstance(cb, ModelCheckpoint) and cb.best_model_path:
+            return cb.best_model_path
+    return None

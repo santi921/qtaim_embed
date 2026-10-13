@@ -15,7 +15,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
 )
-from qtaim_embed.utils.training import build_trainer
+from qtaim_embed.utils.training import best_ckpt_path, build_trainer
 
 
 from qtaim_embed.utils.data import get_default_node_level_config
@@ -43,6 +43,13 @@ def main(argv=None):
         type=int,
         default=None,
         help="DataLoader workers; overrides both dataset.num_workers and optim.num_workers when set",
+    )
+
+    parser.add_argument(
+        "--test_only",
+        type=str,
+        default=None,
+        help="checkpoint to score on the test split; skips fit entirely",
     )
 
     args = parser.parse_args()
@@ -185,15 +192,21 @@ def main(argv=None):
 
     logger.info("Dataset and optim settings logged")
     logger.info("Fitting model")
+    if args.test_only:
+        logger.info("test_only: scoring %s, skipping fit", args.test_only)
+        trainer.test(model, dm, ckpt_path=args.test_only)
+        logger_wb.experiment.finish()
+        return None
+
     trainer.fit(model, dm)
 
     logger.info("Model fitted, testing")
     if use_lmdb:
         if "test_lmdb" in config["dataset"]:
-            trainer.test(model, dm)
+            trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
 
     else:
         if config["dataset"]["test_prop"] > 0.0:
-            trainer.test(model, dm)
+            trainer.test(model, dm, ckpt_path=best_ckpt_path(trainer))
 
     logger_wb.experiment.finish()

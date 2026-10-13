@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.data import HeteroData
-from torchmetrics import Metric
+from torchmetrics import MeanMetric, Metric
 from torchmetrics.classification import BinaryAUROC, BinaryAveragePrecision
 
 from qtaim_embed.data.bonds import bond_pairs_from_heterograph, candidate_labels
@@ -172,6 +172,14 @@ class GCNBondPred(pl.LightningModule):
                 for mode in ("train", "val", "test")
             }
         )
+        # Rank-synced epoch loss: the per-step log below is rank-local so the
+        # progress bar never sits on a collective (the rank-0 bar all-reducing
+        # before the epoch-end hook, while other ranks are inside the metric
+        # all-gather, is what deadlocked the GCN models on 2026-09-09). This is
+        # all-reduced in _epoch_end instead and overrides the same key.
+        self.loss_metrics = nn.ModuleDict(
+            {f"m_{m}": MeanMetric() for m in ("train", "val", "test")}
+        )
 
     # ------------------------------------------------------------------ model
     @staticmethod
@@ -236,8 +244,9 @@ class GCNBondPred(pl.LightningModule):
         n_graphs = int(graph.num_graphs) if hasattr(graph, "num_graphs") else 1
         self.log(
             f"{mode}_loss", loss, on_step=False, on_epoch=True, prog_bar=True,
-            batch_size=n_graphs, sync_dist=True,
+            batch_size=n_graphs, sync_dist=False,
         )
+        self.loss_metrics[f"m_{mode}"].update(loss.detach(), weight=n_graphs)
         probs = torch.sigmoid(logits.detach().float())
         m = self.metrics[f"m_{mode}"]
         m["auroc"].update(probs, y.long())
@@ -255,6 +264,12 @@ class GCNBondPred(pl.LightningModule):
         return self.shared_step(batch, "test")
 
     def _epoch_end(self, mode: str) -> None:
+        # before the early return below: compute() is a collective and every
+        # rank has to reach it
+        epoch_loss = self.loss_metrics[f"m_{mode}"].compute()
+        self.loss_metrics[f"m_{mode}"].reset()
+        if torch.isfinite(epoch_loss):
+            self.log(f"{mode}_loss", epoch_loss, prog_bar=True, sync_dist=False)
         m = self.metrics[f"m_{mode}"]
         binned = m["binned"]
         if binned.total() == 0:
