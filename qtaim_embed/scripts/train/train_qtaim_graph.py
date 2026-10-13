@@ -42,6 +42,13 @@ def main(argv=None):
     )
 
     parser.add_argument(
+        "--num_devices",
+        type=int,
+        default=None,
+        help="GPUs to use; overrides optim.num_devices. SLURM refuses a mismatch "
+             "with --ntasks-per-node, so an interactive node with one task needs 1",
+    )
+    parser.add_argument(
         "--test_only",
         type=str,
         default=None,
@@ -71,6 +78,9 @@ def main(argv=None):
     if args.num_workers is not None:
         config["dataset"]["num_workers"] = args.num_workers
         config["optim"]["num_workers"] = args.num_workers
+
+    if args.num_devices is not None:
+        config["optim"]["num_devices"] = args.num_devices
 
     logger.info("config_settings")
 

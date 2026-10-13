@@ -125,6 +125,12 @@ def test_test_only_flag_and_best_ckpt_are_wired(module):
     assert "ckpt_path=args.test_only" in text
     assert "trainer.test(model, dm)" not in text  # must pass a ckpt_path
     assert "best_ckpt_path(trainer)" in text
+    # torch >= 2.6 refuses these checkpoints under weights_only=True
+    assert text.count("weights_only=False") >= 2
+    # SLURM rejects devices=N against a mismatched --ntasks-per-node, so the
+    # config value has to be overridable from the command line
+    assert '"--num_devices"' in text
+    assert 'config["optim"]["num_devices"] = args.num_devices' in text
 
 
 class TestCheckpointLoading:
