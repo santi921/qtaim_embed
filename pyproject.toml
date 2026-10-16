@@ -42,6 +42,7 @@ qtaim-embed-train-link = "qtaim_embed.scripts.train.train_qtaim_link:main"
 qtaim-embed-bench = "qtaim_embed.scripts.bench.bench_train:main"
 qtaim-embed-train-bond = "qtaim_embed.scripts.train.train_qtaim_bond:main"
 qtaim-embed-eval-bond-baselines = "qtaim_embed.scripts.eval.eval_bond_baselines:main"
+qtaim-embed-eval-stratified = "qtaim_embed.scripts.eval.eval_stratified:main"
 
 # Optional: add project URLs
 [project.urls]
