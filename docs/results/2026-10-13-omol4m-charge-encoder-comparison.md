@@ -27,14 +27,20 @@ run never produced test metrics at all.
 
 ## Results
 
-| rank | encoder | conv_fn | width | L | batch | test MAE | test R2 |
-|---|---|---|---|---|---|---|---|
-| 1 | **equivariant** (lmax 2, cutoff 4) | GraphConvDropoutBatch | hidden 512 | 9 | 256 | **0.1040** | **0.9446** |
-| 2 | schnet | GraphConvDropoutBatch | hidden 384 | 5 | 1024 | 0.1235 | 0.9296 |
-| 3 | schnet | GATConv | hidden 128 | 4 | 512 | 0.1375 | 0.9127 |
-| 4 | none | GraphConvDropoutBatch | hidden 768 | 9 | 1024 | 0.1558 | 0.8171 |
-| 5 | none | ResidualBlock | **embedding 512** | 7 | 1024 | 0.1573 | 0.8144 |
-| 6 | none | GATConv | hidden 128 | 4 | 512 | 0.1842 | 0.7670 |
+| rank | encoder | conv_fn | width | L | batch | test MAE | test R2 (median) | test R2 (mean) |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **equivariant** (lmax 2, cutoff 4) | GraphConvDropoutBatch | hidden 512 | 9 | 256 | **0.1040** | **0.9446** | 0.9043 |
+| 2 | **dimenetpp** (cutoff 4, cap 16) | GraphConvDropoutBatch | hidden 176 | 9 | 512 | 0.1062 | 0.9398 | **0.9098** |
+| 3 | schnet | GraphConvDropoutBatch | hidden 384 | 5 | 1024 | 0.1235 | 0.9296 | 0.8538 |
+| 4 | schnet | GATConv | hidden 128 | 4 | 512 | 0.1375 | 0.9127 | 0.8349 |
+| 5 | none | GraphConvDropoutBatch | hidden 768 | 9 | 1024 | 0.1558 | 0.8171 | 0.8120 |
+| 6 | none | ResidualBlock | **embedding 512** | 7 | 1024 | 0.1573 | 0.8144 | 0.8122 |
+| 7 | none | GATConv | hidden 128 | 4 | 512 | 0.1842 | 0.7670 | 0.7853 |
+
+`test_r2` as logged is `r2.median()` over the six targets, and torch returns
+the **lower** median for an even count, so the headline R2 is literally the
+third-smallest per-target value: Mulliken, for every model here. The mean is
+given alongside because the two disagree at the top of the table.
 
 Width is reported as the knob that actually controls it: `ResidualBlock` reads
 `embedding_size` and ignores `hidden_size`, every other conv_fn is the
@@ -45,12 +51,39 @@ opposite. Run 5's config says `hidden_size: 256`, which is inert; it is a
 
 | encoder / conv | ADCH | Hirshfeld | CM5 | Becke | Loewdin | Mulliken |
 |---|---|---|---|---|---|---|
-| equivariant / GCN | 0.978 | **0.789** | 0.992 | **0.728** | 0.994 | **0.945** |
+| equivariant / GCN | 0.978 | 0.789 | 0.992 | 0.728 | 0.994 | **0.945** |
+| dimenetpp / GCN | **0.979** | **0.790** | 0.992 | **0.764** | 0.993 | 0.940 |
 | schnet / GCN | 0.975 | 0.691 | 0.992 | 0.542 | 0.994 | 0.930 |
 | schnet / GAT | 0.960 | 0.662 | 0.987 | 0.496 | 0.991 | 0.913 |
 | none / GCN | 0.969 | 0.655 | 0.991 | 0.450 | 0.990 | 0.817 |
 | none / ResidualBlock | 0.969 | 0.656 | 0.990 | 0.453 | 0.991 | 0.814 |
 | none / GAT | 0.941 | 0.623 | 0.981 | 0.419 | 0.980 | 0.767 |
+
+### Training length
+
+| run | best ckpt epoch | last epoch | ended |
+|---|---|---|---|
+| equivariant | 120 | 124 | **crashed** |
+| dimenetpp_c4 | - | 163 | **crashed** |
+| schnet | 75 | 146 | finished |
+| schnet_gat | 221 | 261 | finished |
+| gat | 140 | 158 | finished |
+| resid | 46 | 67 | finished |
+| gcn | 53 | 55 | finished |
+
+The two best models are the two that crashed rather than early-stopped.
+Equivariant died four epochs past its best checkpoint and DimeNet++ at epoch
+163, so neither reached its stopping criterion and both may be undertrained.
+Every model that finished ran well past its best (schnet best at 75 of 146,
+gat at 140 of 158, resid at 46 of 67), which is early stopping working and
+evidence those five converged. The gap between the top two and SchNet is
+therefore a lower bound, and the equivariant/DimeNet++ tie should not be read
+as final.
+
+Note also how much longer geometry-aware models keep improving: the
+encoder-free models stopped at 55 and 67 epochs, against 146-261 with an
+encoder. An encoder does not only lower the error, it extends the useful
+training horizon.
 
 ## Findings
 
@@ -66,16 +99,29 @@ hidden 768 (0.1558) and `ResidualBlock` at embedding 512 (0.1573) are within
 the clear loser at 0.1842. So the encoder-free rows mostly measure the same
 thing, and the 9-layer 768-wide model buys nothing over the 7-layer one.
 
-**Within encoders, angular resolution pays.** The lmax-2 equivariant encoder
-beats SchNet's invariant filters by 16 % on MAE (0.1040 vs 0.1235) at the same
-conv_fn, which is lever 4 in section 3.3 paying off on top of lever 1.
+**Within encoders, angular information pays, and the two angular encoders
+tie.** Both the lmax-2 equivariant encoder and DimeNet++ beat SchNet's
+invariant filters by 14-16 % on MAE (0.1040 and 0.1062 vs 0.1235) at the same
+conv_fn. That is lever 4 in section 3.3 paying off on top of lever 1, and it
+is angular resolution rather than equivariance specifically: DimeNet++ is
+invariant and gets there with directional triplets.
+
+**The top two trade places depending on the aggregate, and the disagreement is
+informative.** Equivariant wins on MAE (0.1040 vs 0.1062) and on the logged
+median R2; DimeNet++ wins on mean R2 (0.9098 vs 0.9043) because it is clearly
+better on the hardest target, Becke (0.764 vs 0.728), while giving back a
+little on Mulliken (0.940 vs 0.945). Treat them as tied overall and pick on
+the target that matters: DimeNet++ for the real-space partitioning
+definitions, equivariant for Mulliken and for the mean absolute error. Note
+DimeNet++ is also the cheaper model, hidden 176 against 512.
 
 **Three of the six targets are already saturated and carry no signal.** CM5 and
 Loewdin sit at R2 0.98-0.994 for *every* model including no encoder, and ADCH
-at 0.94-0.98. All of the discrimination lives in **Becke** (0.419 to 0.728),
-**Hirshfeld** (0.623 to 0.789) and **Mulliken** (0.767 to 0.945). Reporting a
-mean R2 over six targets therefore understates the differences between models
-and should be read alongside the per-target table.
+at 0.94-0.98. All of the discrimination lives in **Becke** (0.419 to 0.764),
+**Hirshfeld** (0.623 to 0.790) and **Mulliken** (0.767 to 0.945). Any single
+aggregate over six targets therefore hides most of the difference between
+models, and the logged `test_r2` hides it twice over by collapsing to the
+Mulliken column. Read the per-target table, not the headline.
 
 **Becke and Hirshfeld remain the weakest targets even for the best model**
 (0.728 and 0.789 against 0.99 for CM5 and Loewdin). That is consistent with the
@@ -91,10 +137,16 @@ Worth checking before concluding this is a model-capacity limit.
 - **Checkpoints were selected on `val_mae`**, which is torchmetrics-synced and
   therefore correct under DDP. The `val_loss` in each checkpoint filename was
   rank-local when these runs trained and should be ignored.
-- **DimeNet++ is absent from this table.** Its best result, test MAE 0.1008,
-  was measured on `OMol4M_charge_full` at cutoff 5 with last-epoch weights
-  (`OMol4M_desc_charges`, run `effortless-deluge-65`), so it is not comparable
-  to the rows above. `profiling/train_configs/omol4m_canonical_dimenetpp_c4.json`
-  runs it on `canonical` at cutoff 4 to close that gap.
+- **The DimeNet++ row is from a run that crashed at epoch 163** (wandb
+  `OMol4m_charges_final_models/dimenetpp_c4`, 2026-10-13) and was scored
+  afterwards with `--test_only`, so it may not have converged as far as the
+  others. Its earlier 0.1008 on `OMol4M_charge_full` at cutoff 5 with
+  last-epoch weights is a different dataset and not comparable to anything in
+  this table.
+- **Validation losses are not comparable across these runs.** `val_loss` was
+  rank-local until 2026-10-13; the DimeNet++ run is the only one here trained
+  after that fix, so its 0.5099 is a whole-validation-set value while the
+  others' summaries are rank 0's quarter. Test metrics are unaffected: they
+  come from torchmetrics and always synced.
 - **Topology is given.** These are T2 numbers on known graphs; nothing here
   speaks to T3 bond prediction.
