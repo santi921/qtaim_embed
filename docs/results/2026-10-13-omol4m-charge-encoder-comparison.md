@@ -130,6 +130,69 @@ their configs request; these two definitions are the ones most dependent on
 real-space partitioning, so a missing feature block would show up exactly here.
 Worth checking before concluding this is a model-capacity limit.
 
+## Per-vertical breakdown (2026-10-16)
+
+`qtaim-embed-eval-stratified --group_depth 1 --stride 20` over the canonical
+test split: 20,184 molecules spread evenly across all 403,680, the identical
+index set for every model, 33 verticals. CSVs under `strat_<arch>/`.
+
+The aggregate is mostly an `omol` score: that vertical is 36 % of the split
+and among the harder ones, so the single test MAE answers "how good is this
+model on omol" more than anything else.
+
+### The encoder's value is not uniform: 9 % to 50 % depending on chemistry
+
+Reduction in MAE from the best encoder-free model (`gcn`) to the better of the
+two angular encoders, by vertical:
+
+| gain | verticals |
+|---|---|
+| 43-50 % | ml_elytes, droplet, protein_interface, ml_protein_interface, 5A_elytes, pdb_fragments, pdb_pockets |
+| 30-38 % | rpmd, dna, rna, nakb, electrolytes_scaled_sep, geom_orca6, scaled_separations_exp, orbnet_denali, **omol**, spice, electrolytes_redox |
+| 21-28 % | ml_mo, **tm_react**, low_spin_23, pmechdb, ani2x, ani1xbb, rgd_uks, trans1x |
+| 9-15 % | **mo_hydrides**, electrolytes_reactivity |
+
+Median 35 %, against the 33 % the aggregate reports. Geometry pays most where
+the chemistry is conformational, meaning the same bonding in different spatial
+arrangements: proteins, electrolytes, droplets, PDB fragments. It pays least
+where the chemistry is bond-making and unusual metal oxidation states:
+`mo_hydrides` (9 %) and `electrolytes_reactivity` (15 %) are nearly
+encoder-proof, and `tm_react` and `low_spin_23` sit near the bottom at 26-28 %.
+
+The mechanism is visible in the per-target numbers: the encoder-free model's
+**Mulliken** predictions collapse on exactly the condensed-phase verticals
+where the encoder gains most. `gcn` Mulliken MAE reaches 0.408 on ml_elytes
+(R2 0.588), 0.576 on electrolytes_scaled_sep (R2 0.449), 0.346 on
+ml_protein_interface (R2 0.675), against 0.146, 0.376 and 0.141 for
+equivariant. Most of that 50 % headline gain is Mulliken rescue.
+
+### Equivariant and DimeNet++ split by chemistry
+
+They tie overall but not per vertical. DimeNet++ is better on the
+protein and PDB condensed systems (protein_interface by 7.5 %,
+pdb_fragments_300K 4.9 %, pdb_pockets_300K 4.0 %, pdb_fragments_400K 3.7 %).
+Equivariant is better on reactive chemistry and on metals: tm_react by 8.6 %,
+electrolytes_reactivity 9.0 %, rmechdb 9.8 %, pmechdb 7.1 %, low_spin_23
+6.1 %, ml_mo 3.6 %, plus the nucleic acids (nakb 10.8 %, dna 7.5 %, rna 6.1 %).
+
+For this project's purpose, QTAIM descriptors on transition-metal complexes,
+that is the relevant signal: **equivariant is the better choice on tm_react,
+ml_mo and low_spin_23**, and the overall tie is driven by DimeNet++ winning
+verticals that are not the target chemistry.
+
+### Hardest verticals, consistent across all models
+
+`mo_hydrides` is worst for every model (MAE 0.21-0.23, Hirshfeld R2 0.33-0.44,
+Becke R2 0.17-0.55) and barely responds to an encoder. `low_spin_23`,
+`tm_react`, `ml_mo` and `pmechdb` follow. These are the metal and
+reactive-chemistry verticals, which is precisely where this project needs the
+model to work, and they are the ones the aggregate flatters.
+
+Becke remains the weakest target in nearly every vertical, but the spread is
+large: equivariant gets Becke R2 0.97 on noble_gas, 0.94 on droplet and 0.92
+on nakb, against 0.64 on tm_react and 0.45 on mo_hydrides. So the global
+"Becke is hard" conclusion is really "Becke is hard on metals and reactions".
+
 ## Caveats
 
 - **Single seed per architecture.** No error bars; the 1 % gap between rows 4
@@ -148,5 +211,13 @@ Worth checking before concluding this is a model-capacity limit.
   after that fix, so its 0.5099 is a whole-validation-set value while the
   others' summaries are rank 0's quarter. Test metrics are unaffected: they
   come from torchmetrics and always synced.
+- **The per-vertical tables cover five of the seven models** (equivariant,
+  dimenetpp, schnet, schnet_gat, gcn). `resid` and `gat` were not captured;
+  `resid` tracks `gcn` closely in the aggregate and `gat` is the weakest model,
+  so neither changes the conclusions.
+- **Small verticals are flagged, not dropped.** `mo_hydrides`, `nakb`,
+  `noble_gas`, `rmechdb` and `pdb_pockets_400K` have 12-18 molecules in this
+  sample; treat them as directional. Rerun without `--stride` for the full
+  403,680 before quoting them.
 - **Topology is given.** These are T2 numbers on known graphs; nothing here
   speaks to T3 bond prediction.
