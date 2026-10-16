@@ -166,6 +166,14 @@ where the encoder gains most. `gcn` Mulliken MAE reaches 0.408 on ml_elytes
 ml_protein_interface (R2 0.675), against 0.146, 0.376 and 0.141 for
 equivariant. Most of that 50 % headline gain is Mulliken rescue.
 
+GAT without an encoder is the same failure, further along: Mulliken R2 0.390
+on electrolytes_scaled_sep, 0.474 on droplet, 0.558 on ml_elytes, 0.619 on
+pdb_pockets_400K. Against the best encoder it loses 53 % on droplet, ml_elytes
+and protein_interface, but only 25 % on mo_hydrides, the same chemistry split
+as the `gcn` comparison. It also has essentially no predictive power on metal
+Becke charges: R2 0.208 on tm_react, 0.230 on low_spin_23, 0.179 on
+mo_hydrides.
+
 ### Equivariant and DimeNet++ split by chemistry
 
 They tie overall but not per vertical. DimeNet++ is better on the
@@ -211,10 +219,11 @@ on nakb, against 0.64 on tm_react and 0.45 on mo_hydrides. So the global
   after that fix, so its 0.5099 is a whole-validation-set value while the
   others' summaries are rank 0's quarter. Test metrics are unaffected: they
   come from torchmetrics and always synced.
-- **The per-vertical tables cover five of the seven models** (equivariant,
-  dimenetpp, schnet, schnet_gat, gcn). `resid` and `gat` were not captured;
-  `resid` tracks `gcn` closely in the aggregate and `gat` is the weakest model,
-  so neither changes the conclusions.
+- **The per-vertical tables cover six of the seven models** (equivariant,
+  dimenetpp, schnet, schnet_gat, gcn, gat). `resid` was not captured; it tracks
+  `gcn` to within 1 % in the aggregate, so it does not change the conclusions.
+  `gcn` is the better encoder-free baseline on 32 of 33 verticals, GAT edging
+  it only on `noble_gas` (12 molecules), so the gain figures above use `gcn`.
 - **Small verticals are flagged, not dropped.** `mo_hydrides`, `nakb`,
   `noble_gas`, `rmechdb` and `pdb_pockets_400K` have 12-18 molecules in this
   sample; treat them as directional. Rerun without `--stride` for the full
