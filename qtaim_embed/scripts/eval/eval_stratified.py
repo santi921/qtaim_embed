@@ -110,6 +110,7 @@ def evaluate(
     batch_size: int = 256,
     device: str = "cuda",
     limit: Optional[int] = None,
+    stride: int = 1,
     dtype: str = "float32",
 ) -> Dict[str, _Accum]:
     from qtaim_embed.models.node_level.base_gcn import GCNNodePred
@@ -128,12 +129,19 @@ def evaluate(
     ds = LMDBMoleculeDataset(
         config={"src": lmdb_src}, transform=partial(TransformMol, dtype=dtype)
     )
-    total = len(ds) if limit is None else min(limit, len(ds))
-    logger.info("scoring %d of %d graphs from %s", total, len(ds), lmdb_src)
+    # records are stored grouped by source, so the first N graphs are not a
+    # representative sample: stride spreads a subsample across the whole file
+    indices = list(range(0, len(ds), max(1, stride)))
+    if limit is not None:
+        indices = indices[:limit]
+    logger.info(
+        "scoring %d of %d graphs (stride %d) from %s",
+        len(indices), len(ds), stride, lmdb_src,
+    )
 
     acc: Dict[str, _Accum] = defaultdict(lambda: _Accum(len(targets)))
-    for start in range(0, total, batch_size):
-        idx = range(start, min(start + batch_size, total))
+    for start in range(0, len(indices), batch_size):
+        idx = indices[start : start + batch_size]
         graphs = [ds[i] for i in idx]
         keys = [group_key(g.mol_name, group_depth) for g in graphs]
         batch = collate_hetero_direct(graphs).to(device)
@@ -152,8 +160,18 @@ def evaluate(
             a.n_mols += 1
 
         if start and start % (batch_size * 50) == 0:
-            logger.info("  %d / %d", start, total)
+            logger.info("  %d / %d", start, len(indices))
     return dict(acc), targets
+
+
+def _short_names(targets: Sequence[str]) -> List[str]:
+    """Drop a common prefix so the per-target columns fit (charge_adch -> adch)."""
+    if len(targets) > 1:
+        head = os.path.commonprefix(list(targets))
+        head = head[: head.rfind("_") + 1] if "_" in head else ""
+    else:
+        head = ""
+    return [t[len(head):][:9] for t in targets]
 
 
 def _write(acc: Dict[str, _Accum], targets: Sequence[str], out_dir: str, min_group: int) -> str:
@@ -183,8 +201,21 @@ def _write(acc: Dict[str, _Accum], targets: Sequence[str], out_dir: str, min_gro
         flag = "" if r["n_molecules"] >= min_group else "  (small)"
         print(
             f"{r['group'][:34]:34s} {r['n_molecules']:>8d} {r['n_atoms']:>9d} "
-            f"{r['mae_mean']:>8.4f} {r['r2_mean']:>9.4f}{flag}"
+            f"{r['mae_mean']:>8.4f} {r['r2_mean']:>9.4g}{flag}"
         )
+
+    # the aggregate hides which charge definition is failing; these two are the
+    # point of the tool, and the mean over six targets is diluted by the three
+    # that every model already saturates
+    short = _short_names(targets)
+    for metric, label in (("mae", "MAE"), ("r2", "R2")):
+        print(f"\nper-target {label}")
+        print(f"{'group':34s} " + " ".join(f"{n:>9s}" for n in short))
+        for r in rows:
+            fmt = ".4f" if metric == "mae" else ".4g"
+            cells = " ".join(f"{r[f'{metric}_{t}']:>9{fmt}}" for t in targets)
+            print(f"{r['group'][:34]:34s} {cells}")
+
     print(f"\nwrote {csv_path}")
     return csv_path
 
@@ -198,7 +229,10 @@ def main(argv=None):
                    help='"__"-delimited tokens of mol_name to group on (2 splits omol into its sub-verticals)')
     p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--device", default="cuda")
-    p.add_argument("--limit", type=int, default=None, help="score only the first N graphs")
+    p.add_argument("--limit", type=int, default=None, help="score at most N graphs")
+    p.add_argument("--stride", type=int, default=1,
+                   help="score every Nth graph; records are grouped by source, so a "
+                        "plain --limit over-samples whatever sits at the start of the file")
     p.add_argument("--dtype", default="float32")
     p.add_argument("--min_group", type=int, default=100,
                    help="groups smaller than this are flagged, not dropped")
@@ -212,6 +246,7 @@ def main(argv=None):
         batch_size=args.batch_size,
         device=args.device,
         limit=args.limit,
+        stride=args.stride,
         dtype=args.dtype,
     )
     _write(acc, targets, args.out_dir, args.min_group)
