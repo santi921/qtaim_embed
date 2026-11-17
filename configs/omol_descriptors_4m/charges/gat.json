@@ -1,0 +1,78 @@
+{
+  "dataset": {
+    "train_lmdb": "<DATA_ROOT>/train/merged/merged.lmdb",
+    "val_lmdb": "<DATA_ROOT>/val/merged/merged.lmdb",
+    "test_lmdb": "<DATA_ROOT>/test/merged/merged.lmdb",
+    "target_dict": {
+      "atom": [
+        "charge_adch",
+        "charge_hirshfeld",
+        "charge_cm5",
+        "charge_becke",
+        "charge_mulliken_orca",
+        "charge_loewdin_orca"
+      ],
+      "bond": [],
+      "global": []
+    },
+    "dtype": "float32",
+    "train_batch_size": 512
+  },
+  "model": {
+    "conv_fn": "GATConv",
+    "n_conv_layers": 4,
+    "resid_n_graph_convs": 3,
+    "hidden_size": 128,
+    "embedding_size": 128,
+    "dropout": 0,
+    "batch_norm": true,
+    "bn_before_activation": true,
+    "global_aggr": "sum",
+    "activation": "ReLU",
+    "bias": true,
+    "norm": "both",
+    "aggregate": "sum",
+    "initializer": "xavier",
+    "lr": 0.0003320201256703988,
+    "weight_decay": 1e-05,
+    "scheduler_name": "reduce_on_plateau",
+    "lr_plateau_patience": 5,
+    "lr_scale_factor": 0.75,
+    "loss_fn": "mse",
+    "num_heads_gat": 4,
+    "dropout_feat_gat": 0,
+    "dropout_attn_gat": 0,
+    "residual_gat": true,
+    "encoder_fn": "none",
+    "target_dict": {
+      "atom": [
+        "charge_adch",
+        "charge_hirshfeld",
+        "charge_cm5",
+        "charge_becke",
+        "charge_mulliken_orca",
+        "charge_loewdin_orca"
+      ],
+      "bond": [],
+      "global": []
+    },
+    "max_epochs": 300,
+    "extra_stop_patience": 25,
+    "restore": false,
+    "compiled": false
+  },
+  "optim": {
+    "num_devices": 4,
+    "num_nodes": 1,
+    "strategy": "ddp",
+    "precision": "bf16-mixed",
+    "gradient_clip_val": 5,
+    "accumulate_grad_batches": 1,
+    "num_workers": 8,
+    "pin_memory": true,
+    "persistent_workers": false,
+    "num_sanity_val_steps": 0,
+    "warmup_epochs": 1,
+    "train_batch_size": 512
+  }
+}
